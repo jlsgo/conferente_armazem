@@ -51,3 +51,39 @@ pub fn login(state: State<AppState>, payload: LoginPayload) -> AppResult<Usuario
     let conn = state.conn()?;
     auth::login(&conn, &payload.login, &payload.senha)
 }
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn listar_usuarios(state: State<AppState>, armazem_id: Option<i64>) -> AppResult<Vec<Usuario>> {
+    let conn = state.conn()?;
+    auth::listar_usuarios(&conn, armazem_id)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CriarUsuarioPayload {
+    pub nome: String,
+    pub login: String,
+    pub senha: String,
+    pub armazem_id: Option<i64>,
+    pub papel: String,
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn criar_usuario(
+    state: State<AppState>,
+    solicitante_id: i64,
+    payload: CriarUsuarioPayload,
+) -> AppResult<()> {
+    let conn = state.conn()?;
+    auth::criar_usuario_como_gestor(
+        &conn,
+        solicitante_id,
+        NovoUsuario {
+            nome: &payload.nome,
+            login: &payload.login,
+            senha: &payload.senha,
+            armazem_id: payload.armazem_id,
+            papel: &payload.papel,
+        },
+    )?;
+    Ok(())
+}

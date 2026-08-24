@@ -1,0 +1,141 @@
+import { FormEvent, useEffect, useState } from 'react';
+import type { Armazem, Usuario } from '../types';
+import { criarUsuario, listarUsuarios } from '../lib/api';
+
+interface Props {
+  usuarioLogado: Usuario;
+  armazens: Armazem[];
+}
+
+export default function Usuarios({ usuarioLogado, armazens }: Props) {
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [carregando, setCarregando] = useState(true);
+
+  const [nome, setNome] = useState('');
+  const [login, setLogin] = useState('');
+  const [senha, setSenha] = useState('');
+  const [armazemId, setArmazemId] = useState<number | null>(armazens[0]?.id ?? null);
+  const [papel, setPapel] = useState<'conferente' | 'gestor'>('conferente');
+  const [erro, setErro] = useState('');
+  const [sucesso, setSucesso] = useState('');
+  const [enviando, setEnviando] = useState(false);
+
+  async function carregar() {
+    setCarregando(true);
+    const lista = await listarUsuarios();
+    setUsuarios(lista);
+    setCarregando(false);
+  }
+
+  useEffect(() => {
+    carregar();
+  }, []);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setErro('');
+    setSucesso('');
+    setEnviando(true);
+
+    const resultado = await criarUsuario(usuarioLogado.id, { nome, login, senha, armazem_id: armazemId, papel });
+    setEnviando(false);
+
+    if (!resultado.ok) {
+      setErro(resultado.error ?? 'Nao foi possivel cadastrar o usuario.');
+      return;
+    }
+
+    setSucesso(`Usuario "${login}" cadastrado.`);
+    setNome('');
+    setLogin('');
+    setSenha('');
+    setPapel('conferente');
+    await carregar();
+  }
+
+  return (
+    <div>
+      <section className="cartao">
+        <h2>Nova conferente / usuario</h2>
+        <form onSubmit={handleSubmit}>
+          <div className="grade-formulario">
+            <label>
+              Nome completo
+              <input value={nome} onChange={(e) => setNome(e.target.value)} required />
+            </label>
+
+            <label>
+              Usuario de acesso
+              <input value={login} onChange={(e) => setLogin(e.target.value.trim())} required />
+            </label>
+
+            <label>
+              Senha
+              <input
+                type="password"
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                minLength={6}
+                required
+              />
+            </label>
+
+            <label>
+              Armazem
+              <select value={armazemId ?? ''} onChange={(e) => setArmazemId(Number(e.target.value))}>
+                {armazens.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.codigo} - {a.nome}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Papel
+              <select value={papel} onChange={(e) => setPapel(e.target.value as 'conferente' | 'gestor')}>
+                <option value="conferente">Conferente</option>
+                <option value="gestor">Gestor</option>
+              </select>
+            </label>
+          </div>
+
+          {erro && <p className="erro">{erro}</p>}
+          {sucesso && <p className="sucesso">{sucesso}</p>}
+
+          <button type="submit" disabled={enviando}>
+            {enviando ? 'Cadastrando...' : 'Cadastrar usuario'}
+          </button>
+        </form>
+      </section>
+
+      <section className="cartao">
+        <h2>Usuarios cadastrados</h2>
+        {carregando ? (
+          <p>Carregando...</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Usuario</th>
+                <th>Armazem</th>
+                <th>Papel</th>
+              </tr>
+            </thead>
+            <tbody>
+              {usuarios.map((u) => (
+                <tr key={u.id}>
+                  <td>{u.nome}</td>
+                  <td>{u.login}</td>
+                  <td>{armazens.find((a) => a.id === u.armazem_id)?.codigo ?? '-'}</td>
+                  <td>{u.papel}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+    </div>
+  );
+}

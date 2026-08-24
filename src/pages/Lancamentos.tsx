@@ -1,9 +1,11 @@
 import { FormEvent, useEffect, useState } from 'react';
-import type { Categoria, Montagem, Movimento, MovimentoItemInput, TipoMovimento, Usuario } from '../types';
-import { criarMovimento, listarMovimentosDoDia, sugestoesDescricao } from '../lib/api';
+import type { Armazem, Categoria, Fechamento, Montagem, Movimento, MovimentoItemInput, TipoMovimento, Usuario } from '../types';
+import { criarMovimento, buscarFechamentoDoDia, fecharDia, listarMovimentosDoDia, sugestoesDescricao } from '../lib/api';
+import FechamentoImpressao from '../components/FechamentoImpressao';
 
 interface Props {
   usuario: Usuario;
+  armazem: Armazem | undefined;
 }
 
 interface ItemForm {
@@ -37,11 +39,12 @@ function novoItemVazio(): ItemForm {
   return { categoria: 'scooter', descricao: '', montagem: '', quantidade: 1 };
 }
 
-export default function Lancamentos({ usuario }: Props) {
+export default function Lancamentos({ usuario, armazem }: Props) {
   const armazemId = usuario.armazem_id as number;
   const data = dataDeHoje();
 
   const [lancamentos, setLancamentos] = useState<Movimento[]>([]);
+  const [fechamento, setFechamento] = useState<Fechamento | null>(null);
   const [carregandoLista, setCarregandoLista] = useState(true);
   const [sugestoesPorCategoria, setSugestoesPorCategoria] = useState<Partial<Record<Categoria, string[]>>>({});
 
@@ -54,11 +57,16 @@ export default function Lancamentos({ usuario }: Props) {
   const [itens, setItens] = useState<ItemForm[]>([novoItemVazio()]);
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [fechando, setFechando] = useState(false);
 
-  async function carregarLista() {
+  async function carregarTudo() {
     setCarregandoLista(true);
-    const lista = await listarMovimentosDoDia({ armazem_id: armazemId, fluxo: 'saida_armazem', data });
+    const [lista, fechamentoDoDia] = await Promise.all([
+      listarMovimentosDoDia({ armazem_id: armazemId, fluxo: 'saida_armazem', data }),
+      buscarFechamentoDoDia({ armazem_id: armazemId, fluxo: 'saida_armazem', data }),
+    ]);
     setLancamentos(lista);
+    setFechamento(fechamentoDoDia);
     setCarregandoLista(false);
   }
 
@@ -69,7 +77,7 @@ export default function Lancamentos({ usuario }: Props) {
   }
 
   useEffect(() => {
-    carregarLista();
+    carregarTudo();
     garantirSugestoes('scooter');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -88,7 +96,10 @@ export default function Lancamentos({ usuario }: Props) {
   }
 
   function limparFormulario() {
-    setHora(horaAtual());
+    // O horario NAO reseta para "agora": nas planilhas antigas varios pedidos
+    // seguidos do mesmo lote sao registrados com o mesmo horario (a conferente
+    // carimba o lote todo de uma vez). Manter o ultimo valor digitado evita
+    // que ela tenha que reajustar o campo a cada lancamento do mesmo lote.
     setNumeroPedido('');
     setContraparte('');
     setQuemRetirou('');
@@ -135,13 +146,48 @@ export default function Lancamentos({ usuario }: Props) {
     }
 
     limparFormulario();
-    await carregarLista();
+    await carregarTudo();
+  }
+
+  async function handleFecharDia() {
+    if (lancamentos.length === 0) return;
+    const confirmado = window.confirm(
+      `Fechar o dia ${data}? Depois disso nao sera mais possivel adicionar ou corrigir lancamentos deste dia neste armazem.`
+    );
+    if (!confirmado) return;
+
+    setErro('');
+    setFechando(true);
+    const resultado = await fecharDia({ armazem_id: armazemId, fluxo: 'saida_armazem', data, usuario_id: usuario.id });
+    setFechando(false);
+
+    if (!resultado.ok) {
+      setErro(resultado.error ?? 'Nao foi possivel fechar o dia.');
+      return;
+    }
+
+    await carregarTudo();
   }
 
   const totalGeralDoDia = lancamentos.reduce(
     (soma, m) => soma + m.itens.reduce((s, it) => s + it.quantidade, 0),
     0
   );
+
+  if (carregandoLista) {
+    return <p>Carregando...</p>;
+  }
+
+  if (fechamento) {
+    return (
+      <div>
+        <p className="aviso-fechado">
+          O dia {data} ja foi fechado por {fechamento.usuario_nome}. Os lancamentos abaixo sao somente leitura.
+        </p>
+        <FechamentoImpressao armazem={armazem} data={data} fechamento={fechamento} lancamentos={lancamentos} />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -267,54 +313,54 @@ export default function Lancamentos({ usuario }: Props) {
 
       <section className="cartao">
         <h2>Lancamentos de hoje ({data})</h2>
-        {carregandoLista ? (
-          <p>Carregando...</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Nº</th>
-                <th>Horario</th>
-                <th>Pedido</th>
-                <th>Coleta</th>
-                <th>Itens</th>
-                <th>Qtd.</th>
-                <th>Quem retirou</th>
-                <th>Registrado por</th>
-                <th>Situacao</th>
+        <table>
+          <thead>
+            <tr>
+              <th>Nº</th>
+              <th>Horario</th>
+              <th>Pedido</th>
+              <th>Coleta</th>
+              <th>Itens</th>
+              <th>Qtd.</th>
+              <th>Quem retirou</th>
+              <th>Registrado por</th>
+              <th>Situacao</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lancamentos.map((m) => (
+              <tr key={m.id}>
+                <td>{m.numero}</td>
+                <td>{m.hora}</td>
+                <td>{m.numero_pedido || '-'}</td>
+                <td>{m.contraparte || '-'}</td>
+                <td>
+                  {m.itens
+                    .map((it) => `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`)
+                    .join(' + ')}
+                </td>
+                <td>{m.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
+                <td>{m.quem_retirou || '-'}</td>
+                <td>{m.usuario_nome}</td>
+                <td>{m.tipo === 'saida' ? 'BAIXA' : 'ENTRADA'}</td>
               </tr>
-            </thead>
-            <tbody>
-              {lancamentos.map((m) => (
-                <tr key={m.id}>
-                  <td>{m.numero}</td>
-                  <td>{m.hora}</td>
-                  <td>{m.numero_pedido || '-'}</td>
-                  <td>{m.contraparte || '-'}</td>
-                  <td>
-                    {m.itens
-                      .map((it) => `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`)
-                      .join(' + ')}
-                  </td>
-                  <td>{m.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
-                  <td>{m.quem_retirou || '-'}</td>
-                  <td>{m.usuario_nome}</td>
-                  <td>{m.tipo === 'saida' ? 'BAIXA' : 'ENTRADA'}</td>
-                </tr>
-              ))}
-              {lancamentos.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="rodape-tabela">
-                    Nenhum lancamento registrado ainda hoje.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        )}
+            ))}
+            {lancamentos.length === 0 && (
+              <tr>
+                <td colSpan={9} className="rodape-tabela">
+                  Nenhum lancamento registrado ainda hoje.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
         <p className="rodape-tabela">
           <strong>{totalGeralDoDia}</strong> unidades no total ({lancamentos.length} pedidos)
         </p>
+
+        <button onClick={handleFecharDia} disabled={fechando || lancamentos.length === 0}>
+          {fechando ? 'Fechando...' : 'Fechar o dia'}
+        </button>
       </section>
     </div>
   );

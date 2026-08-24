@@ -77,5 +77,26 @@ export interface Movimento {
   contraparte: string | null;
   quem_retirou: string | null;
   status: string;
+  hash_integridade: string;
   itens: MovimentoItem[];
+}
+
+export interface Fechamento {
+  id: number;
+  armazem_id: number;
+  fluxo: Fluxo;
+  data: string;
+  usuario_id: number;
+  usuario_nome: string;
+  total_itens: number;
+  hash_integridade: string;
+  criado_em: string;
+}
+
+export interface NovoUsuarioInput {
+  nome: string;
+  login: string;
+  senha: string;
+  armazem_id: number | null;
+  papel: 'conferente' | 'gestor';
 }

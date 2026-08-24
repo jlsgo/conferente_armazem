@@ -24,6 +24,11 @@ O que falta para o fluxo de Saida do Armazem virar o substituto real da planilha
   conferentes de cada armazem, com login individual.
 - Ajustar o icone do instalador para a marca Ecoviva (`PNG/MARCA_ECOVIVA-*.png` ja estao
   no repo).
+- **Horario nao reseta sozinho entre lancamentos**: analisando os PDFs antigos, varios
+  pedidos seguidos no mesmo dia sao registrados com o mesmo horario (a conferente
+  carimba o lote inteiro com o horario em que fechou, nao o horario real de cada
+  pedido). O formulario atual reseta o campo Horario para "agora" a cada novo
+  lancamento — deveria manter o ultimo valor digitado como padrao do proximo.
 
 ## Sprint 2 — Os outros dois fluxos
 

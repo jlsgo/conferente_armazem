@@ -30,9 +30,13 @@ pub fn run() {
             commands::status_commands::get_status,
             commands::auth_commands::setup_primeiro_usuario,
             commands::auth_commands::login,
+            commands::auth_commands::listar_usuarios,
+            commands::auth_commands::criar_usuario,
             commands::movimento_commands::criar_movimento,
             commands::movimento_commands::listar_movimentos_do_dia,
             commands::movimento_commands::sugestoes_descricao,
+            commands::fechamento_commands::fechar_dia,
+            commands::fechamento_commands::buscar_fechamento_do_dia,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

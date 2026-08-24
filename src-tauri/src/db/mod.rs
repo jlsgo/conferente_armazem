@@ -6,7 +6,10 @@ use rusqlite_migration::{Migrations, M};
 use crate::domain::errors::{AppError, AppResult};
 
 fn migrations() -> Migrations<'static> {
-    Migrations::new(vec![M::up(include_str!("../../migrations/0001_init.sql"))])
+    Migrations::new(vec![
+        M::up(include_str!("../../migrations/0001_init.sql")),
+        M::up(include_str!("../../migrations/0002_fechamentos.sql")),
+    ])
 }
 
 fn aplicar_pragmas_e_migrations(conn: &mut Connection) -> AppResult<()> {

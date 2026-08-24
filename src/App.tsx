@@ -37,5 +37,12 @@ export default function App() {
 
   const armazem = status.armazens.find((a) => a.id === usuario.armazem_id);
 
-  return <Dashboard usuario={usuario} armazem={armazem} onSair={() => setUsuario(null)} />;
+  return (
+    <Dashboard
+      usuario={usuario}
+      armazem={armazem}
+      armazens={status.armazens}
+      onSair={() => setUsuario(null)}
+    />
+  );
 }

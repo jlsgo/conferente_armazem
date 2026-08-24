@@ -1,5 +1,14 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { AppStatus, Categoria, Fluxo, Movimento, NovoMovimento, Usuario } from '../types';
+import type {
+  AppStatus,
+  Categoria,
+  Fechamento,
+  Fluxo,
+  Movimento,
+  NovoMovimento,
+  NovoUsuarioInput,
+  Usuario,
+} from '../types';
 
 export interface OkResult {
   ok: boolean;
@@ -12,6 +21,10 @@ export interface LoginResult extends OkResult {
 
 export interface CriarMovimentoResult extends OkResult {
   movimento?: Movimento;
+}
+
+export interface FecharDiaResult extends OkResult {
+  fechamento?: Fechamento;
 }
 
 function erroParaTexto(err: unknown): string {
@@ -66,4 +79,39 @@ export function listarMovimentosDoDia(params: {
 
 export function sugestoesDescricao(categoria: Categoria): Promise<string[]> {
   return invoke<string[]>('sugestoes_descricao', { categoria });
+}
+
+export function buscarFechamentoDoDia(params: {
+  armazem_id: number;
+  fluxo: Fluxo;
+  data: string;
+}): Promise<Fechamento | null> {
+  return invoke<Fechamento | null>('buscar_fechamento_do_dia', params);
+}
+
+export async function fecharDia(params: {
+  armazem_id: number;
+  fluxo: Fluxo;
+  data: string;
+  usuario_id: number;
+}): Promise<FecharDiaResult> {
+  try {
+    const fechamento = await invoke<Fechamento>('fechar_dia', { payload: params });
+    return { ok: true, fechamento };
+  } catch (err) {
+    return { ok: false, error: erroParaTexto(err) };
+  }
+}
+
+export function listarUsuarios(armazemId?: number | null): Promise<Usuario[]> {
+  return invoke<Usuario[]>('listar_usuarios', { armazem_id: armazemId ?? null });
+}
+
+export async function criarUsuario(solicitanteId: number, payload: NovoUsuarioInput): Promise<OkResult> {
+  try {
+    await invoke('criar_usuario', { solicitante_id: solicitanteId, payload });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: erroParaTexto(err) };
+  }
 }

@@ -183,3 +183,72 @@ th {
 .linha-item-veiculo {
   grid-template-columns: 130px 1fr 130px 90px auto;
 }
+
+.sucesso {
+  color: var(--verde-escuro);
+  font-size: 13px;
+  margin: -6px 0 14px;
+}
+
+.aviso-fechado {
+  background: #fff4e5;
+  border: 1px solid #f0c36d;
+  color: #7a5200;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.cabecalho-impressao {
+  margin-bottom: 16px;
+}
+
+.total-fechamento {
+  font-size: 14px;
+  margin-top: 10px;
+}
+
+.assinatura {
+  margin-top: 56px;
+  max-width: 360px;
+}
+
+.linha-assinatura {
+  border-top: 1px solid var(--texto);
+  margin-bottom: 6px;
+}
+
+.assinatura p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--texto-suave);
+  text-align: center;
+}
+
+/* Impressao do fechamento: so a area-impressao aparece, no tamanho A4. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .area-impressao,
+  .area-impressao * {
+    visibility: visible;
+  }
+  .area-impressao {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-width: none;
+    border: none;
+    box-shadow: none;
+  }
+  .somente-tela {
+    display: none !important;
+  }
+  @page {
+    size: A4;
+    margin: 16mm;
+  }
+}

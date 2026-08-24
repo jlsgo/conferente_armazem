@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -65,6 +65,7 @@ pub struct Movimento {
     pub contraparte: Option<String>,
     pub quem_retirou: Option<String>,
     pub status: String,
+    pub hash_integridade: String,
     pub itens: Vec<MovimentoItem>,
 }
 
@@ -164,6 +165,21 @@ pub fn criar_movimento(conn: &mut Connection, novo: NovoMovimento) -> AppResult<
 
     let tx = conn.transaction()?;
 
+    let dia_fechado: bool = tx
+        .query_row(
+            "SELECT 1 FROM fechamentos WHERE armazem_id = ?1 AND fluxo = ?2 AND data = ?3",
+            params![novo.armazem_id, novo.fluxo, novo.data],
+            |_| Ok(true),
+        )
+        .optional()?
+        .unwrap_or(false);
+
+    if dia_fechado {
+        return Err(AppError::Validation(
+            "Este dia ja foi fechado. Nao e possivel adicionar novos lancamentos.".into(),
+        ));
+    }
+
     let hash_anterior: String = tx
         .query_row(
             "SELECT hash_integridade FROM movimentos ORDER BY id DESC LIMIT 1",
@@ -260,9 +276,10 @@ pub fn buscar_movimento(conn: &Connection, id: i64) -> AppResult<Movimento> {
         contraparte,
         quem_retirou,
         status,
+        hash_integridade,
     ) = conn.query_row(
         "SELECT m.armazem_id, m.fluxo, m.tipo, m.data, m.hora, m.turno, m.usuario_id, u.nome,
-                m.numero_pedido, m.contraparte, m.quem_retirou, m.status
+                m.numero_pedido, m.contraparte, m.quem_retirou, m.status, m.hash_integridade
          FROM movimentos m JOIN usuarios u ON u.id = m.usuario_id
          WHERE m.id = ?1",
         params![id],
@@ -280,6 +297,7 @@ pub fn buscar_movimento(conn: &Connection, id: i64) -> AppResult<Movimento> {
                 r.get::<_, Option<String>>(9)?,
                 r.get::<_, Option<String>>(10)?,
                 r.get::<_, String>(11)?,
+                r.get::<_, String>(12)?,
             ))
         },
     )?;
@@ -301,6 +319,7 @@ pub fn buscar_movimento(conn: &Connection, id: i64) -> AppResult<Movimento> {
         contraparte,
         quem_retirou,
         status,
+        hash_integridade,
         itens,
     })
 }
@@ -313,7 +332,7 @@ pub fn listar_movimentos_do_dia(
 ) -> AppResult<Vec<Movimento>> {
     let mut stmt = conn.prepare(
         "SELECT m.id, m.armazem_id, m.fluxo, m.tipo, m.data, m.hora, m.turno, m.usuario_id, u.nome,
-                m.numero_pedido, m.contraparte, m.quem_retirou, m.status
+                m.numero_pedido, m.contraparte, m.quem_retirou, m.status, m.hash_integridade
          FROM movimentos m JOIN usuarios u ON u.id = m.usuario_id
          WHERE m.armazem_id = ?1 AND m.fluxo = ?2 AND m.data = ?3
          ORDER BY m.id ASC",
@@ -336,6 +355,7 @@ pub fn listar_movimentos_do_dia(
                 contraparte: r.get(10)?,
                 quem_retirou: r.get(11)?,
                 status: r.get(12)?,
+                hash_integridade: r.get(13)?,
                 itens: Vec::new(),
             })
         })?
