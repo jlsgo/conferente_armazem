@@ -67,6 +67,20 @@ similar) so adicionaria uma dependencia e complexidade sem beneficio real nesse 
 Se um dia isso mudar (varios usuarios simultaneos no mesmo PC, por exemplo), trocar por
 um pool e uma mudanca isolada em `state.rs`.
 
+## Fechamento do dia: sem biblioteca de PDF
+
+`domain::fechamentos` trava (`status = 'fechado'`) os lancamentos do dia e grava um
+resumo (`fechamentos`, hash SHA-256 encadeado sobre os hashes dos movimentos daquele
+dia). Nao existe geracao de arquivo PDF pelo backend: a tela de fechamento
+(`src/components/FechamentoImpressao.tsx`) e sempre renderizada ao vivo a partir dos
+movimentos (ja garantidos imutaveis pelo fechamento) e impressa com `window.print()` do
+proprio webview, usando `@media print` para o layout A4. Isso foi uma escolha
+deliberada: uma lib de geracao de PDF em Rust (`genpdf`, que usa `printpdf`) traz cerca
+de 30 dependencias transitivas, algumas antigas (`time` 0.2, `stdweb`), o oposto do que
+se busca com "menor superficie de ataque". Como toda impressora e a maioria dos sistemas
+operacionais ja oferecem "salvar como PDF" no proprio dialogo de impressao, isso cobre a
+necessidade de exportar sem nenhuma dependencia nova.
+
 ## Preparado para sincronizacao futura, sem implementa-la agora
 
 `movimentos` ja tem `armazem_destino_id` e `transferencia_origem_id` (ambos opcionais).

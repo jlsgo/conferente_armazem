@@ -10,25 +10,19 @@ não deixe ela ficar desatualizada.
 - Fluxo **Saida do Armazem** (veiculos: scooter/triciclo/patinete) completo: lancamento
   de pedido com multiplos itens, lista do dia, total automatico.
 - Repositorio no GitHub (`jlsgo/conferente_armazem`), CI verde em Linux e Windows.
+- **Sprint 1**: fechamento do dia (trava os lancamentos e gera uma visao de impressao em
+  A4 via `window.print()` do proprio app, sem depender de nenhuma lib de PDF — ver
+  `docs/ARQUITETURA.md`); cadastro de mais usuarios (tela restrita a `papel = 'gestor'`,
+  checado no backend); icone do instalador trocado pela marca Ecoviva; horario do
+  lancamento nao reseta mais sozinho entre pedidos do mesmo lote.
 
-## Sprint 1 — Fechar o fluxo principal
+## Pendente do Sprint 1 (ficou pra depois)
 
-O que falta para o fluxo de Saida do Armazem virar o substituto real da planilha:
-
-- **Fechamento do dia**: acao que trava os lancamentos do dia (viram read-only; correcao
-  depois so por lancamento de ajuste, nunca edicao direta) e gera um PDF no layout
-  parecido com a planilha atual, pronto pra imprimir na impressora do galpao e assinar
-  a mao.
-- **Cadastro de mais usuarios**: hoje so existe a conta criada na tela de Setup inicial.
-  Precisa de uma tela (visivel so para `papel = 'gestor'`) para cadastrar as demais
-  conferentes de cada armazem, com login individual.
-- Ajustar o icone do instalador para a marca Ecoviva (`PNG/MARCA_ECOVIVA-*.png` ja estao
-  no repo).
-- **Horario nao reseta sozinho entre lancamentos**: analisando os PDFs antigos, varios
-  pedidos seguidos no mesmo dia sao registrados com o mesmo horario (a conferente
-  carimba o lote inteiro com o horario em que fechou, nao o horario real de cada
-  pedido). O formulario atual reseta o campo Horario para "agora" a cada novo
-  lancamento — deveria manter o ultimo valor digitado como padrao do proximo.
+- **Correcao apos o fechamento**: hoje, depois de fechado, o dia fica travado por
+  completo — nao existe ainda um "lancamento de ajuste/estorno" pra corrigir um erro
+  descoberto depois do fechamento. Por enquanto a unica saida e um gestor reabrir o caso
+  manualmente no banco. Vale planejar isso antes do fechamento do dia virar habito nas
+  duas pontas (A4 e B2).
 
 ## Sprint 2 — Os outros dois fluxos
 
@@ -76,3 +70,7 @@ confirmado se ha internet em algum ponto do dia):
 - Uma unica `Mutex<Connection>` no backend, nao um pool.
 - App 100% local por PC; qualquer sincronizacao e oportunista, nunca uma dependencia
   para o uso diario.
+- Sem biblioteca de geracao de PDF em Rust — o fechamento do dia e impresso direto do
+  app via `window.print()` (CSS `@media print`, tamanho A4), evitando dependencias
+  transitivas desnecessarias (uma lib como `genpdf`/`printpdf` traria ~30 crates extras,
+  varios antigos).
