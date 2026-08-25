@@ -202,6 +202,40 @@ propria nem WebSocket (o app ja fala direto com o Turso) — todas implementadas
 `validar_quantidades_recebidas`). Verificado de ponta a ponta contra o Turso real
 (envio, divergencia aceita/rejeitada, limpeza dos dados de teste).
 
+## Ajustes finais pre-producao (Feito)
+
+Rodada de acerto fino depois do Sprint 7, com o cliente ja testando de verdade.
+101 testes Rust ao final (97 -> 101).
+
+- **Restricao de cadastro de gestor**: `criar_usuario_como_gestor` rejeita
+  `papel = 'gestor'` explicitamente — so existe um gestor hoje (Jhon), cadastrado
+  fora da tela; a tela "Usuarios" so cria conferentes.
+- **Retirada parcial em Saida de Armazem**: `movimentos` ganhou `retirada_completa`
+  (migration `0007_retirada_parcial.sql`, coberta pela cadeia de hash — 19 campos no
+  `CamposHash` agora). `verificar_retirada_pendente` avisa o conferente, ao digitar
+  um numero de pedido ja usado no mesmo armazem, se a retirada anterior ficou
+  marcada como parcial; aparece como badge na tabela, marcador "(parcial)" no
+  historico/CSV/impressao do fechamento.
+- **Cor por aba**: cada fluxo (Saida de Armazem, Montagem, SAC, Historico, Usuarios)
+  tem uma cor propria no menu e um friso no topo do primeiro cartao da pagina —
+  reduz o risco de a conferente lancar no fluxo errado sem perceber.
+- **Impressao do fechamento recalibrada pra caber ~40 lancamentos numa folha A4**:
+  o layout automatico da tabela espremia Coleta/Itens pra caber Observacoes,
+  forcando quebra de linha em quase toda linha (3 paginas pro que cabia numa folha
+  no Excel antigo). `colgroup` com largura fixa por coluna (calibrado por variante)
+  + fonte/padding reduzidos + remocao do padding de tela (`32px`) que a area de
+  impressao herdava sem necessidade — testado gerando a impressao real (CSS
+  compilado do projeto) com 40 linhas via Chrome headless antes de fixar os
+  valores. A data/hora de fechamento, que tinha ficado escondida junto com o hash
+  de auditoria numa linha minuscula, agora tem linha propria no mesmo tamanho de
+  Data/Responsavel(is); o CSV do Historico ganhou a mesma informacao numa coluna
+  "Fechado em".
+- **Bug real de compatibilidade Windows**: um arquivo commitado com `:` no nome
+  quebrava `git checkout` no Windows (caractere reservado no sistema de arquivos) —
+  pego pelo CI (`windows-latest` falhando com "invalid path"), corrigido renomeando
+  o arquivo. Lembrete pra qualquer commit futuro: nunca usar `: * ? " < > |` em
+  nome de arquivo, o alvo real de instalacao e Windows.
+
 ## Depois disso
 
 - Escalar o mesmo instalador para novos armazens, se a empresa abrir mais.
