@@ -1,0 +1,56 @@
+name: Deploy do painel
+
+# Publica painel/index.html no GitHub Pages. So roda quando o painel muda (ou
+# via "Run workflow" manual) - as credenciais reais (URL + token
+# somente-leitura do Turso) ficam em secrets do repo, nunca no arquivo fonte
+# commitado; entram so no artefato publicado por este workflow.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'painel/**'
+      - '.github/workflows/deploy-painel.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Publica o painel
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Injeta as credenciais do Turso (somente-leitura)
+        run: |
+          mkdir -p _site
+          sed \
+            -e "s#__TURSO_PAINEL_URL__#${TURSO_PAINEL_URL}#g" \
+            -e "s#__TURSO_PAINEL_TOKEN__#${TURSO_PAINEL_TOKEN}#g" \
+            painel/index.html > _site/index.html
+        env:
+          TURSO_PAINEL_URL: ${{ secrets.TURSO_PAINEL_URL }}
+          TURSO_PAINEL_TOKEN: ${{ secrets.TURSO_PAINEL_TOKEN }}
+
+      - name: Configura o Pages
+        uses: actions/configure-pages@v5
+
+      - name: Envia o artefato do Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Publica no GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

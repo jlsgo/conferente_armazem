@@ -148,6 +148,57 @@ manualmente simulando os dois PCs (dois bancos SQLite em memoria separados) cont
 Turso real: envio de B2, confirmacao em A4, e o caso de um envio estornado em B2 nao
 aparecer mais como pendente em A4.
 
+### Fila de sincronizacao com retry (Sprint 7)
+
+O envio pro Turso era "melhor esforco, uma tentativa so" — uma falha por linha era
+simplesmente ignorada (nem registrada), so seria tentada de novo na proxima chamada
+inteira de `enviar_para_turso`. `movimentos` ganhou `sync_tentativas`, `sync_erro`,
+`sync_proxima_tentativa` (migration `0005_sync_retry.sql`); `enviar_para_turso` agora
+devolve `ResultadoSincronizacao { enviados, falhas }` em vez de so uma lista de
+sucesso, e cada falha e registrada via `marcar_falha_sincronizacao` com um backoff
+progressivo (`calcular_backoff_minutos`: 1/5/15/30 min, fixo em 60 min a partir da 5a
+tentativa) — a linha some de `movimentos_pendentes` ate esse horario passar, pra nao
+martelar o Turso repetidamente numa falha persistente. `Dashboard.tsx` re-tenta
+sozinho a cada 5 minutos (`setInterval`) alem do botao manual e da tentativa na
+abertura do app, e mostra quantos lancamentos estao pendentes/com erro
+(`status_sincronizacao`, gestor-only).
+
+### Divergencia de quantidade na confirmacao de recebimento (Sprint 7)
+
+`confirmar_recebimento` copiava os itens da transferencia 1:1 — nao havia como o
+conferente que recebe registrar que chegou menos do que foi enviado.
+`movimento_itens` ganhou `quantidade_enviada` (migration
+`0006_divergencia_recebimento.sql`, coberta pela cadeia de hash via `ItemHash`). Na
+tela de Montagem, cada item de uma transferencia pendente mostra um campo editavel
+pre-preenchido com a quantidade enviada; `domain::movimentos::validar_quantidades_recebidas`
+(pura, testada) rejeita receber mais do que foi enviado — nunca confia no frontend pra
+isso, mesma logica ja usada pra `armazem_destino_codigo` — mas aceita receber menos
+(divergencia legitima), gravando os dois valores (`quantidade` = recebido,
+`quantidade_enviada` = enviado) pra auditoria e pro painel.
+
+### Painel web somente-leitura (Sprint 7)
+
+`painel/index.html` e um site estatico de arquivo unico (sem build step, JS puro) que
+le `movimentos_consolidados` direto do Turso via o **HTTP Pipeline API**
+(`POST {url}/v2/pipeline`, `Authorization: Bearer <token>` — o mesmo protocolo que o
+`libsql` do backend usa, so que aqui e um `fetch()` puro, sem client library). O token
+embutido no site e gerado com `turso db tokens create <db> --read-only` — testado que
+o escopo e reforcado pelo *servidor*, nao e so uma convencao do cliente: uma tentativa
+de `INSERT` com esse token volta `{"error":{"code":"BLOCKED", ...}}`. Isso importa
+porque o painel fica **publico** (GitHub Pages nao restringe por colaborador do repo
+no plano gratuito) — a unica protecao real e essa (o gate de senha no `sessionStorage`,
+com hash SHA-256 no arquivo em vez da senha em texto puro, so afasta acesso casual;
+qualquer um que veja o codigo-fonte pode tentar forcar o hash offline).
+
+Publicado via `.github/workflows/deploy-painel.yml`, que dispara em todo push a `main`
+que toque `painel/**` — a URL e o token **nunca ficam commitados**: entram no HTML so
+no momento do deploy, substituindo os placeholders `__TURSO_PAINEL_URL__`/
+`__TURSO_PAINEL_TOKEN__` a partir de secrets do repo (`TURSO_PAINEL_URL`/
+`TURSO_PAINEL_TOKEN`). **GitHub Pages exige repo publico no plano gratuito** — repos
+privados precisam de GitHub Pro; o repo foi tornado publico especificamente por isso
+(confirmado antes que nenhum segredo jamais foi commitado — `turso.txt` sempre viveu
+fora do repo, no diretorio de dados do usuario).
+
 ## Migrations
 
 Arquivos SQL numerados em `src-tauri/migrations/`, aplicados por `rusqlite_migration` a

@@ -230,6 +230,7 @@ mod tests {
                     condicao: None,
                     quantidade: 2,
                     observacao: None,
+                    quantidade_enviada: None,
                 }],
             },
         )
@@ -278,6 +279,7 @@ mod tests {
                     condicao: None,
                     quantidade: 1,
                     observacao: None,
+                    quantidade_enviada: None,
                 }],
             },
         );

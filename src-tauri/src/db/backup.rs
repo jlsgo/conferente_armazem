@@ -327,6 +327,7 @@ mod tests {
                     condicao: None,
                     quantidade: 3,
                     observacao: None,
+                    quantidade_enviada: None,
                 }],
             },
         )

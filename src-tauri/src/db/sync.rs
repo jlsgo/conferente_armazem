@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use rusqlite::{Connection, ToSql};
+use rusqlite::{Connection, OptionalExtension, ToSql};
 use serde::Serialize;
 
 use crate::domain::errors::{AppError, AppResult};
@@ -33,9 +33,24 @@ pub struct LinhaPendente {
     pub itens: Vec<MovimentoItem>,
 }
 
+/// Backoff progressivo por numero de tentativas ja feitas (antes desta):
+/// 1min, 5min, 15min, 30min, e a partir da 5a tentativa fica fixo em 60min.
+/// Funcao pura, sem estado - so decide quanto esperar antes de tentar de novo.
+pub fn calcular_backoff_minutos(tentativas: i64) -> i64 {
+    match tentativas {
+        ..=1 => 1,
+        2 => 5,
+        3 => 15,
+        4 => 30,
+        _ => 60,
+    }
+}
+
 /// Busca os movimentos que ainda nao foram enviados pro Turso
-/// (`sincronizado_em IS NULL`), mais antigos primeiro. Pura leitura local,
-/// sem depender de rede - testada normalmente com SQLite em memoria.
+/// (`sincronizado_em IS NULL`) e que nao estao "esperando o backoff" de uma
+/// falha recente (`sync_proxima_tentativa` no futuro), mais antigos primeiro.
+/// Pura leitura local, sem depender de rede - testada normalmente com SQLite
+/// em memoria.
 pub fn movimentos_pendentes(conn: &Connection) -> AppResult<Vec<LinhaPendente>> {
     let mut stmt = conn.prepare(
         "SELECT m.id, m.armazem_id, a.codigo, m.armazem_destino_id, ad.codigo, m.fluxo,
@@ -48,6 +63,7 @@ pub fn movimentos_pendentes(conn: &Connection) -> AppResult<Vec<LinhaPendente>> 
          LEFT JOIN armazens ad ON ad.id = m.armazem_destino_id
          JOIN usuarios u ON u.id = m.usuario_id
          WHERE m.sincronizado_em IS NULL
+           AND (m.sync_proxima_tentativa IS NULL OR m.sync_proxima_tentativa <= datetime('now'))
          ORDER BY m.id ASC",
     )?;
 
@@ -118,6 +134,72 @@ pub fn marcar_sincronizado(conn: &Connection, ids: &[i64]) -> AppResult<()> {
     Ok(())
 }
 
+/// Registra uma tentativa de envio que falhou: incrementa `sync_tentativas`,
+/// grava o motivo em `sync_erro` e agenda `sync_proxima_tentativa` com o
+/// backoff correspondente - a linha so volta a aparecer em
+/// `movimentos_pendentes` depois desse horario.
+pub fn marcar_falha_sincronizacao(conn: &Connection, falhas: &[(i64, String)]) -> AppResult<()> {
+    for (id, erro) in falhas {
+        let erro_curto: String = erro.chars().take(300).collect();
+        conn.execute(
+            "UPDATE movimentos
+             SET sync_tentativas = sync_tentativas + 1,
+                 sync_erro = ?1,
+                 sync_proxima_tentativa = datetime('now', '+' || ?2 || ' minutes')
+             WHERE id = ?3",
+            rusqlite::params![
+                erro_curto,
+                calcular_backoff_minutos(
+                    conn.query_row(
+                        "SELECT sync_tentativas FROM movimentos WHERE id = ?1",
+                        rusqlite::params![id],
+                        |r| r.get::<_, i64>(0)
+                    )? + 1
+                ),
+                id
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+/// Retrato local do estado da fila de sincronizacao, pra mostrar ao gestor
+/// sem precisar de rede.
+#[derive(Debug, Serialize)]
+pub struct StatusSincronizacao {
+    pub pendentes: i64,
+    pub com_erro: i64,
+    pub ultimo_erro: Option<String>,
+}
+
+pub fn status_sincronizacao(conn: &Connection) -> AppResult<StatusSincronizacao> {
+    let pendentes = conn.query_row(
+        "SELECT COUNT(*) FROM movimentos WHERE sincronizado_em IS NULL",
+        [],
+        |r| r.get(0),
+    )?;
+    let com_erro = conn.query_row(
+        "SELECT COUNT(*) FROM movimentos WHERE sincronizado_em IS NULL AND sync_tentativas > 0",
+        [],
+        |r| r.get(0),
+    )?;
+    let ultimo_erro = conn
+        .query_row(
+            "SELECT sync_erro FROM movimentos
+             WHERE sincronizado_em IS NULL AND sync_erro IS NOT NULL
+             ORDER BY id DESC LIMIT 1",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?
+        .flatten();
+    Ok(StatusSincronizacao {
+        pendentes,
+        com_erro,
+        ultimo_erro,
+    })
+}
+
 const SQL_CRIAR_TABELA_REMOTA: &str = "
     CREATE TABLE IF NOT EXISTS movimentos_consolidados (
         armazem_codigo TEXT NOT NULL,
@@ -182,11 +264,17 @@ const SQL_UPSERT: &str = "
 /// So o passo local (quais linhas estao pendentes, marcar como enviado) e
 /// coberto por teste automatizado - o passo de rede em si so pode ser
 /// validado com uma conta/banco Turso real (ver docs/ARQUITETURA.md).
+#[derive(Debug, Default)]
+pub struct ResultadoSincronizacao {
+    pub enviados: Vec<i64>,
+    pub falhas: Vec<(i64, String)>,
+}
+
 pub async fn enviar_para_turso(
     url: &str,
     token: &str,
     pendentes: &[LinhaPendente],
-) -> AppResult<Vec<i64>> {
+) -> AppResult<ResultadoSincronizacao> {
     let banco = libsql::Builder::new_remote(url.to_string(), token.to_string())
         .build()
         .await
@@ -207,13 +295,13 @@ pub async fn enviar_para_turso(
         let _ = remoto.execute(alter, ()).await;
     }
 
-    let mut enviados = Vec::new();
+    let mut resultado = ResultadoSincronizacao::default();
 
     for linha in pendentes {
         let itens_json = serde_json::to_string(&linha.itens)
             .map_err(|e| AppError::Interno(format!("Nao foi possivel serializar os itens: {e}")))?;
 
-        let resultado = remoto
+        let execucao = remoto
             .execute(
                 SQL_UPSERT,
                 libsql::params![
@@ -243,12 +331,13 @@ pub async fn enviar_para_turso(
             )
             .await;
 
-        if resultado.is_ok() {
-            enviados.push(linha.movimento.id);
+        match execucao {
+            Ok(_) => resultado.enviados.push(linha.movimento.id),
+            Err(e) => resultado.falhas.push((linha.movimento.id, e.to_string())),
         }
     }
 
-    Ok(enviados)
+    Ok(resultado)
 }
 
 /// Um envio (`saida` de `peca_montagem` com `armazem_destino_codigo`
@@ -543,6 +632,7 @@ mod tests {
                     condicao: None,
                     quantidade: 1,
                     observacao: None,
+                    quantidade_enviada: None,
                 }],
             },
         )
@@ -572,6 +662,49 @@ mod tests {
         let (conn, _movimento_id) = conexao_com_movimento();
         assert!(marcar_sincronizado(&conn, &[]).is_ok());
         assert_eq!(movimentos_pendentes(&conn).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn calcular_backoff_minutos_cresce_e_depois_estabiliza() {
+        assert_eq!(calcular_backoff_minutos(0), 1);
+        assert_eq!(calcular_backoff_minutos(1), 1);
+        assert_eq!(calcular_backoff_minutos(2), 5);
+        assert_eq!(calcular_backoff_minutos(3), 15);
+        assert_eq!(calcular_backoff_minutos(4), 30);
+        assert_eq!(calcular_backoff_minutos(5), 60);
+        assert_eq!(calcular_backoff_minutos(50), 60);
+    }
+
+    #[test]
+    fn marcar_falha_sincronizacao_tira_da_lista_de_pendentes_ate_o_backoff_passar() {
+        let (conn, movimento_id) = conexao_com_movimento();
+        marcar_falha_sincronizacao(&conn, &[(movimento_id, "sem internet".into())]).unwrap();
+
+        // sync_proxima_tentativa fica no futuro (1 min) - some da lista.
+        assert!(movimentos_pendentes(&conn).unwrap().is_empty());
+
+        let status = status_sincronizacao(&conn).unwrap();
+        assert_eq!(status.pendentes, 1);
+        assert_eq!(status.com_erro, 1);
+        assert_eq!(status.ultimo_erro.as_deref(), Some("sem internet"));
+
+        // Depois que o horario do backoff passa, volta a aparecer.
+        conn.execute(
+            "UPDATE movimentos SET sync_proxima_tentativa = datetime('now', '-1 minute') WHERE id = ?1",
+            rusqlite::params![movimento_id],
+        )
+        .unwrap();
+        assert_eq!(movimentos_pendentes(&conn).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn status_sincronizacao_sem_pendencias_fica_zerado() {
+        let (conn, movimento_id) = conexao_com_movimento();
+        marcar_sincronizado(&conn, &[movimento_id]).unwrap();
+        let status = status_sincronizacao(&conn).unwrap();
+        assert_eq!(status.pendentes, 0);
+        assert_eq!(status.com_erro, 0);
+        assert_eq!(status.ultimo_erro, None);
     }
 
     #[test]
@@ -625,6 +758,7 @@ mod tests {
                     condicao: Some("boa".into()),
                     quantidade: 2,
                     observacao: None,
+                    quantidade_enviada: None,
                 }],
             },
         )

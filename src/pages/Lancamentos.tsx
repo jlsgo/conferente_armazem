@@ -55,6 +55,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
   const [lancamentos, setLancamentos] = useState<Movimento[]>([]);
   const [fechamento, setFechamento] = useState<Fechamento | null>(null);
   const [carregandoLista, setCarregandoLista] = useState(true);
+  const [erroCarregamento, setErroCarregamento] = useState('');
   const [sugestoesPorCategoria, setSugestoesPorCategoria] = useState<Partial<Record<Categoria, string[]>>>({});
 
   const [tipo, setTipo] = useState<TipoMovimento>('saida');
@@ -73,13 +74,21 @@ export default function Lancamentos({ usuario, armazem }: Props) {
 
   async function carregarTudo() {
     setCarregandoLista(true);
-    const [lista, fechamentoDoDia] = await Promise.all([
-      listarMovimentosDoDia({ armazem_id: armazemId, fluxo: 'saida_armazem', data }),
-      buscarFechamentoDoDia({ armazem_id: armazemId, fluxo: 'saida_armazem', data }),
-    ]);
-    setLancamentos(lista);
-    setFechamento(fechamentoDoDia);
-    setCarregandoLista(false);
+    setErroCarregamento('');
+    try {
+      const [lista, fechamentoDoDia] = await Promise.all([
+        listarMovimentosDoDia({ armazem_id: armazemId, fluxo: 'saida_armazem', data }),
+        buscarFechamentoDoDia({ armazem_id: armazemId, fluxo: 'saida_armazem', data }),
+      ]);
+      setLancamentos(lista);
+      setFechamento(fechamentoDoDia);
+    } catch (err) {
+      setErroCarregamento(
+        typeof err === 'string' ? err : 'Nao foi possivel carregar os lancamentos de hoje.'
+      );
+    } finally {
+      setCarregandoLista(false);
+    }
   }
 
   async function garantirSugestoes(categoria: Categoria) {
@@ -215,6 +224,17 @@ export default function Lancamentos({ usuario, armazem }: Props) {
 
   if (carregandoLista) {
     return <p className="carregando">Carregando...</p>;
+  }
+
+  if (erroCarregamento) {
+    return (
+      <div className="cartao">
+        <p className="erro">{erroCarregamento}</p>
+        <button type="button" onClick={carregarTudo}>
+          Tentar novamente
+        </button>
+      </div>
+    );
   }
 
   if (fechamento) {

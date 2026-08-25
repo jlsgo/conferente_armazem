@@ -69,6 +69,7 @@ fn item(
         condicao: condicao.map(String::from),
         quantidade,
         observacao: observacao.map(String::from),
+        quantidade_enviada: None,
     }
 }
 

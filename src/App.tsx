@@ -9,20 +9,39 @@ export default function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState('');
 
   async function refreshStatus() {
-    const s = await getStatus();
-    setStatus(s);
+    setErro('');
+    try {
+      const s = await getStatus();
+      setStatus(s);
+    } catch (err) {
+      setErro(typeof err === 'string' ? err : 'Nao foi possivel iniciar o aplicativo.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    refreshStatus().finally(() => setLoading(false));
+    refreshStatus();
   }, []);
 
-  if (loading || !status) {
+  if (loading) {
     return (
       <div className="tela-centralizada">
         <p className="carregando">Carregando...</p>
+      </div>
+    );
+  }
+
+  if (erro || !status) {
+    return (
+      <div className="tela-centralizada">
+        <p className="erro">{erro || 'Nao foi possivel iniciar o aplicativo.'}</p>
+        <button type="button" onClick={refreshStatus}>
+          Tentar novamente
+        </button>
       </div>
     );
   }

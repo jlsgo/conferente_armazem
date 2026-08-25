@@ -14,6 +14,10 @@ fn migrations() -> Migrations<'static> {
         M::up(include_str!("../../migrations/0002_fechamentos.sql")),
         M::up(include_str!("../../migrations/0003_sync.sql")),
         M::up(include_str!("../../migrations/0004_transferencias.sql")),
+        M::up(include_str!("../../migrations/0005_sync_retry.sql")),
+        M::up(include_str!(
+            "../../migrations/0006_divergencia_recebimento.sql"
+        )),
     ])
 }
 

@@ -171,6 +171,11 @@ pub fn criar_usuario_como_gestor(
             "Somente um gestor pode cadastrar novos usuarios.".into(),
         ));
     }
+    if novo.papel == "gestor" {
+        return Err(AppError::Validation(
+            "Nao e permitido cadastrar outro gestor por aqui.".into(),
+        ));
+    }
     criar_usuario(conn, novo)
 }
 
@@ -337,6 +342,36 @@ mod tests {
         criar_usuario(&conn, novo()).unwrap();
         let resultado = criar_usuario(&conn, novo());
         assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn gestor_nao_pode_cadastrar_outro_gestor() {
+        let conn = conexao_de_teste();
+        let gestor_id = criar_usuario(
+            &conn,
+            NovoUsuario {
+                nome: "Brenda",
+                login: "brenda",
+                senha: "senha123",
+                armazem_id: None,
+                papel: "gestor",
+            },
+        )
+        .unwrap();
+
+        let resultado = criar_usuario_como_gestor(
+            &conn,
+            gestor_id,
+            NovoUsuario {
+                nome: "Karol",
+                login: "karol",
+                senha: "senha123",
+                armazem_id: None,
+                papel: "gestor",
+            },
+        );
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
+        assert_eq!(listar_usuarios(&conn, None).unwrap().len(), 1);
     }
 
     #[test]

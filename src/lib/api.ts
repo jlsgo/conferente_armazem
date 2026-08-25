@@ -7,6 +7,7 @@ import type {
   Movimento,
   NovoMovimento,
   NovoUsuarioInput,
+  StatusSincronizacao,
   TransferenciaPendente,
   Usuario,
 } from '../types';
@@ -159,6 +160,14 @@ export async function sincronizarAgora(): Promise<SincronizarResult> {
   }
 }
 
+export async function statusSincronizacao(): Promise<StatusSincronizacao | null> {
+  try {
+    return await invoke<StatusSincronizacao>('status_sincronizacao');
+  } catch {
+    return null;
+  }
+}
+
 export async function buscarTransferenciasPendentes(): Promise<TransferenciaPendente[]> {
   try {
     return await invoke<TransferenciaPendente[]>('buscar_transferencias_pendentes');
@@ -175,13 +184,15 @@ export interface ConfirmarRecebimentoResult extends OkResult {
 export async function confirmarRecebimento(
   origemArmazemCodigo: string,
   origemId: number,
-  hora: string
+  hora: string,
+  quantidadesRecebidas: number[]
 ): Promise<ConfirmarRecebimentoResult> {
   try {
     const movimento = await invoke<Movimento>('confirmar_recebimento', {
       origem_armazem_codigo: origemArmazemCodigo,
       origem_id: origemId,
       hora,
+      quantidades_recebidas: quantidadesRecebidas,
     });
     return { ok: true, movimento };
   } catch (err) {

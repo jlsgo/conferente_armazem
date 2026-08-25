@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Painel Ecoviva - Armazens</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f6f4;
+    --texto: #1c2b1e;
+    --cartao: #ffffff;
+    --borda: #d9ddd6;
+    --verde: #1f6b3a;
+    --verde-claro: #e6f2ea;
+    --erro: #a3272c;
+    --erro-claro: #fdecec;
+    --divergencia: #b7791f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--texto);
+  }
+  header {
+    background: var(--verde);
+    color: white;
+    padding: 16px 20px;
+  }
+  header h1 { margin: 0; font-size: 1.3rem; }
+  header p { margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9; }
+  main { padding: 20px; max-width: 1200px; margin: 0 auto; }
+  .cartao {
+    background: var(--cartao);
+    border: 1px solid var(--borda);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .gate {
+    max-width: 380px;
+    margin: 80px auto;
+    text-align: center;
+  }
+  .gate input {
+    width: 100%;
+    padding: 10px;
+    font-size: 1rem;
+    margin: 12px 0;
+    border: 1px solid var(--borda);
+    border-radius: 6px;
+  }
+  .gate button, .filtros button {
+    background: var(--verde);
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+  .gate .erro { color: var(--erro); font-size: 0.9rem; }
+  .filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+  .filtros label { display: flex; flex-direction: column; font-size: 0.8rem; gap: 4px; }
+  .filtros select, .filtros input {
+    padding: 6px 8px;
+    border: 1px solid var(--borda);
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+  th { position: sticky; top: 0; background: var(--cartao); }
+  .tabela-scroll { overflow-x: auto; max-height: 65vh; overflow-y: auto; }
+  .badge { border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; }
+  .badge-pendente { background: #fff4d6; color: #7a5b00; }
+  .badge-divergencia { background: #fde9d0; color: var(--divergencia); }
+  .badge-estorno { background: var(--erro-claro); color: var(--erro); }
+  .rodape { font-size: 0.75rem; opacity: 0.7; margin-top: 8px; }
+  .escondido { display: none; }
+</style>
+</head>
+<body>
+
+<div id="gate" class="gate cartao">
+  <h2>Painel Ecoviva</h2>
+  <p>Acesso restrito - digite a senha combinada com a gestao.</p>
+  <input id="campo-senha" type="password" placeholder="Senha" autofocus />
+  <button id="botao-entrar">Entrar</button>
+  <p id="erro-senha" class="erro escondido">Senha incorreta.</p>
+</div>
+
+<div id="conteudo" class="escondido">
+  <header>
+    <h1>Painel Ecoviva - Armazens A4 / B2</h1>
+    <p id="status-topo">Carregando...</p>
+  </header>
+  <main>
+    <div class="cartao filtros">
+      <label>Armazem
+        <select id="filtro-armazem">
+          <option value="">Todos</option>
+          <option value="A4">A4</option>
+          <option value="B2">B2</option>
+        </select>
+      </label>
+      <label>Fluxo
+        <select id="filtro-fluxo">
+          <option value="">Todos</option>
+          <option value="saida_armazem">Saida de Armazem</option>
+          <option value="peca_montagem">Montagem</option>
+          <option value="sac">SAC</option>
+        </select>
+      </label>
+      <label>Data
+        <input id="filtro-data" type="date" />
+      </label>
+      <label>&nbsp;
+        <button id="botao-atualizar">Atualizar agora</button>
+      </label>
+    </div>
+
+    <div class="cartao">
+      <h3>Transferencias pendentes de confirmacao</h3>
+      <div id="lista-pendentes"><p>Nenhuma.</p></div>
+    </div>
+
+    <div class="cartao">
+      <h3>Movimentos recentes</h3>
+      <div class="tabela-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Armazem</th>
+              <th>Fluxo</th>
+              <th>Tipo</th>
+              <th>Data</th>
+              <th>Hora</th>
+              <th>Pedido</th>
+              <th>Itens</th>
+              <th>Qtd.</th>
+              <th>Registrado por</th>
+              <th>Situacao</th>
+              <th>Sincronizado</th>
+            </tr>
+          </thead>
+          <tbody id="corpo-tabela"></tbody>
+        </table>
+      </div>
+      <p class="rodape" id="rodape-tabela"></p>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // Substituidos no deploy pelo workflow do GitHub Actions
+  // (.github/workflows/deploy-painel.yml) a partir de secrets do repo -
+  // nunca ficam commitados de verdade no arquivo fonte.
+  var TURSO_URL = "__TURSO_PAINEL_URL__";
+  var TURSO_TOKEN = "__TURSO_PAINEL_TOKEN__";
+
+  // SHA-256 da senha combinada com a gestao - a senha em texto puro nunca
+  // fica no arquivo. Isso NAO e seguranca de verdade (qualquer um que veja
+  // o codigo-fonte pode forcar/testar hashes offline) - so afasta acesso
+  // casual. A protecao real e o token do Turso acima ser SOMENTE LEITURA
+  // (escopo reforcado pelo servidor): mesmo que a senha vaze, da so pra ler.
+  var SENHA_HASH = "3030678937569bf5f7e8130183ad7873f4426c7a67faf2ec88907ba343e18107";
+  var CHAVE_SESSAO = "ecoviva-painel-autenticado";
+
+  var elGate = document.getElementById("gate");
+  var elConteudo = document.getElementById("conteudo");
+  var elCampoSenha = document.getElementById("campo-senha");
+  var elBotaoEntrar = document.getElementById("botao-entrar");
+  var elErroSenha = document.getElementById("erro-senha");
+
+  async function sha256Hex(texto) {
+    var buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(texto));
+    return Array.from(new Uint8Array(buf)).map(function (b) {
+      return b.toString(16).padStart(2, "0");
+    }).join("");
+  }
+
+  async function tentarEntrar() {
+    var digitado = elCampoSenha.value;
+    var hash = await sha256Hex(digitado);
+    if (hash === SENHA_HASH) {
+      try { sessionStorage.setItem(CHAVE_SESSAO, "1"); } catch (e) {}
+      liberarAcesso();
+    } else {
+      elErroSenha.classList.remove("escondido");
+    }
+  }
+
+  function liberarAcesso() {
+    elGate.classList.add("escondido");
+    elConteudo.classList.remove("escondido");
+    iniciar();
+  }
+
+  elBotaoEntrar.addEventListener("click", tentarEntrar);
+  elCampoSenha.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") tentarEntrar();
+  });
+
+  var jaAutenticado = false;
+  try { jaAutenticado = sessionStorage.getItem(CHAVE_SESSAO) === "1"; } catch (e) {}
+  if (jaAutenticado) liberarAcesso();
+
+  // ---- Dados ----
+
+  var todosOsMovimentos = [];
+  var intervaloAtualizacao = null;
+
+  async function buscarMovimentos() {
+    var resposta = await fetch(TURSO_URL + "/v2/pipeline", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + TURSO_TOKEN,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        requests: [
+          {
+            type: "execute",
+            stmt: {
+              sql: "SELECT armazem_codigo, id_origem, fluxo, tipo, data, hora, usuario_nome, numero_pedido, status, estornado_de, itens_json, armazem_destino_codigo, recebido_de_armazem_codigo, recebido_de_id_origem, enviado_em FROM movimentos_consolidados ORDER BY data DESC, hora DESC LIMIT 300"
+            }
+          },
+          { type: "close" }
+        ]
+      })
+    });
+
+    if (!resposta.ok) {
+      throw new Error("Turso respondeu " + resposta.status);
+    }
+    var corpo = await resposta.json();
+    var execucao = corpo.results && corpo.results[0];
+    if (!execucao || execucao.type !== "ok") {
+      throw new Error("Resposta inesperada do Turso.");
+    }
+    var linhas = execucao.response.result.rows;
+    return linhas.map(function (linha) {
+      function v(i) { return linha[i] && linha[i].value !== undefined ? linha[i].value : null; }
+      var itens = [];
+      try { itens = JSON.parse(v(10) || "[]"); } catch (e) { itens = []; }
+      return {
+        armazem_codigo: v(0),
+        id_origem: Number(v(1)),
+        fluxo: v(2),
+        tipo: v(3),
+        data: v(4),
+        hora: v(5),
+        usuario_nome: v(6),
+        numero_pedido: v(7),
+        status: v(8),
+        estornado_de: v(9) != null ? Number(v(9)) : null,
+        itens: itens,
+        armazem_destino_codigo: v(11),
+        recebido_de_armazem_codigo: v(12),
+        recebido_de_id_origem: v(13) != null ? Number(v(13)) : null,
+        enviado_em: v(14)
+      };
+    });
+  }
+
+  function chave(armazem, id) { return armazem + ":" + id; }
+
+  function calcularPendentes(movimentos) {
+    var confirmados = new Set();
+    var estornados = new Set();
+    movimentos.forEach(function (m) {
+      if (m.recebido_de_armazem_codigo && m.recebido_de_id_origem != null) {
+        confirmados.add(chave(m.recebido_de_armazem_codigo, m.recebido_de_id_origem));
+      }
+      if (m.estornado_de != null) {
+        estornados.add(chave(m.armazem_codigo, m.estornado_de));
+      }
+    });
+    return movimentos.filter(function (m) {
+      return m.fluxo === "peca_montagem" && m.tipo === "saida" && m.armazem_destino_codigo &&
+        m.estornado_de == null &&
+        !confirmados.has(chave(m.armazem_codigo, m.id_origem)) &&
+        !estornados.has(chave(m.armazem_codigo, m.id_origem));
+    });
+  }
+
+  function totalItens(itens) {
+    return itens.reduce(function (s, it) { return s + (it.quantidade || 0); }, 0);
+  }
+
+  function resumoItens(itens) {
+    return itens.map(function (it) {
+      var base = it.quantidade + "x " + it.categoria + (it.descricao ? " (" + it.descricao + ")" : "");
+      if (it.quantidade_enviada != null && it.quantidade_enviada !== it.quantidade) {
+        base += " [divergencia: enviado " + it.quantidade_enviada + "]";
+      }
+      return base;
+    }).join(" + ");
+  }
+
+  function temDivergencia(itens) {
+    return itens.some(function (it) {
+      return it.quantidade_enviada != null && it.quantidade_enviada !== it.quantidade;
+    });
+  }
+
+  function renderizarPendentes(movimentos) {
+    var el = document.getElementById("lista-pendentes");
+    var pendentes = calcularPendentes(movimentos);
+    if (pendentes.length === 0) {
+      el.innerHTML = "<p>Nenhuma.</p>";
+      return;
+    }
+    el.innerHTML = pendentes.map(function (m) {
+      return '<p><span class="badge badge-pendente">pendente</span> ' +
+        m.armazem_codigo + " &rarr; " + (m.armazem_destino_codigo || "?") + " - " +
+        m.data + " " + m.hora + " - " + resumoItens(m.itens) + "</p>";
+    }).join("");
+  }
+
+  function aplicarFiltros(movimentos) {
+    var armazem = document.getElementById("filtro-armazem").value;
+    var fluxo = document.getElementById("filtro-fluxo").value;
+    var data = document.getElementById("filtro-data").value;
+    return movimentos.filter(function (m) {
+      if (armazem && m.armazem_codigo !== armazem) return false;
+      if (fluxo && m.fluxo !== fluxo) return false;
+      if (data && m.data !== data) return false;
+      return true;
+    });
+  }
+
+  function renderizarTabela() {
+    var filtrados = aplicarFiltros(todosOsMovimentos);
+    var corpo = document.getElementById("corpo-tabela");
+    corpo.innerHTML = filtrados.map(function (m) {
+      var situacao = m.estornado_de != null
+        ? '<span class="badge badge-estorno">estorno</span>'
+        : m.status;
+      var divergencia = temDivergencia(m.itens)
+        ? ' <span class="badge badge-divergencia">divergencia</span>'
+        : "";
+      return "<tr>" +
+        "<td>" + m.armazem_codigo + "</td>" +
+        "<td>" + m.fluxo + "</td>" +
+        "<td>" + m.tipo + "</td>" +
+        "<td>" + m.data + "</td>" +
+        "<td>" + m.hora + "</td>" +
+        "<td>" + (m.numero_pedido || "-") + "</td>" +
+        "<td>" + resumoItens(m.itens) + divergencia + "</td>" +
+        "<td>" + totalItens(m.itens) + "</td>" +
+        "<td>" + m.usuario_nome + "</td>" +
+        "<td>" + situacao + "</td>" +
+        "<td>" + (m.enviado_em || "-") + "</td>" +
+        "</tr>";
+    }).join("");
+    document.getElementById("rodape-tabela").textContent =
+      filtrados.length + " de " + todosOsMovimentos.length + " movimentos (ultimos 300 sincronizados).";
+  }
+
+  async function atualizar() {
+    var elStatus = document.getElementById("status-topo");
+    try {
+      todosOsMovimentos = await buscarMovimentos();
+      renderizarPendentes(todosOsMovimentos);
+      renderizarTabela();
+      elStatus.textContent = "Atualizado as " + new Date().toLocaleTimeString("pt-BR") +
+        " - atualiza sozinho a cada 30s.";
+    } catch (e) {
+      elStatus.textContent = "Falha ao buscar dados: " + e.message;
+    }
+  }
+
+  function iniciar() {
+    document.getElementById("botao-atualizar").addEventListener("click", atualizar);
+    ["filtro-armazem", "filtro-fluxo", "filtro-data"].forEach(function (id) {
+      document.getElementById(id).addEventListener("change", renderizarTabela);
+    });
+    atualizar();
+    if (intervaloAtualizacao) clearInterval(intervaloAtualizacao);
+    intervaloAtualizacao = setInterval(atualizar, 30000);
+  }
+})();
+</script>
+</body>
+</html>

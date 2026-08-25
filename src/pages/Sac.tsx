@@ -47,6 +47,7 @@ export default function Sac({ usuario, armazem }: Props) {
   const [lancamentos, setLancamentos] = useState<Movimento[]>([]);
   const [fechamento, setFechamento] = useState<Fechamento | null>(null);
   const [carregandoLista, setCarregandoLista] = useState(true);
+  const [erroCarregamento, setErroCarregamento] = useState('');
   const [sugestoes, setSugestoes] = useState<string[]>([]);
 
   const [hora, setHora] = useState(horaAtual());
@@ -63,13 +64,21 @@ export default function Sac({ usuario, armazem }: Props) {
 
   async function carregarTudo() {
     setCarregandoLista(true);
-    const [lista, fechamentoDoDia] = await Promise.all([
-      listarMovimentosDoDia({ armazem_id: armazemId, fluxo: 'sac', data }),
-      buscarFechamentoDoDia({ armazem_id: armazemId, fluxo: 'sac', data }),
-    ]);
-    setLancamentos(lista);
-    setFechamento(fechamentoDoDia);
-    setCarregandoLista(false);
+    setErroCarregamento('');
+    try {
+      const [lista, fechamentoDoDia] = await Promise.all([
+        listarMovimentosDoDia({ armazem_id: armazemId, fluxo: 'sac', data }),
+        buscarFechamentoDoDia({ armazem_id: armazemId, fluxo: 'sac', data }),
+      ]);
+      setLancamentos(lista);
+      setFechamento(fechamentoDoDia);
+    } catch (err) {
+      setErroCarregamento(
+        typeof err === 'string' ? err : 'Nao foi possivel carregar os lancamentos de hoje.'
+      );
+    } finally {
+      setCarregandoLista(false);
+    }
   }
 
   useEffect(() => {
@@ -206,6 +215,17 @@ export default function Sac({ usuario, armazem }: Props) {
 
   if (carregandoLista) {
     return <p className="carregando">Carregando...</p>;
+  }
+
+  if (erroCarregamento) {
+    return (
+      <div className="cartao">
+        <p className="erro">{erroCarregamento}</p>
+        <button type="button" onClick={carregarTudo}>
+          Tentar novamente
+        </button>
+      </div>
+    );
   }
 
   if (fechamento) {

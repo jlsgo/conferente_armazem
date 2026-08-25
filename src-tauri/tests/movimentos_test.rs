@@ -68,6 +68,7 @@ fn fluxo_completo_de_login_e_lancamento_de_pedido_misto() {
                 condicao: None,
                 quantidade: 1,
                 observacao: None,
+                quantidade_enviada: None,
             },
             MovimentoItemInput {
                 categoria: "patinete".into(),
@@ -76,6 +77,7 @@ fn fluxo_completo_de_login_e_lancamento_de_pedido_misto() {
                 condicao: None,
                 quantidade: 2,
                 observacao: None,
+                quantidade_enviada: None,
             },
         ],
     };

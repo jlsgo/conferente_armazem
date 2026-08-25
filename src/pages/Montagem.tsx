@@ -78,11 +78,13 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
   const [lancamentos, setLancamentos] = useState<Movimento[]>([]);
   const [fechamento, setFechamento] = useState<Fechamento | null>(null);
   const [carregandoLista, setCarregandoLista] = useState(true);
+  const [erroCarregamento, setErroCarregamento] = useState('');
   const [sugestoesPorCategoria, setSugestoesPorCategoria] = useState<Partial<Record<Categoria, string[]>>>({});
 
   const [pendentes, setPendentes] = useState<TransferenciaPendente[]>([]);
   const [carregandoPendentes, setCarregandoPendentes] = useState(true);
   const [confirmando, setConfirmando] = useState<string | null>(null);
+  const [quantidadesRecebidas, setQuantidadesRecebidas] = useState<Record<string, number[]>>({});
 
   const [hora, setHora] = useState(horaAtual());
   const [destino, setDestino] = useState<Destino>('armazem');
@@ -96,13 +98,21 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
 
   async function carregarTudo() {
     setCarregandoLista(true);
-    const [lista, fechamentoDoDia] = await Promise.all([
-      listarMovimentosDoDia({ armazem_id: armazemId, fluxo: 'peca_montagem', data }),
-      buscarFechamentoDoDia({ armazem_id: armazemId, fluxo: 'peca_montagem', data }),
-    ]);
-    setLancamentos(lista);
-    setFechamento(fechamentoDoDia);
-    setCarregandoLista(false);
+    setErroCarregamento('');
+    try {
+      const [lista, fechamentoDoDia] = await Promise.all([
+        listarMovimentosDoDia({ armazem_id: armazemId, fluxo: 'peca_montagem', data }),
+        buscarFechamentoDoDia({ armazem_id: armazemId, fluxo: 'peca_montagem', data }),
+      ]);
+      setLancamentos(lista);
+      setFechamento(fechamentoDoDia);
+    } catch (err) {
+      setErroCarregamento(
+        typeof err === 'string' ? err : 'Nao foi possivel carregar os lancamentos de hoje.'
+      );
+    } finally {
+      setCarregandoLista(false);
+    }
   }
 
   async function carregarPendentes() {
@@ -123,6 +133,26 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
     garantirSugestoes('peca');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    setQuantidadesRecebidas((atual) => {
+      const novo = { ...atual };
+      for (const t of pendentes) {
+        const chave = chaveTransferencia(t);
+        if (!novo[chave]) {
+          novo[chave] = t.itens.map((it) => it.quantidade);
+        }
+      }
+      return novo;
+    });
+  }, [pendentes]);
+
+  function atualizarQuantidadeRecebida(chave: string, indice: number, valor: number) {
+    setQuantidadesRecebidas((atual) => ({
+      ...atual,
+      [chave]: (atual[chave] ?? []).map((q, i) => (i === indice ? valor : q)),
+    }));
+  }
 
   function atualizarItem(indice: number, alteracoes: Partial<ItemForm>) {
     setItens((atual) => atual.map((it, i) => (i === indice ? { ...it, ...alteracoes } : it)));
@@ -196,8 +226,15 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
 
   async function handleConfirmar(t: TransferenciaPendente) {
     setErro('');
-    setConfirmando(chaveTransferencia(t));
-    const resultado = await confirmarRecebimento(t.armazem_origem_codigo, t.id_origem, horaAtual());
+    const chave = chaveTransferencia(t);
+    setConfirmando(chave);
+    const quantidades = quantidadesRecebidas[chave] ?? t.itens.map((it) => it.quantidade);
+    const resultado = await confirmarRecebimento(
+      t.armazem_origem_codigo,
+      t.id_origem,
+      horaAtual(),
+      quantidades
+    );
     setConfirmando(null);
 
     if (!resultado.ok) {
@@ -274,6 +311,17 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
     return <p className="carregando">Carregando...</p>;
   }
 
+  if (erroCarregamento) {
+    return (
+      <div className="cartao">
+        <p className="erro">{erroCarregamento}</p>
+        <button type="button" onClick={carregarTudo}>
+          Tentar novamente
+        </button>
+      </div>
+    );
+  }
+
   if (fechamento) {
     return (
       <div>
@@ -335,40 +383,56 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
         <section className="cartao somente-tela">
           <h2>Transferencias chegando{outroArmazem ? ` de ${outroArmazem.codigo}` : ''}</h2>
           <p className="subtitulo">
-            Confira fisicamente o que chegou antes de confirmar - os itens abaixo veem exatamente do
-            que foi enviado, sem precisar redigitar nada.
+            Confira fisicamente o que chegou antes de confirmar. A quantidade ja vem preenchida com o
+            que foi enviado - so mude se chegou diferente.
           </p>
           <div className="tabela-scroll">
             <table>
               <thead>
                 <tr>
                   <th>Data do envio</th>
-                  <th>Itens</th>
-                  <th>Qtd.</th>
+                  <th>Itens (enviado / recebido)</th>
                   <th className="somente-tela">Acoes</th>
                 </tr>
               </thead>
               <tbody>
-                {pendentes.map((t) => (
-                  <tr key={chaveTransferencia(t)}>
-                    <td>{t.data} {t.hora}</td>
-                    <td>
-                      {t.itens
-                        .map((it) => `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`)
-                        .join(' + ')}
-                    </td>
-                    <td>{t.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
-                    <td className="somente-tela">
-                      <button
-                        type="button"
-                        onClick={() => handleConfirmar(t)}
-                        disabled={confirmando === chaveTransferencia(t)}
-                      >
-                        {confirmando === chaveTransferencia(t) ? 'Confirmando...' : 'Confirmar recebimento'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {pendentes.map((t) => {
+                  const chave = chaveTransferencia(t);
+                  return (
+                    <tr key={chave}>
+                      <td>{t.data} {t.hora}</td>
+                      <td>
+                        {t.itens.map((it, indice) => (
+                          <div key={indice} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <span>
+                              {it.categoria}
+                              {it.descricao ? ` (${it.descricao})` : ''} - enviado {it.quantidade}:
+                            </span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={it.quantidade}
+                              value={quantidadesRecebidas[chave]?.[indice] ?? it.quantidade}
+                              onChange={(e) =>
+                                atualizarQuantidadeRecebida(chave, indice, Number(e.target.value))
+                              }
+                              style={{ width: 70 }}
+                            />
+                          </div>
+                        ))}
+                      </td>
+                      <td className="somente-tela">
+                        <button
+                          type="button"
+                          onClick={() => handleConfirmar(t)}
+                          disabled={confirmando === chave}
+                        >
+                          {confirmando === chave ? 'Confirmando...' : 'Confirmar recebimento'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -526,7 +590,11 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
                 <td>{direcaoTexto(m)}</td>
                 <td>
                   {m.itens
-                    .map((it) => `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`)
+                    .map((it) => {
+                      const base = `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`;
+                      const divergente = it.quantidade_enviada != null && it.quantidade_enviada !== it.quantidade;
+                      return divergente ? `${base} [enviado: ${it.quantidade_enviada}]` : base;
+                    })
                     .join(' + ')}
                 </td>
                 <td>{m.itens.reduce((s, it) => s + it.quantidade, 0)}</td>

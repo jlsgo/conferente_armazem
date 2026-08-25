@@ -23,6 +23,11 @@ pub struct MovimentoItemInput {
     pub condicao: Option<String>,
     pub quantidade: i64,
     pub observacao: Option<String>,
+    /// Preenchido so quando este item veio de uma confirmacao de
+    /// recebimento (`commands::sync_commands::confirmar_recebimento`) -
+    /// guarda quanto o remetente registrou, pra comparar com `quantidade`
+    /// (quanto realmente chegou). `None` em todo lancamento normal.
+    pub quantidade_enviada: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -60,6 +65,7 @@ pub struct MovimentoItem {
     pub condicao: Option<String>,
     pub quantidade: i64,
     pub observacao: Option<String>,
+    pub quantidade_enviada: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -215,6 +221,50 @@ fn validar_novo_movimento(novo: &NovoMovimento) -> AppResult<()> {
     Ok(())
 }
 
+/// Usado por `commands::sync_commands::confirmar_recebimento` pra transformar
+/// os itens de uma transferencia (o que o remetente registrou) nos itens do
+/// movimento de entrada local, deixando o conferente que recebe informar a
+/// quantidade realmente chegada. Nunca confia no frontend pra isso: rejeita
+/// se a quantidade recebida de qualquer item for maior que a enviada (nao da
+/// pra "receber" mais do que foi de fato mandado) ou <= 0, e rejeita se a
+/// lista de quantidades nao tiver exatamente um valor por item enviado.
+/// Quantidade recebida menor que a enviada e aceita normalmente (divergencia
+/// legitima) - fica registrada em `quantidade` (recebida) vs
+/// `quantidade_enviada` (o que foi mandado) pra auditoria/painel.
+pub fn validar_quantidades_recebidas(
+    enviados: &[MovimentoItem],
+    recebidos: &[i64],
+) -> AppResult<Vec<MovimentoItemInput>> {
+    if enviados.len() != recebidos.len() {
+        return Err(AppError::Validation(
+            "A lista de quantidades recebidas nao bate com os itens da transferencia.".into(),
+        ));
+    }
+
+    enviados
+        .iter()
+        .zip(recebidos.iter())
+        .map(|(item, &recebido)| {
+            if recebido <= 0 || recebido > item.quantidade {
+                return Err(AppError::Validation(format!(
+                    "Quantidade recebida invalida para {} (enviado: {}).",
+                    item.descricao.as_deref().unwrap_or(&item.categoria),
+                    item.quantidade
+                )));
+            }
+            Ok(MovimentoItemInput {
+                categoria: item.categoria.clone(),
+                descricao: item.descricao.clone(),
+                montagem: item.montagem.clone(),
+                condicao: item.condicao.clone(),
+                quantidade: recebido,
+                observacao: item.observacao.clone(),
+                quantidade_enviada: Some(item.quantidade),
+            })
+        })
+        .collect()
+}
+
 fn buscar_armazem_ativo(conn: &Connection, armazem_id: i64) -> AppResult<()> {
     let ativo: Option<bool> = conn
         .query_row(
@@ -273,6 +323,7 @@ struct ItemHash {
     condicao: Option<String>,
     quantidade: i64,
     observacao: Option<String>,
+    quantidade_enviada: Option<i64>,
 }
 
 /// Tudo que entra no hash de auditoria de uma linha - precisa cobrir todo
@@ -331,6 +382,7 @@ impl CamposHash {
                     condicao: i.condicao.clone(),
                     quantidade: i.quantidade,
                     observacao: i.observacao.clone(),
+                    quantidade_enviada: i.quantidade_enviada,
                 })
                 .collect(),
         }
@@ -343,13 +395,16 @@ fn calcular_hash(hash_anterior: &str, campos: &CamposHash) -> String {
         .iter()
         .map(|i| {
             format!(
-                "{}:{}:{}:{}:{}:{}",
+                "{}:{}:{}:{}:{}:{}:{}",
                 i.categoria,
                 i.descricao.as_deref().unwrap_or(""),
                 i.montagem.as_deref().unwrap_or(""),
                 i.condicao.as_deref().unwrap_or(""),
                 i.quantidade,
                 i.observacao.as_deref().unwrap_or(""),
+                i.quantidade_enviada
+                    .map(|v| v.to_string())
+                    .unwrap_or_default(),
             )
         })
         .collect();
@@ -470,8 +525,8 @@ pub fn criar_movimento(conn: &mut Connection, novo: NovoMovimento) -> AppResult<
 
     {
         let mut inserir_item = tx.prepare(
-            "INSERT INTO movimento_itens (movimento_id, categoria, descricao, montagem, condicao, quantidade, observacao)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO movimento_itens (movimento_id, categoria, descricao, montagem, condicao, quantidade, observacao, quantidade_enviada)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )?;
         for item in &novo.itens {
             inserir_item.execute(params![
@@ -482,6 +537,7 @@ pub fn criar_movimento(conn: &mut Connection, novo: NovoMovimento) -> AppResult<
                 item.condicao,
                 item.quantidade,
                 item.observacao,
+                item.quantidade_enviada,
             ])?;
         }
     }
@@ -578,6 +634,7 @@ pub fn estornar_movimento(
                 condicao: i.condicao.clone(),
                 quantidade: i.quantidade,
                 observacao: i.observacao.clone(),
+                quantidade_enviada: i.quantidade_enviada,
             })
             .collect(),
     };
@@ -616,8 +673,8 @@ pub fn estornar_movimento(
 
     {
         let mut inserir_item = tx.prepare(
-            "INSERT INTO movimento_itens (movimento_id, categoria, descricao, montagem, condicao, quantidade, observacao)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO movimento_itens (movimento_id, categoria, descricao, montagem, condicao, quantidade, observacao, quantidade_enviada)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )?;
         for item in &itens_originais {
             inserir_item.execute(params![
@@ -628,6 +685,7 @@ pub fn estornar_movimento(
                 item.condicao,
                 item.quantidade,
                 item.observacao,
+                item.quantidade_enviada,
             ])?;
         }
     }
@@ -707,6 +765,7 @@ pub fn verificar_cadeia(conn: &Connection) -> AppResult<Option<QuebraCadeia>> {
                 condicao: i.condicao,
                 quantidade: i.quantidade,
                 observacao: i.observacao,
+                quantidade_enviada: i.quantidade_enviada,
             })
             .collect();
 
@@ -728,7 +787,7 @@ pub(crate) fn carregar_itens(
     movimento_id: i64,
 ) -> AppResult<Vec<MovimentoItem>> {
     let mut stmt = conn.prepare(
-        "SELECT id, categoria, descricao, montagem, condicao, quantidade, observacao
+        "SELECT id, categoria, descricao, montagem, condicao, quantidade, observacao, quantidade_enviada
          FROM movimento_itens WHERE movimento_id = ?1 ORDER BY id ASC",
     )?;
     let itens = stmt
@@ -741,6 +800,7 @@ pub(crate) fn carregar_itens(
                 condicao: r.get(4)?,
                 quantidade: r.get(5)?,
                 observacao: r.get(6)?,
+                quantidade_enviada: r.get(7)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -1014,6 +1074,7 @@ mod tests {
                 condicao: None,
                 quantidade: 1,
                 observacao: None,
+                quantidade_enviada: None,
             },
             MovimentoItemInput {
                 categoria: "patinete".into(),
@@ -1022,6 +1083,7 @@ mod tests {
                 condicao: None,
                 quantidade: 2,
                 observacao: None,
+                quantidade_enviada: None,
             },
         ];
 
@@ -1050,6 +1112,7 @@ mod tests {
             condicao: None,
             quantidade: 1,
             observacao: None,
+            quantidade_enviada: None,
         }];
         let resultado = criar_movimento(&mut conn, movimento_base(armazem_id, usuario_id, itens));
         assert!(matches!(resultado, Err(AppError::Validation(_))));
@@ -1065,6 +1128,7 @@ mod tests {
             condicao: Some("boa".into()),
             quantidade: 0,
             observacao: None,
+            quantidade_enviada: None,
         }];
         let resultado = criar_movimento(&mut conn, movimento_base(armazem_id, usuario_id, itens));
         assert!(matches!(resultado, Err(AppError::Validation(_))));
@@ -1082,6 +1146,7 @@ mod tests {
                 condicao: None,
                 quantidade: qtd,
                 observacao: None,
+                quantidade_enviada: None,
             }];
             criar_movimento(&mut conn, movimento_base(armazem_id, usuario_id, itens)).unwrap();
         }
@@ -1112,6 +1177,7 @@ mod tests {
                 condicao: None,
                 quantidade: 1,
                 observacao: None,
+                quantidade_enviada: None,
             }]
         };
 
@@ -1146,6 +1212,7 @@ mod tests {
                 condicao: None,
                 quantidade: 1,
                 observacao: None,
+                quantidade_enviada: None,
             },
             MovimentoItemInput {
                 categoria: "peca".into(),
@@ -1154,6 +1221,7 @@ mod tests {
                 condicao: Some("boa".into()),
                 quantidade: 1,
                 observacao: None,
+                quantidade_enviada: None,
             },
         ];
         criar_movimento(&mut conn, movimento_base(armazem_id, usuario_id, itens)).unwrap();
@@ -1170,6 +1238,7 @@ mod tests {
             condicao: None,
             quantidade: 1,
             observacao: None,
+            quantidade_enviada: None,
         }]
     }
 
@@ -1252,6 +1321,7 @@ mod tests {
             condicao: None,
             quantidade: 1,
             observacao: None,
+            quantidade_enviada: None,
         }];
         let resultado = criar_movimento(&mut conn, movimento_base(armazem_id, usuario_id, itens));
         assert!(matches!(resultado, Err(AppError::Validation(_))));
@@ -1267,6 +1337,7 @@ mod tests {
             condicao: Some("meio-boa".into()),
             quantidade: 1,
             observacao: None,
+            quantidade_enviada: None,
         }];
         let resultado = criar_movimento(&mut conn, movimento_base(armazem_id, usuario_id, itens));
         assert!(matches!(resultado, Err(AppError::Validation(_))));
@@ -1293,6 +1364,7 @@ mod tests {
             condicao: None,
             quantidade: QUANTIDADE_MAX + 1,
             observacao: None,
+            quantidade_enviada: None,
         }];
         let resultado = criar_movimento(&mut conn, movimento_base(armazem_id, usuario_id, itens));
         assert!(matches!(resultado, Err(AppError::Validation(_))));
@@ -1608,6 +1680,7 @@ mod tests {
             condicao: None,
             quantidade: -5,
             observacao: None,
+            quantidade_enviada: None,
         }];
         let resultado = criar_movimento(&mut conn, movimento_base(armazem_id, usuario_id, itens));
         assert!(matches!(resultado, Err(AppError::Validation(_))));
@@ -1850,5 +1923,55 @@ mod tests {
     fn autorizar_leitura_permite_usuario_do_proprio_armazem() {
         let (conn, armazem_id, usuario_id) = conexao_de_teste();
         assert!(autorizar_leitura(&conn, usuario_id, armazem_id).is_ok());
+    }
+
+    fn item_enviado(quantidade: i64) -> MovimentoItem {
+        MovimentoItem {
+            id: 1,
+            categoria: "peca".into(),
+            descricao: Some("Bateria 48V".into()),
+            montagem: None,
+            condicao: Some("boa".into()),
+            quantidade,
+            observacao: None,
+            quantidade_enviada: None,
+        }
+    }
+
+    #[test]
+    fn validar_quantidades_recebidas_aceita_igual_ao_enviado() {
+        let enviados = vec![item_enviado(5)];
+        let resultado = validar_quantidades_recebidas(&enviados, &[5]).unwrap();
+        assert_eq!(resultado[0].quantidade, 5);
+        assert_eq!(resultado[0].quantidade_enviada, Some(5));
+    }
+
+    #[test]
+    fn validar_quantidades_recebidas_aceita_menor_que_o_enviado() {
+        let enviados = vec![item_enviado(5)];
+        let resultado = validar_quantidades_recebidas(&enviados, &[3]).unwrap();
+        assert_eq!(resultado[0].quantidade, 3);
+        assert_eq!(resultado[0].quantidade_enviada, Some(5));
+    }
+
+    #[test]
+    fn validar_quantidades_recebidas_rejeita_maior_que_o_enviado() {
+        let enviados = vec![item_enviado(5)];
+        let resultado = validar_quantidades_recebidas(&enviados, &[6]);
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn validar_quantidades_recebidas_rejeita_zero_ou_negativo() {
+        let enviados = vec![item_enviado(5)];
+        assert!(validar_quantidades_recebidas(&enviados, &[0]).is_err());
+        assert!(validar_quantidades_recebidas(&enviados, &[-1]).is_err());
+    }
+
+    #[test]
+    fn validar_quantidades_recebidas_rejeita_tamanho_diferente() {
+        let enviados = vec![item_enviado(5), item_enviado(2)];
+        let resultado = validar_quantidades_recebidas(&enviados, &[5]);
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
     }
 }

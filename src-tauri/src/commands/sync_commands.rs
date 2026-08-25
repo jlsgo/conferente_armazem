@@ -1,10 +1,10 @@
 use rusqlite::{params, Connection, OptionalExtension};
 use tauri::{Manager, State};
 
-use crate::db::sync::{self, TransferenciaPendente};
+use crate::db::sync::{self, StatusSincronizacao, TransferenciaPendente};
 use crate::domain::auth::buscar_usuario_ativo;
 use crate::domain::errors::{AppError, AppResult};
-use crate::domain::movimentos::{self, Movimento, MovimentoItemInput, NovoMovimento};
+use crate::domain::movimentos::{self, validar_quantidades_recebidas, Movimento, NovoMovimento};
 use crate::state::AppState;
 
 /// Codigo ('A4'/'B2') do armazem do usuario logado, direto do banco local -
@@ -63,18 +63,44 @@ pub async fn sincronizar_agora(
         ));
     };
 
-    let enviados = sync::enviar_para_turso(&url, &token, &pendentes).await?;
+    let resultado = sync::enviar_para_turso(&url, &token, &pendentes).await?;
 
     {
         let conn = state.conn()?;
-        sync::marcar_sincronizado(&conn, &enviados)?;
+        sync::marcar_sincronizado(&conn, &resultado.enviados)?;
+        sync::marcar_falha_sincronizacao(&conn, &resultado.falhas)?;
     }
 
-    Ok(match enviados.len() {
-        0 => "Nenhum lancamento novo para enviar.".to_string(),
+    let enviados_txt = match resultado.enviados.len() {
+        0 => "Nenhum lancamento novo enviado.".to_string(),
         1 => "1 lancamento enviado.".to_string(),
         n => format!("{n} lancamentos enviados."),
+    };
+
+    Ok(if resultado.falhas.is_empty() {
+        enviados_txt
+    } else {
+        format!(
+            "{enviados_txt} {} com erro (tentando de novo automaticamente).",
+            resultado.falhas.len()
+        )
     })
+}
+
+/// Retrato local da fila de sincronizacao (quantos pendentes, quantos com
+/// erro, ultimo erro registrado) - gestor-only, mesmo padrao de
+/// `sincronizar_agora`. Nao depende de rede, so le o estado local.
+#[tauri::command(rename_all = "snake_case")]
+pub fn status_sincronizacao(state: State<AppState>) -> AppResult<StatusSincronizacao> {
+    let usuario_id = state.usuario_logado()?;
+    let conn = state.conn()?;
+    let usuario = buscar_usuario_ativo(&conn, usuario_id)?;
+    if usuario.papel != "gestor" {
+        return Err(AppError::Validation(
+            "Somente um gestor pode ver o status de sincronizacao.".into(),
+        ));
+    }
+    sync::status_sincronizacao(&conn)
 }
 
 /// Busca no Turso o que foi enviado pro armazem do usuario logado e ainda
@@ -120,6 +146,7 @@ pub async fn confirmar_recebimento(
     origem_armazem_codigo: String,
     origem_id: i64,
     hora: String,
+    quantidades_recebidas: Vec<i64>,
 ) -> AppResult<Movimento> {
     let usuario_id = state.usuario_logado()?;
 
@@ -160,18 +187,7 @@ pub async fn confirmar_recebimento(
         ));
     }
 
-    let itens: Vec<MovimentoItemInput> = transferencia
-        .itens
-        .into_iter()
-        .map(|i| MovimentoItemInput {
-            categoria: i.categoria,
-            descricao: i.descricao,
-            montagem: i.montagem,
-            condicao: i.condicao,
-            quantidade: i.quantidade,
-            observacao: i.observacao,
-        })
-        .collect();
+    let itens = validar_quantidades_recebidas(&transferencia.itens, &quantidades_recebidas)?;
 
     let movimento_confirmado = {
         let mut conn = state.conn()?;
@@ -212,9 +228,10 @@ pub async fn confirmar_recebimento(
         sync::movimentos_pendentes(&conn)?
     };
     match sync::enviar_para_turso(&url, &token, &pendentes).await {
-        Ok(enviados) => {
+        Ok(resultado) => {
             let conn = state.conn()?;
-            sync::marcar_sincronizado(&conn, &enviados)?;
+            sync::marcar_sincronizado(&conn, &resultado.enviados)?;
+            sync::marcar_falha_sincronizacao(&conn, &resultado.falhas)?;
         }
         Err(e) => log::warn!(
             "Confirmacao de recebimento #{} salva localmente, mas falhou ao sincronizar agora: {e}",

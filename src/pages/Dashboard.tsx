@@ -1,12 +1,14 @@
-import { useState } from 'react';
-import type { Armazem, Usuario } from '../types';
+import { useEffect, useState } from 'react';
+import type { Armazem, StatusSincronizacao, Usuario } from '../types';
 import Lancamentos from './Lancamentos';
 import Montagem from './Montagem';
 import Sac from './Sac';
 import Historico from './Historico';
 import Usuarios from './Usuarios';
 import logoEcoviva from '../assets/ecoviva-logo.png';
-import { sincronizarAgora } from '../lib/api';
+import { sincronizarAgora, statusSincronizacao } from '../lib/api';
+
+const INTERVALO_RETRY_SYNC_MS = 5 * 60 * 1000;
 
 interface Props {
   usuario: Usuario;
@@ -23,6 +25,11 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
 
   const [sincronizando, setSincronizando] = useState(false);
   const [mensagemSync, setMensagemSync] = useState('');
+  const [statusSync, setStatusSync] = useState<StatusSincronizacao | null>(null);
+
+  async function atualizarStatusSync() {
+    if (ehGestor) setStatusSync(await statusSincronizacao());
+  }
 
   async function handleSincronizar() {
     setSincronizando(true);
@@ -30,7 +37,18 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
     const resultado = await sincronizarAgora();
     setSincronizando(false);
     setMensagemSync(resultado.ok ? resultado.mensagem ?? '' : resultado.error ?? 'Falha ao sincronizar.');
+    await atualizarStatusSync();
   }
+
+  useEffect(() => {
+    if (!ehGestor) return;
+    atualizarStatusSync();
+    const intervalo = setInterval(() => {
+      handleSincronizar();
+    }, INTERVALO_RETRY_SYNC_MS);
+    return () => clearInterval(intervalo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ehGestor]);
 
   return (
     <div className="pagina">
@@ -48,6 +66,12 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
           {ehGestor && (
             <>
               {mensagemSync && <span className="subtitulo">{mensagemSync}</span>}
+              {!mensagemSync && statusSync && statusSync.pendentes > 0 && (
+                <span className="subtitulo" title={statusSync.ultimo_erro ?? ''}>
+                  {statusSync.pendentes} pendente{statusSync.pendentes > 1 ? 's' : ''}
+                  {statusSync.com_erro > 0 ? ` (${statusSync.com_erro} com erro)` : ''}
+                </span>
+              )}
               <button className="secundario" onClick={handleSincronizar} disabled={sincronizando}>
                 {sincronizando ? 'Sincronizando...' : 'Sincronizar agora'}
               </button>

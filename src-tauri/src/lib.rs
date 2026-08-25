@@ -58,17 +58,25 @@ pub fn run() {
                         }
                     };
                     match db::sync::enviar_para_turso(&url, &token, &pendentes).await {
-                        Ok(enviados) => {
+                        Ok(resultado) => {
                             if let Ok(conn) = state.conn() {
-                                if let Err(e) = db::sync::marcar_sincronizado(&conn, &enviados) {
+                                if let Err(e) =
+                                    db::sync::marcar_sincronizado(&conn, &resultado.enviados)
+                                {
                                     log::warn!(
                                         "Falha ao marcar lancamentos como sincronizados: {e}"
                                     );
                                 }
+                                if let Err(e) =
+                                    db::sync::marcar_falha_sincronizacao(&conn, &resultado.falhas)
+                                {
+                                    log::warn!("Falha ao registrar erro de sincronizacao: {e}");
+                                }
                             }
                             log::info!(
-                                "Sincronizacao com o Turso: {} lancamento(s) enviados.",
-                                enviados.len()
+                                "Sincronizacao com o Turso: {} enviados, {} com erro.",
+                                resultado.enviados.len(),
+                                resultado.falhas.len()
                             );
                         }
                         Err(e) => log::warn!("Falha na sincronizacao com o Turso: {e}"),
@@ -93,6 +101,7 @@ pub fn run() {
             commands::fechamento_commands::fechar_dia,
             commands::fechamento_commands::buscar_fechamento_do_dia,
             commands::sync_commands::sincronizar_agora,
+            commands::sync_commands::status_sincronizacao,
             commands::sync_commands::buscar_transferencias_pendentes,
             commands::sync_commands::confirmar_recebimento,
         ])

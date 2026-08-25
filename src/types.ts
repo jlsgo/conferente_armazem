@@ -59,6 +59,7 @@ export interface MovimentoItem {
   condicao: Condicao | null;
   quantidade: number;
   observacao: string | null;
+  quantidade_enviada: number | null;
 }
 
 export interface Movimento {
@@ -109,6 +110,12 @@ export interface Fechamento {
   criado_em: string;
   total_estornado: number;
   total_liquido: number;
+}
+
+export interface StatusSincronizacao {
+  pendentes: number;
+  com_erro: number;
+  ultimo_erro: string | null;
 }
 
 export interface NovoUsuarioInput {

@@ -112,15 +112,28 @@ não deixe ela ficar desatualizada.
   Turso real (simulando os dois PCs), incluindo o caso de estorno cancelar a
   pendencia do outro lado. 88 testes Rust (85 -> 88).
 
+- **Um unico usuario gestor, cadastro restrito a conferente**: `criar_usuario_como_gestor`
+  (usado pela tela `Usuarios.tsx`) agora rejeita `papel = 'gestor'` no backend — so da pra
+  cadastrar conferente por ali, entao nao tem como a equipe criar um segundo gestor sem
+  querer (testado em `gestor_nao_pode_cadastrar_outro_gestor`). `Usuarios.tsx` perdeu o
+  seletor de Papel (sempre manda `conferente`). O bootstrap inicial (`setup_primeiro_usuario`,
+  tela de Setup no primeiro uso) continua criando gestor livremente — e o unico jeito
+  legitimo de existir um gestor, e so roda quando o banco esta vazio. 89 testes Rust
+  (88 -> 89). Banco local de desenvolvimento resetado nessa mesma leva: sem lancamentos/
+  fechamentos de teste, usuario unico `jhon` (gestor, sem armazem fixo pra poder fechar/
+  estornar nos dois).
+
 ## Sprint 4 (resto) — Distribuicao real
 
-Fora do que da pra fazer neste ambiente (sem Windows real, sem acesso aos PCs de
-A4/B2):
+O instalador (`.msi`/`.exe`) ja foi gerado pelo `build-installer.yml`, baixado e deixado
+pronto pra copiar (pasta `PARA-O-PENDRIVE-ECOVIVA` na Area de Trabalho, junto com
+`turso.txt` configurado e um `LEIA-ME.txt` em linguagem simples). Falta so o que exige
+acesso fisico aos PCs reais, fora deste ambiente:
 
-- Baixar e testar de verdade o instalador gerado pelo `build-installer.yml` numa
-  maquina Windows.
-- Instalar nos PCs reais de A4 e B2 e acompanhar o primeiro uso das conferentes (piloto
-  em paralelo com a planilha, conforme a "Decisao atual" do plano de melhorias).
+- Instalar de verdade numa maquina Windows (validar que o instalador roda e abre).
+- Instalar nos PCs reais de A4 e B2, criar as contas de conferente reais pela tela
+  Usuarios (logado como `jhon`) e acompanhar o primeiro uso (piloto em paralelo com a
+  planilha, conforme a "Decisao atual" do plano de melhorias).
 
 ## Sprint 5 — Mais de um armazem "conversarem" (resto)
 
@@ -129,11 +142,65 @@ Confirmado que ha internet real (mesmo que intermitente) nos dois PCs. A sincron
 acima. Falta:
 
 - Painel consolidado (visao dos dois armazens juntos) para gestao, lendo
-  `movimentos_consolidados` no Turso.
+  `movimentos_consolidados` no Turso — detalhado como Sprint 7 abaixo.
 - **Importacao de historico**: pedir os XLSX/ODS originais se existirem (os PDFs em
   `modelos_antigos/` quebram coluna e tem registros inconsistentes, entao ficam so como
   arquivo de referencia); definir mapeamento de colunas por tipo de planilha; importar
   somente depois de validacao humana dos totais.
+
+## Sprint 6 — Resiliencia de erro no frontend
+
+Item que ficou pendente do plano de melhorias original (P2 "Erros e recuperacao no
+frontend") e nunca virou sprint dedicado. Duplicidade de envio ja esta coberta (todo
+formulario desabilita o botao com `enviando` durante o request) — falta o resto:
+
+- `App.tsx`: se `getStatus()` falhar na inicializacao (ex.: banco corrompido, erro de
+  IPC), o `loading` vira `false` mas `status` continua `null` — a tela fica presa em
+  "Carregando..." pra sempre, sem nenhuma mensagem nem botao de tentar de novo. Trocar
+  por uma tela de erro explicita com "Tentar novamente".
+- Revisar as buscas que rodam ao montar a tela (sugestoes de descricao em
+  `Lancamentos`/`Montagem`/`Sac`, busca de historico, "transferencias aguardando
+  confirmacao" em `Montagem`) pra garantir que uma falha de rede/IPC mostra mensagem em
+  vez de deixar a lista vazia sem explicacao.
+
+## Sprint 7 — Painel do administrador em tempo quase real (Feito)
+
+Baseado em `plano de melhorias futuras.md`. Reduzido a 3 fatias sem precisar de API
+propria nem WebSocket (o app ja fala direto com o Turso) — todas implementadas:
+
+1. **Fila de sincronizacao com estado**: `movimentos` ganhou `sync_tentativas`,
+   `sync_erro`, `sync_proxima_tentativa` (migration `0005_sync_retry.sql`).
+   `enviar_para_turso` agora devolve `ResultadoSincronizacao { enviados, falhas }` em
+   vez de so uma lista de sucesso; uma falha por linha e registrada com backoff
+   progressivo (1/5/15/30/60 min, `calcular_backoff_minutos`) — a linha some da
+   proxima tentativa ate o backoff passar (`movimentos_pendentes` filtra por
+   `sync_proxima_tentativa`). Novo comando `status_sincronizacao` (gestor-only) mostra
+   pendentes/com-erro no `Dashboard.tsx`, que agora tambem re-tenta sozinho a cada 5
+   minutos (antes so no clique manual ou abertura do app).
+2. **Divergencia de transferencia**: `movimento_itens` ganhou `quantidade_enviada`
+   (migration `0006_divergencia_recebimento.sql`, coberta pela cadeia de hash). Ao
+   confirmar recebimento (`Montagem.tsx`), o conferente ve a quantidade enviada por
+   item com um campo editavel (pre-preenchido) pra registrar quanto chegou de verdade;
+   `domain::movimentos::validar_quantidades_recebidas` rejeita receber mais do que foi
+   enviado (nunca confia no frontend), aceita menos (divergencia legitima, fica
+   registrada nos dois campos pra auditoria/painel).
+3. **Painel web somente-leitura**: `painel/index.html`, arquivo unico sem build step,
+   `fetch()` direto no Turso HTTP Pipeline API (`POST {url}/v2/pipeline`) com um token
+   **somente-leitura** (`turso db tokens create --read-only` — testado que o escopo e
+   reforcado pelo servidor: uma tentativa de `INSERT` com esse token e rejeitada com
+   `BLOCKED`, nao e so uma convencao do cliente). Publicado via GitHub Pages
+   (`.github/workflows/deploy-painel.yml`, dispara em push que toque `painel/**`) —
+   URL e token entram no HTML so no deploy, via secrets do repo
+   (`TURSO_PAINEL_URL`/`TURSO_PAINEL_TOKEN`), nunca commitados. Gate de senha simples
+   (hash SHA-256 no arquivo, nao a senha em texto puro) so pra afastar acesso casual —
+   a protecao real e o token ser somente-leitura. GitHub Pages exige repo publico no
+   plano gratuito (nao suporta Pages em repo privado sem GitHub Pro) — o repo foi
+   tornado publico pra isso; confirmado que nenhum segredo jamais foi commitado
+   (`turso.txt` sempre viveu fora do repo).
+
+97 testes Rust (89 -> 97: backoff, fila respeitando `sync_proxima_tentativa`,
+`validar_quantidades_recebidas`). Verificado de ponta a ponta contra o Turso real
+(envio, divergencia aceita/rejeitada, limpeza dos dados de teste).
 
 ## Depois disso
 

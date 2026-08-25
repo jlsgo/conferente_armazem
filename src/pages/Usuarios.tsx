@@ -14,7 +14,6 @@ export default function Usuarios({ armazens }: Props) {
   const [login, setLogin] = useState('');
   const [senha, setSenha] = useState('');
   const [armazemId, setArmazemId] = useState<number | null>(armazens[0]?.id ?? null);
-  const [papel, setPapel] = useState<'conferente' | 'gestor'>('conferente');
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -36,7 +35,13 @@ export default function Usuarios({ armazens }: Props) {
     setSucesso('');
     setEnviando(true);
 
-    const resultado = await criarUsuario({ nome, login, senha, armazem_id: armazemId, papel });
+    const resultado = await criarUsuario({
+      nome,
+      login,
+      senha,
+      armazem_id: armazemId,
+      papel: 'conferente',
+    });
     setEnviando(false);
 
     if (!resultado.ok) {
@@ -48,7 +53,6 @@ export default function Usuarios({ armazens }: Props) {
     setNome('');
     setLogin('');
     setSenha('');
-    setPapel('conferente');
     await carregar();
   }
 
@@ -89,15 +93,11 @@ export default function Usuarios({ armazens }: Props) {
                 ))}
               </select>
             </label>
-
-            <label>
-              Papel
-              <select value={papel} onChange={(e) => setPapel(e.target.value as 'conferente' | 'gestor')}>
-                <option value="conferente">Conferente</option>
-                <option value="gestor">Gestor</option>
-              </select>
-            </label>
           </div>
+
+          <p className="subtitulo">
+            Todo novo cadastro entra como conferente. So existe um usuario gestor no sistema.
+          </p>
 
           {erro && <p className="erro">{erro}</p>}
           {sucesso && <p className="sucesso">{sucesso}</p>}
