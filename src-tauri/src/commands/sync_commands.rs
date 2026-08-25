@@ -214,6 +214,7 @@ pub async fn confirmar_recebimento(
                 )),
                 recebido_de_armazem_codigo: Some(origem_armazem_codigo),
                 recebido_de_id_origem: Some(origem_id),
+                retirada_completa: true,
                 itens,
             },
         )?

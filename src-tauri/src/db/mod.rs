@@ -18,6 +18,7 @@ fn migrations() -> Migrations<'static> {
         M::up(include_str!(
             "../../migrations/0006_divergencia_recebimento.sql"
         )),
+        M::up(include_str!("../../migrations/0007_retirada_parcial.sql")),
     ])
 }
 

@@ -348,7 +348,7 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
                       <td>
                         <button
                           type="button"
-                          className="secundario"
+                          className="perigo"
                           onClick={() => handleEstornar(m)}
                           disabled={estornando === m.id}
                         >
@@ -608,7 +608,7 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
                     {!m.estornado_de && !idsJaEstornados.has(m.id) && (
                       <button
                         type="button"
-                        className="secundario"
+                        className="perigo"
                         onClick={() => handleEstornar(m)}
                         disabled={estornando === m.id}
                       >
@@ -634,7 +634,7 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
         </p>
 
         {ehGestor && (
-          <button onClick={handleFecharDia} disabled={fechando || lancamentos.length === 0}>
+          <button className="aviso" onClick={handleFecharDia} disabled={fechando || lancamentos.length === 0}>
             {fechando ? 'Fechando...' : 'Fechar o dia'}
           </button>
         )}

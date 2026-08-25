@@ -320,6 +320,7 @@ mod tests {
                 observacoes: None,
                 recebido_de_armazem_codigo: None,
                 recebido_de_id_origem: None,
+                retirada_completa: true,
                 itens: vec![MovimentoItemInput {
                     categoria: "scooter".into(),
                     descricao: None,

@@ -48,6 +48,8 @@ export interface NovoMovimento {
   motivo?: string | null;
   valor_centavos?: number | null;
   observacoes?: string | null;
+  /** So relevante pra saida_armazem/saida - default true nas outras telas. */
+  retirada_completa?: boolean;
   itens: MovimentoItemInput[];
 }
 
@@ -85,6 +87,7 @@ export interface Movimento {
   estornado_de: number | null;
   recebido_de_armazem_codigo: string | null;
   recebido_de_id_origem: number | null;
+  retirada_completa: boolean;
   hash_integridade: string;
   itens: MovimentoItem[];
 }

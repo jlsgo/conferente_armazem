@@ -57,7 +57,7 @@ pub fn movimentos_pendentes(conn: &Connection) -> AppResult<Vec<LinhaPendente>> 
                 m.tipo, m.data, m.hora, m.turno, m.usuario_id, u.nome, m.numero_pedido,
                 m.codigo_rastreio, m.contraparte, m.quem_retirou, m.motivo, m.valor_centavos,
                 m.observacoes, m.status, m.estornado_de, m.recebido_de_armazem_codigo,
-                m.recebido_de_id_origem, m.hash_integridade
+                m.recebido_de_id_origem, m.retirada_completa, m.hash_integridade
          FROM movimentos m
          JOIN armazens a ON a.id = m.armazem_id
          LEFT JOIN armazens ad ON ad.id = m.armazem_destino_id
@@ -96,7 +96,8 @@ pub fn movimentos_pendentes(conn: &Connection) -> AppResult<Vec<LinhaPendente>> 
                     estornado_de: r.get(20)?,
                     recebido_de_armazem_codigo: r.get(21)?,
                     recebido_de_id_origem: r.get(22)?,
-                    hash_integridade: r.get(23)?,
+                    retirada_completa: r.get(23)?,
+                    hash_integridade: r.get(24)?,
                     itens: Vec::new(),
                 },
                 armazem_codigo,
@@ -625,6 +626,7 @@ mod tests {
                 observacoes: None,
                 recebido_de_armazem_codigo: None,
                 recebido_de_id_origem: None,
+                retirada_completa: true,
                 itens: vec![MovimentoItemInput {
                     categoria: "scooter".into(),
                     descricao: None,
@@ -751,6 +753,7 @@ mod tests {
                 observacoes: None,
                 recebido_de_armazem_codigo: None,
                 recebido_de_id_origem: None,
+                retirada_completa: true,
                 itens: vec![MovimentoItemInput {
                     categoria: "peca".into(),
                     descricao: None,

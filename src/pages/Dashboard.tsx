@@ -72,7 +72,7 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
                   {statusSync.com_erro > 0 ? ` (${statusSync.com_erro} com erro)` : ''}
                 </span>
               )}
-              <button className="secundario" onClick={handleSincronizar} disabled={sincronizando}>
+              <button className="info" onClick={handleSincronizar} disabled={sincronizando}>
                 {sincronizando ? 'Sincronizando...' : 'Sincronizar agora'}
               </button>
             </>

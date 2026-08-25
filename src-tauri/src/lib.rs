@@ -98,6 +98,7 @@ pub fn run() {
             commands::movimento_commands::listar_movimentos_do_dia,
             commands::movimento_commands::sugestoes_descricao,
             commands::movimento_commands::buscar_historico,
+            commands::movimento_commands::verificar_retirada_pendente,
             commands::fechamento_commands::fechar_dia,
             commands::fechamento_commands::buscar_fechamento_do_dia,
             commands::sync_commands::sincronizar_agora,

@@ -1,0 +1,1 @@
+ALTER TABLE movimentos ADD COLUMN retirada_completa INTEGER NOT NULL DEFAULT 1;

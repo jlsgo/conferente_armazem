@@ -255,7 +255,7 @@ export default function Sac({ usuario, armazem }: Props) {
                       <td>
                         <button
                           type="button"
-                          className="secundario"
+                          className="perigo"
                           onClick={() => handleEstornar(m)}
                           disabled={estornando === m.id}
                         >
@@ -434,7 +434,7 @@ export default function Sac({ usuario, armazem }: Props) {
                     {!m.estornado_de && !idsJaEstornados.has(m.id) && (
                       <button
                         type="button"
-                        className="secundario"
+                        className="perigo"
                         onClick={() => handleEstornar(m)}
                         disabled={estornando === m.id}
                       >
@@ -460,7 +460,7 @@ export default function Sac({ usuario, armazem }: Props) {
         </p>
 
         {ehGestor && (
-          <button onClick={handleFecharDia} disabled={fechando || lancamentos.length === 0}>
+          <button className="aviso" onClick={handleFecharDia} disabled={fechando || lancamentos.length === 0}>
             {fechando ? 'Fechando...' : 'Fechar o dia'}
           </button>
         )}

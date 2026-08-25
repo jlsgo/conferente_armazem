@@ -10,6 +10,11 @@
   --erro-claro: #fdecea;
   --aviso: #b06e00;
   --aviso-claro: #fff4e5;
+  --aviso-escuro: #7a4b00;
+  --perigo: #c62828;
+  --perigo-escuro: #9e1f1f;
+  --info: #2563a8;
+  --info-escuro: #1a4a7d;
   --anel-foco: rgba(31, 138, 76, 0.25);
   font-family: 'Segoe UI', Roboto, Arial, sans-serif;
 }
@@ -131,15 +136,18 @@ button {
   font-weight: 600;
   background: var(--verde);
   color: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
   transition: background-color 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
 }
 
 button:hover:not(:disabled) {
   background: var(--verde-escuro);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
 
 button:active:not(:disabled) {
   transform: translateY(1px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 button:focus-visible {
@@ -150,17 +158,52 @@ button:focus-visible {
 button:disabled {
   opacity: 0.6;
   cursor: default;
+  box-shadow: none;
 }
 
+/* Botao neutro: acoes que nao alteram nada salvo (ex.: adicionar linha, sair,
+   exportar) - visualmente discreto, sem competir com o botao principal. */
 button.secundario {
   background: transparent;
   color: var(--texto);
   border: 1px solid var(--borda);
+  box-shadow: none;
 }
 
 button.secundario:hover:not(:disabled) {
   background: var(--fundo);
   border-color: #b9c6ce;
+  box-shadow: none;
+}
+
+/* Botao de perigo: acoes que corrigem/alteram um registro ja salvo (estorno). */
+button.perigo {
+  background: var(--perigo);
+  color: #fff;
+}
+
+button.perigo:hover:not(:disabled) {
+  background: var(--perigo-escuro);
+}
+
+/* Botao de atencao: acoes significativas e dificeis de desfazer (fechar o dia). */
+button.aviso {
+  background: var(--aviso);
+  color: #fff;
+}
+
+button.aviso:hover:not(:disabled) {
+  background: var(--aviso-escuro);
+}
+
+/* Botao de info: acoes de comunicacao/rede (sincronizar). */
+button.info {
+  background: var(--info);
+  color: #fff;
+}
+
+button.info:hover:not(:disabled) {
+  background: var(--info-escuro);
 }
 
 .erro {
@@ -300,6 +343,11 @@ tbody tr:last-child td {
 .badge-estorno {
   background: var(--erro-claro);
   color: var(--erro);
+}
+
+.badge-parcial {
+  background: var(--aviso-claro);
+  color: var(--aviso-escuro);
 }
 
 .carregando {

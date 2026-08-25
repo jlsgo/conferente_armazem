@@ -60,6 +60,7 @@ fn fluxo_completo_de_login_e_lancamento_de_pedido_misto() {
         observacoes: None,
         recebido_de_armazem_codigo: None,
         recebido_de_id_origem: None,
+        retirada_completa: true,
         itens: vec![
             MovimentoItemInput {
                 categoria: "scooter".into(),

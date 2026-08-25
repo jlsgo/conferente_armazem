@@ -102,6 +102,18 @@ export function sugestoesDescricao(categoria: Categoria): Promise<string[]> {
   return invoke<string[]>('sugestoes_descricao', { categoria });
 }
 
+export async function verificarRetiradaPendente(params: {
+  armazem_id: number;
+  fluxo: Fluxo;
+  numero_pedido: string;
+}): Promise<Movimento | null> {
+  try {
+    return await invoke<Movimento | null>('verificar_retirada_pendente', params);
+  } catch {
+    return null;
+  }
+}
+
 export function buscarHistorico(params: {
   armazem_id: number;
   fluxo: Fluxo;

@@ -7,6 +7,7 @@ import {
   fecharDia,
   listarMovimentosDoDia,
   sugestoesDescricao,
+  verificarRetiradaPendente,
 } from '../lib/api';
 import FechamentoImpressao from '../components/FechamentoImpressao';
 import { situacaoInfo } from '../lib/situacao';
@@ -61,10 +62,11 @@ export default function Lancamentos({ usuario, armazem }: Props) {
   const [tipo, setTipo] = useState<TipoMovimento>('saida');
   const [hora, setHora] = useState(horaAtual());
   const [numeroPedido, setNumeroPedido] = useState('');
-  const [codigoRastreio, setCodigoRastreio] = useState('');
   const [contraparte, setContraparte] = useState('');
   const [quemRetirou, setQuemRetirou] = useState('');
   const [observacoes, setObservacoes] = useState('');
+  const [retiradaParcial, setRetiradaParcial] = useState(false);
+  const [alertaRetiradaPendente, setAlertaRetiradaPendente] = useState<Movimento | null>(null);
   const [itens, setItens] = useState<ItemForm[]>([novoItemVazio()]);
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -122,11 +124,25 @@ export default function Lancamentos({ usuario, armazem }: Props) {
     // carimba o lote todo de uma vez). Manter o ultimo valor digitado evita
     // que ela tenha que reajustar o campo a cada lancamento do mesmo lote.
     setNumeroPedido('');
-    setCodigoRastreio('');
     setContraparte('');
     setQuemRetirou('');
     setObservacoes('');
+    setRetiradaParcial(false);
+    setAlertaRetiradaPendente(null);
     setItens([novoItemVazio()]);
+  }
+
+  async function verificarPedidoPendente() {
+    if (!numeroPedido.trim()) {
+      setAlertaRetiradaPendente(null);
+      return;
+    }
+    const pendente = await verificarRetiradaPendente({
+      armazem_id: armazemId,
+      fluxo: 'saida_armazem',
+      numero_pedido: numeroPedido.trim(),
+    });
+    setAlertaRetiradaPendente(pendente);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -157,10 +173,11 @@ export default function Lancamentos({ usuario, armazem }: Props) {
       hora,
       turno: 'diurno',
       numero_pedido: numeroPedido || null,
-      codigo_rastreio: codigoRastreio || null,
+      codigo_rastreio: null,
       contraparte: contraparte || null,
       quem_retirou: quemRetirou || null,
       observacoes: observacoes || null,
+      retirada_completa: tipo === 'saida' ? !retiradaParcial : true,
       itens: itensValidos,
     });
     setEnviando(false);
@@ -264,7 +281,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
                       <td>
                         <button
                           type="button"
-                          className="secundario"
+                          className="perigo"
                           onClick={() => handleEstornar(m)}
                           disabled={estornando === m.id}
                         >
@@ -312,6 +329,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
               <input
                 value={numeroPedido}
                 onChange={(e) => setNumeroPedido(e.target.value)}
+                onBlur={verificarPedidoPendente}
                 placeholder="Ex: 3932"
                 required
               />
@@ -331,12 +349,15 @@ export default function Lancamentos({ usuario, armazem }: Props) {
               Quem retirou
               <input value={quemRetirou} onChange={(e) => setQuemRetirou(e.target.value)} />
             </label>
-
-            <label>
-              Codigo de rastreio
-              <input value={codigoRastreio} onChange={(e) => setCodigoRastreio(e.target.value)} />
-            </label>
           </div>
+
+          {alertaRetiradaPendente && (
+            <p className="erro" style={{ background: 'var(--aviso-claro)', color: 'var(--aviso-escuro)', borderColor: '#f0c36d' }}>
+              Atencao: o pedido {numeroPedido} teve uma retirada parcial em{' '}
+              {alertaRetiradaPendente.data} ({alertaRetiradaPendente.itens.reduce((s, it) => s + it.quantidade, 0)} un.).
+              Confirme se esta e a retirada complementar.
+            </p>
+          )}
 
           <label>
             Observacoes do pedido
@@ -347,6 +368,18 @@ export default function Lancamentos({ usuario, armazem }: Props) {
               placeholder="Opcional - qualquer detalhe que nao caiba nos campos acima"
             />
           </label>
+
+          {tipo === 'saida' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400 }}>
+              <input
+                type="checkbox"
+                style={{ width: 'auto', margin: 0 }}
+                checked={retiradaParcial}
+                onChange={(e) => setRetiradaParcial(e.target.checked)}
+              />
+              Retirada parcial - cliente ainda vai voltar buscar o restante do pedido
+            </label>
+          )}
 
           <h3>Itens deste pedido</h3>
           {itens.map((item, indice) => (
@@ -432,7 +465,6 @@ export default function Lancamentos({ usuario, armazem }: Props) {
               <th>Horario</th>
               <th>Pedido</th>
               <th>Coleta</th>
-              <th>Rastreio</th>
               <th>Itens</th>
               <th>Qtd.</th>
               <th>Quem retirou</th>
@@ -447,9 +479,11 @@ export default function Lancamentos({ usuario, armazem }: Props) {
               <tr key={m.id}>
                 <td>{m.numero}</td>
                 <td>{m.hora}</td>
-                <td>{m.numero_pedido || '-'}</td>
+                <td>
+                  {m.numero_pedido || '-'}
+                  {!m.retirada_completa && <span className="badge badge-parcial"> parcial</span>}
+                </td>
                 <td>{m.contraparte || '-'}</td>
-                <td>{m.codigo_rastreio || '-'}</td>
                 <td>
                   {m.itens
                     .map(
@@ -470,7 +504,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
                     {!m.estornado_de && !idsJaEstornados.has(m.id) && (
                       <button
                         type="button"
-                        className="secundario"
+                        className="perigo"
                         onClick={() => handleEstornar(m)}
                         disabled={estornando === m.id}
                       >
@@ -483,7 +517,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
             ))}
             {lancamentos.length === 0 && (
               <tr>
-                <td colSpan={ehGestor ? 12 : 11} className="rodape-tabela">
+                <td colSpan={ehGestor ? 11 : 10} className="rodape-tabela">
                   Nenhum lancamento registrado ainda hoje.
                 </td>
               </tr>
@@ -496,7 +530,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
         </p>
 
         {ehGestor && (
-          <button onClick={handleFecharDia} disabled={fechando || lancamentos.length === 0}>
+          <button className="aviso" onClick={handleFecharDia} disabled={fechando || lancamentos.length === 0}>
             {fechando ? 'Fechando...' : 'Fechar o dia'}
           </button>
         )}

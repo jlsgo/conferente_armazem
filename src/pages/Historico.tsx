@@ -309,7 +309,7 @@ export default function Historico({ usuario }: Props) {
                           {!m.estornado_de && !idsJaEstornados.has(m.id) && (
                             <button
                               type="button"
-                              className="secundario"
+                              className="perigo"
                               onClick={() => handleEstornar(m)}
                               disabled={estornando === m.id}
                             >

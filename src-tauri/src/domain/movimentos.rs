@@ -53,6 +53,10 @@ pub struct NovoMovimento {
     /// normal (lancamento local comum).
     pub recebido_de_armazem_codigo: Option<String>,
     pub recebido_de_id_origem: Option<i64>,
+    /// So faz sentido pra `saida_armazem`/`saida`: o cliente retirou tudo
+    /// (`true`, padrao) ou so parte do pedido, voltando outro dia buscar o
+    /// resto (`false`). Generico nos outros fluxos (sempre `true`).
+    pub retirada_completa: bool,
     pub itens: Vec<MovimentoItemInput>,
 }
 
@@ -92,6 +96,7 @@ pub struct Movimento {
     pub estornado_de: Option<i64>,
     pub recebido_de_armazem_codigo: Option<String>,
     pub recebido_de_id_origem: Option<i64>,
+    pub retirada_completa: bool,
     pub hash_integridade: String,
     pub itens: Vec<MovimentoItem>,
 }
@@ -348,6 +353,7 @@ struct CamposHash {
     estornado_de: Option<i64>,
     recebido_de_armazem_codigo: Option<String>,
     recebido_de_id_origem: Option<i64>,
+    retirada_completa: bool,
     itens: Vec<ItemHash>,
 }
 
@@ -372,6 +378,7 @@ impl CamposHash {
             estornado_de,
             recebido_de_armazem_codigo: novo.recebido_de_armazem_codigo.clone(),
             recebido_de_id_origem: novo.recebido_de_id_origem,
+            retirada_completa: novo.retirada_completa,
             itens: novo
                 .itens
                 .iter()
@@ -409,7 +416,7 @@ fn calcular_hash(hash_anterior: &str, campos: &CamposHash) -> String {
         })
         .collect();
 
-    let partes: [String; 18] = [
+    let partes: [String; 19] = [
         campos.armazem_id.to_string(),
         campos
             .armazem_destino_id
@@ -443,6 +450,7 @@ fn calcular_hash(hash_anterior: &str, campos: &CamposHash) -> String {
             .recebido_de_id_origem
             .map(|v| v.to_string())
             .unwrap_or_default(),
+        campos.retirada_completa.to_string(),
     ];
 
     let conteudo = format!(
@@ -497,8 +505,8 @@ pub fn criar_movimento(conn: &mut Connection, novo: NovoMovimento) -> AppResult<
             armazem_id, armazem_destino_id, fluxo, tipo, data, hora, turno, usuario_id,
             numero_pedido, codigo_rastreio, contraparte, quem_retirou,
             motivo, valor_centavos, observacoes, status,
-            recebido_de_armazem_codigo, recebido_de_id_origem, hash_integridade
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 'aberto', ?16, ?17, ?18)",
+            recebido_de_armazem_codigo, recebido_de_id_origem, retirada_completa, hash_integridade
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 'aberto', ?16, ?17, ?18, ?19)",
         params![
             novo.armazem_id,
             novo.armazem_destino_id,
@@ -517,6 +525,7 @@ pub fn criar_movimento(conn: &mut Connection, novo: NovoMovimento) -> AppResult<
             novo.observacoes,
             novo.recebido_de_armazem_codigo,
             novo.recebido_de_id_origem,
+            novo.retirada_completa,
             hash,
         ],
     )?;
@@ -625,6 +634,7 @@ pub fn estornar_movimento(
         estornado_de: Some(movimento_id),
         recebido_de_armazem_codigo: None,
         recebido_de_id_origem: None,
+        retirada_completa: original.retirada_completa,
         itens: itens_originais
             .iter()
             .map(|i| ItemHash {
@@ -646,8 +656,8 @@ pub fn estornar_movimento(
         "INSERT INTO movimentos (
             armazem_id, armazem_destino_id, fluxo, tipo, data, hora, turno, usuario_id,
             numero_pedido, codigo_rastreio, contraparte, quem_retirou,
-            motivo, valor_centavos, observacoes, status, estornado_de, hash_integridade
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 'estorno', ?16, ?17)",
+            motivo, valor_centavos, observacoes, status, estornado_de, retirada_completa, hash_integridade
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 'estorno', ?16, ?17, ?18)",
         params![
             original.armazem_id,
             None::<i64>,
@@ -665,6 +675,7 @@ pub fn estornar_movimento(
             None::<i64>,
             observacoes,
             movimento_id,
+            original.retirada_completa,
             hash,
         ],
     )?;
@@ -711,7 +722,7 @@ pub fn verificar_cadeia(conn: &Connection) -> AppResult<Option<QuebraCadeia>> {
         "SELECT id, armazem_id, armazem_destino_id, fluxo, tipo, data, hora, turno, usuario_id,
                 numero_pedido, codigo_rastreio, contraparte, quem_retirou, motivo,
                 valor_centavos, observacoes, estornado_de, recebido_de_armazem_codigo,
-                recebido_de_id_origem, hash_integridade
+                recebido_de_id_origem, retirada_completa, hash_integridade
          FROM movimentos ORDER BY id ASC",
     )?;
 
@@ -728,7 +739,7 @@ pub fn verificar_cadeia(conn: &Connection) -> AppResult<Option<QuebraCadeia>> {
             Ok(Linha {
                 id,
                 numero_pedido: r.get(9)?,
-                hash_integridade: r.get(19)?,
+                hash_integridade: r.get(20)?,
                 campos: CamposHash {
                     armazem_id: r.get(1)?,
                     armazem_destino_id: r.get(2)?,
@@ -748,6 +759,7 @@ pub fn verificar_cadeia(conn: &Connection) -> AppResult<Option<QuebraCadeia>> {
                     estornado_de: r.get(16)?,
                     recebido_de_armazem_codigo: r.get(17)?,
                     recebido_de_id_origem: r.get(18)?,
+                    retirada_completa: r.get(19)?,
                     itens: Vec::new(),
                 },
             })
@@ -814,7 +826,7 @@ pub fn buscar_movimento(conn: &Connection, id: i64) -> AppResult<Movimento> {
                     m.usuario_id, u.nome, m.numero_pedido, m.codigo_rastreio, m.contraparte,
                     m.quem_retirou, m.motivo, m.valor_centavos, m.observacoes, m.status,
                     m.estornado_de, m.recebido_de_armazem_codigo, m.recebido_de_id_origem,
-                    m.hash_integridade
+                    m.retirada_completa, m.hash_integridade
              FROM movimentos m JOIN usuarios u ON u.id = m.usuario_id
              WHERE m.id = ?1",
             params![id],
@@ -842,7 +854,8 @@ pub fn buscar_movimento(conn: &Connection, id: i64) -> AppResult<Movimento> {
                     estornado_de: r.get(17)?,
                     recebido_de_armazem_codigo: r.get(18)?,
                     recebido_de_id_origem: r.get(19)?,
-                    hash_integridade: r.get(20)?,
+                    retirada_completa: r.get(20)?,
+                    hash_integridade: r.get(21)?,
                     itens: Vec::new(),
                 })
             },
@@ -867,7 +880,7 @@ pub fn listar_movimentos_do_dia(
                 m.turno, m.usuario_id, u.nome, m.numero_pedido, m.codigo_rastreio, m.contraparte,
                 m.quem_retirou, m.motivo, m.valor_centavos, m.observacoes, m.status,
                 m.estornado_de, m.recebido_de_armazem_codigo, m.recebido_de_id_origem,
-                m.hash_integridade
+                m.retirada_completa, m.hash_integridade
          FROM movimentos m JOIN usuarios u ON u.id = m.usuario_id
          WHERE m.armazem_id = ?1 AND m.fluxo = ?2 AND m.data = ?3
          ORDER BY m.id ASC",
@@ -898,7 +911,8 @@ pub fn listar_movimentos_do_dia(
                 estornado_de: r.get(18)?,
                 recebido_de_armazem_codigo: r.get(19)?,
                 recebido_de_id_origem: r.get(20)?,
-                hash_integridade: r.get(21)?,
+                retirada_completa: r.get(21)?,
+                hash_integridade: r.get(22)?,
                 itens: Vec::new(),
             })
         })?
@@ -934,7 +948,7 @@ pub fn buscar_historico(
                 m.turno, m.usuario_id, u.nome, m.numero_pedido, m.codigo_rastreio, m.contraparte,
                 m.quem_retirou, m.motivo, m.valor_centavos, m.observacoes, m.status,
                 m.estornado_de, m.recebido_de_armazem_codigo, m.recebido_de_id_origem,
-                m.hash_integridade
+                m.retirada_completa, m.hash_integridade
          FROM movimentos m JOIN usuarios u ON u.id = m.usuario_id
          WHERE m.armazem_id = ?1 AND m.fluxo = ?2
            AND (?3 IS NULL OR m.data >= ?3)
@@ -980,7 +994,8 @@ pub fn buscar_historico(
                     estornado_de: r.get(18)?,
                     recebido_de_armazem_codigo: r.get(19)?,
                     recebido_de_id_origem: r.get(20)?,
-                    hash_integridade: r.get(21)?,
+                    retirada_completa: r.get(21)?,
+                    hash_integridade: r.get(22)?,
                     itens: Vec::new(),
                 })
             },
@@ -992,6 +1007,44 @@ pub fn buscar_historico(
     }
 
     Ok(movimentos)
+}
+
+/// Busca a retirada mais recente (por data/hora) desse `numero_pedido` nesse
+/// armazem/fluxo, ignorando estornos - e devolve so se ela ainda estiver
+/// marcada como parcial (`retirada_completa = false`). Usada pra avisar o
+/// conferente, ao digitar o numero do pedido, que ha uma retirada anterior
+/// aguardando complemento. Se a retirada mais recente ja for completa (uma
+/// visita posterior resolveu a pendencia), devolve `None` - nao ha estado
+/// mutavel de "resolvido", so a comparacao com a entrada mais nova.
+pub fn buscar_retirada_parcial_pendente(
+    conn: &Connection,
+    armazem_id: i64,
+    fluxo: &str,
+    numero_pedido: &str,
+) -> AppResult<Option<Movimento>> {
+    let id: Option<i64> = conn
+        .query_row(
+            "SELECT m.id FROM movimentos m
+             WHERE m.armazem_id = ?1 AND m.fluxo = ?2 AND m.numero_pedido = ?3
+               AND m.tipo = 'saida' AND m.estornado_de IS NULL
+               AND NOT EXISTS (SELECT 1 FROM movimentos x WHERE x.estornado_de = m.id)
+             ORDER BY m.data DESC, m.hora DESC, m.id DESC
+             LIMIT 1",
+            params![armazem_id, fluxo, numero_pedido],
+            |r| r.get(0),
+        )
+        .optional()?;
+
+    let Some(id) = id else {
+        return Ok(None);
+    };
+
+    let movimento = buscar_movimento(conn, id)?;
+    if movimento.retirada_completa {
+        Ok(None)
+    } else {
+        Ok(Some(movimento))
+    }
 }
 
 /// Sugestoes de descricao ja usadas para a categoria informada, para
@@ -1058,6 +1111,7 @@ mod tests {
             observacoes: None,
             recebido_de_armazem_codigo: None,
             recebido_de_id_origem: None,
+            retirada_completa: true,
             itens,
         }
     }
@@ -1973,5 +2027,109 @@ mod tests {
         let enviados = vec![item_enviado(5), item_enviado(2)];
         let resultado = validar_quantidades_recebidas(&enviados, &[5]);
         assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn retirada_parcial_pendente_none_quando_pedido_nao_existe() {
+        let (conn, armazem_id, _usuario_id) = conexao_de_teste();
+        let resultado =
+            buscar_retirada_parcial_pendente(&conn, armazem_id, "saida_armazem", "9999").unwrap();
+        assert!(resultado.is_none());
+    }
+
+    #[test]
+    fn retirada_parcial_pendente_none_quando_retirada_foi_completa() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(
+            armazem_id,
+            usuario_id,
+            vec![MovimentoItemInput {
+                categoria: "scooter".into(),
+                descricao: None,
+                montagem: None,
+                condicao: None,
+                quantidade: 2,
+                observacao: None,
+                quantidade_enviada: None,
+            }],
+        );
+        novo.numero_pedido = Some("500".into());
+        novo.retirada_completa = true;
+        criar_movimento(&mut conn, novo).unwrap();
+
+        let resultado =
+            buscar_retirada_parcial_pendente(&conn, armazem_id, "saida_armazem", "500").unwrap();
+        assert!(resultado.is_none());
+    }
+
+    #[test]
+    fn retirada_parcial_pendente_encontra_a_retirada_parcial_mais_recente() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(
+            armazem_id,
+            usuario_id,
+            vec![MovimentoItemInput {
+                categoria: "scooter".into(),
+                descricao: None,
+                montagem: None,
+                condicao: None,
+                quantidade: 5,
+                observacao: None,
+                quantidade_enviada: None,
+            }],
+        );
+        novo.numero_pedido = Some("501".into());
+        novo.retirada_completa = false;
+        let criado = criar_movimento(&mut conn, novo).unwrap();
+
+        let resultado = buscar_retirada_parcial_pendente(&conn, armazem_id, "saida_armazem", "501")
+            .unwrap()
+            .expect("deveria encontrar a retirada parcial");
+        assert_eq!(resultado.id, criado.id);
+        assert!(!resultado.retirada_completa);
+    }
+
+    #[test]
+    fn retirada_parcial_pendente_resolve_quando_ha_retirada_complementar_depois() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut primeira = movimento_base(
+            armazem_id,
+            usuario_id,
+            vec![MovimentoItemInput {
+                categoria: "scooter".into(),
+                descricao: None,
+                montagem: None,
+                condicao: None,
+                quantidade: 3,
+                observacao: None,
+                quantidade_enviada: None,
+            }],
+        );
+        primeira.numero_pedido = Some("502".into());
+        primeira.retirada_completa = false;
+        primeira.hora = "09:00".into();
+        criar_movimento(&mut conn, primeira).unwrap();
+
+        let mut complementar = movimento_base(
+            armazem_id,
+            usuario_id,
+            vec![MovimentoItemInput {
+                categoria: "scooter".into(),
+                descricao: None,
+                montagem: None,
+                condicao: None,
+                quantidade: 2,
+                observacao: None,
+                quantidade_enviada: None,
+            }],
+        );
+        complementar.numero_pedido = Some("502".into());
+        complementar.retirada_completa = true;
+        complementar.hora = "15:00".into();
+        criar_movimento(&mut conn, complementar).unwrap();
+
+        let resultado =
+            buscar_retirada_parcial_pendente(&conn, armazem_id, "saida_armazem", "502").unwrap();
+        assert!(resultado.is_none());
     }
 }
