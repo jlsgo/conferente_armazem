@@ -40,8 +40,17 @@ function dataHaDias(dias: number): string {
 
 function itensResumo(m: Movimento): string {
   return m.itens
-    .map((it) => `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`)
+    .map((it) => {
+      const base = `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`;
+      const divergente = it.quantidade_enviada != null && it.quantidade_enviada !== it.quantidade;
+      return divergente ? `${base} [enviado: ${it.quantidade_enviada}]` : base;
+    })
     .join(' + ');
+}
+
+function pedidoTexto(m: Movimento): string {
+  const base = m.numero_pedido || '-';
+  return m.fluxo === 'saida_armazem' && !m.retirada_completa ? `${base} (parcial)` : base;
 }
 
 function qtdTotal(m: Movimento): number {
@@ -114,7 +123,7 @@ export default function Historico({ usuario }: Props) {
       linhas = resultados.map((m) => [
         formatarData(m.data),
         m.hora,
-        m.numero_pedido || '-',
+        pedidoTexto(m),
         m.contraparte || '-',
         itensResumo(m),
         String(qtdTotal(m)),
@@ -285,7 +294,7 @@ export default function Historico({ usuario }: Props) {
                       <td>{m.hora}</td>
                       {fluxo === 'saida_armazem' && (
                         <>
-                          <td>{m.numero_pedido || '-'}</td>
+                          <td>{pedidoTexto(m)}</td>
                           <td>{m.contraparte || '-'}</td>
                         </>
                       )}

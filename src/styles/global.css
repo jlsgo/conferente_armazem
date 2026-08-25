@@ -458,19 +458,24 @@ tbody tr:last-child td {
     display: none !important;
   }
   .area-impressao table {
-    font-size: 11px;
+    font-size: 12.5px;
+    line-height: 1.35;
   }
   .area-impressao .tabela-scroll {
     overflow: visible;
   }
   .area-impressao th,
   .area-impressao td {
-    padding: 4px 6px;
+    padding: 5px 7px;
+  }
+  .area-impressao h2 {
+    font-size: 16px;
   }
   @page {
-    /* Paisagem: a tabela de Saida de Armazem ganhou colunas (rastreio,
-       observacoes) e nao cabe direito em retrato. */
+    /* Paisagem pra caber a tabela (10 colunas em Saida de Armazem, com
+       Itens/Observacoes em texto livre) com fonte legivel - retrato
+       obrigaria a fonte muito pequena pra nao cortar coluna. */
     size: A4 landscape;
-    margin: 14mm;
+    margin: 12mm;
   }
 }

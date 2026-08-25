@@ -68,7 +68,6 @@ export default function FechamentoImpressao({
                 <th>Coleta</th>
               </>
             )}
-            {variante === 'armazem' && <th>Rastreio</th>}
             <th>Itens</th>
             <th>Qtd.</th>
             {variante === 'armazem' && <th>Quem retirou</th>}
@@ -86,7 +85,10 @@ export default function FechamentoImpressao({
               <td>{m.hora}</td>
               {variante === 'armazem' && (
                 <>
-                  <td>{m.numero_pedido || '-'}</td>
+                  <td>
+                    {m.numero_pedido || '-'}
+                    {!m.retirada_completa && ' (parcial)'}
+                  </td>
                   <td>{m.contraparte || '-'}</td>
                 </>
               )}
@@ -97,13 +99,13 @@ export default function FechamentoImpressao({
                   <td>{m.contraparte || '-'}</td>
                 </>
               )}
-              {variante === 'armazem' && <td>{m.codigo_rastreio || '-'}</td>}
               <td>
                 {m.itens
-                  .map(
-                    (it) =>
-                      `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}${it.observacao ? ' - ' + it.observacao : ''}`
-                  )
+                  .map((it) => {
+                    const base = `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}${it.observacao ? ' - ' + it.observacao : ''}`;
+                    const divergente = it.quantidade_enviada != null && it.quantidade_enviada !== it.quantidade;
+                    return divergente ? `${base} [enviado: ${it.quantidade_enviada}]` : base;
+                  })
                   .join(' + ')}
               </td>
               <td>{m.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
