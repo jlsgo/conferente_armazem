@@ -1,8 +1,20 @@
 import { FormEvent, useEffect, useState } from 'react';
-import type { Armazem, Condicao, Fechamento, Movimento, MovimentoItemInput, TipoMovimento, Usuario } from '../types';
+import type {
+  Armazem,
+  Categoria,
+  Condicao,
+  Fechamento,
+  Montagem as MontagemVeiculo,
+  Movimento,
+  MovimentoItemInput,
+  TransferenciaPendente,
+  Usuario,
+} from '../types';
 import {
   criarMovimento,
   buscarFechamentoDoDia,
+  buscarTransferenciasPendentes,
+  confirmarRecebimento,
   estornarMovimento,
   fecharDia,
   listarMovimentosDoDia,
@@ -14,13 +26,28 @@ import { situacaoInfo } from '../lib/situacao';
 interface Props {
   usuario: Usuario;
   armazem: Armazem | undefined;
+  armazens: Armazem[];
 }
 
 interface ItemForm {
+  categoria: Categoria;
   descricao: string;
+  montagem: MontagemVeiculo | '';
   condicao: Condicao | '';
   quantidade: number;
+  observacao: string;
 }
+
+type Destino = 'armazem' | 'externo';
+
+const CATEGORIAS: { valor: Categoria; rotulo: string }[] = [
+  { valor: 'peca', rotulo: 'Peca' },
+  { valor: 'scooter', rotulo: 'Scooter' },
+  { valor: 'triciclo', rotulo: 'Triciclo' },
+  { valor: 'patinete', rotulo: 'Patinete' },
+];
+
+const CATEGORIAS_VEICULO: Categoria[] = ['scooter', 'triciclo', 'patinete'];
 
 function dataDeHoje(): string {
   const agora = new Date();
@@ -36,20 +63,30 @@ function horaAtual(): string {
 }
 
 function novoItemVazio(): ItemForm {
-  return { descricao: '', condicao: '', quantidade: 1 };
+  return { categoria: 'peca', descricao: '', montagem: '', condicao: '', quantidade: 1, observacao: '' };
 }
 
-export default function Montagem({ usuario, armazem }: Props) {
+function chaveTransferencia(t: TransferenciaPendente): string {
+  return `${t.armazem_origem_codigo}:${t.id_origem}`;
+}
+
+export default function Montagem({ usuario, armazem, armazens }: Props) {
   const armazemId = usuario.armazem_id as number;
   const data = dataDeHoje();
+  const outroArmazem = armazens.find((a) => a.id !== armazem?.id);
 
   const [lancamentos, setLancamentos] = useState<Movimento[]>([]);
   const [fechamento, setFechamento] = useState<Fechamento | null>(null);
   const [carregandoLista, setCarregandoLista] = useState(true);
-  const [sugestoes, setSugestoes] = useState<string[]>([]);
+  const [sugestoesPorCategoria, setSugestoesPorCategoria] = useState<Partial<Record<Categoria, string[]>>>({});
 
-  const [tipo, setTipo] = useState<TipoMovimento>('saida');
+  const [pendentes, setPendentes] = useState<TransferenciaPendente[]>([]);
+  const [carregandoPendentes, setCarregandoPendentes] = useState(true);
+  const [confirmando, setConfirmando] = useState<string | null>(null);
+
   const [hora, setHora] = useState(horaAtual());
+  const [destino, setDestino] = useState<Destino>('armazem');
+  const [enviadoPara, setEnviadoPara] = useState('');
   const [itens, setItens] = useState<ItemForm[]>([novoItemVazio()]);
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -68,14 +105,28 @@ export default function Montagem({ usuario, armazem }: Props) {
     setCarregandoLista(false);
   }
 
+  async function carregarPendentes() {
+    setCarregandoPendentes(true);
+    setPendentes(await buscarTransferenciasPendentes());
+    setCarregandoPendentes(false);
+  }
+
+  async function garantirSugestoes(categoria: Categoria) {
+    if (sugestoesPorCategoria[categoria]) return;
+    const lista = await sugestoesDescricao(categoria);
+    setSugestoesPorCategoria((atual) => ({ ...atual, [categoria]: lista }));
+  }
+
   useEffect(() => {
     carregarTudo();
-    sugestoesDescricao('peca').then(setSugestoes);
+    carregarPendentes();
+    garantirSugestoes('peca');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function atualizarItem(indice: number, alteracoes: Partial<ItemForm>) {
     setItens((atual) => atual.map((it, i) => (i === indice ? { ...it, ...alteracoes } : it)));
+    if (alteracoes.categoria) garantirSugestoes(alteracoes.categoria);
   }
 
   function adicionarLinhaItem() {
@@ -88,6 +139,7 @@ export default function Montagem({ usuario, armazem }: Props) {
 
   function limparFormulario() {
     setItens([novoItemVazio()]);
+    setEnviadoPara('');
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -95,32 +147,40 @@ export default function Montagem({ usuario, armazem }: Props) {
     setErro('');
 
     if (itens.some((it) => !it.condicao)) {
-      setErro('Informe a condicao (boa, defeito ou sucata) de cada peca.');
+      setErro('Informe a condicao (boa, defeito ou sucata) de cada item.');
+      return;
+    }
+    if (destino === 'externo' && !enviadoPara.trim()) {
+      setErro('Informe pra quem foi enviado (ex: nome do tecnico).');
       return;
     }
 
     const itensValidos: MovimentoItemInput[] = itens
       .filter((it) => it.quantidade > 0)
       .map((it) => ({
-        categoria: 'peca',
+        categoria: it.categoria,
         descricao: it.descricao.trim() || null,
+        montagem: it.montagem || null,
         condicao: it.condicao || null,
         quantidade: it.quantidade,
+        observacao: it.observacao.trim() || null,
       }));
 
     if (itensValidos.length === 0) {
-      setErro('Informe ao menos uma peca com quantidade valida.');
+      setErro('Informe ao menos um item com quantidade valida.');
       return;
     }
 
     setEnviando(true);
     const resultado = await criarMovimento({
       armazem_id: armazemId,
+      armazem_destino_id: destino === 'armazem' ? (outroArmazem?.id ?? null) : null,
       fluxo: 'peca_montagem',
-      tipo,
+      tipo: 'saida',
       data,
       hora,
       turno: 'diurno',
+      contraparte: destino === 'externo' ? enviadoPara.trim() : null,
       itens: itensValidos,
     });
     setEnviando(false);
@@ -132,6 +192,20 @@ export default function Montagem({ usuario, armazem }: Props) {
 
     limparFormulario();
     await carregarTudo();
+  }
+
+  async function handleConfirmar(t: TransferenciaPendente) {
+    setErro('');
+    setConfirmando(chaveTransferencia(t));
+    const resultado = await confirmarRecebimento(t.armazem_origem_codigo, t.id_origem, horaAtual());
+    setConfirmando(null);
+
+    if (!resultado.ok) {
+      setErro(resultado.error ?? 'Nao foi possivel confirmar o recebimento.');
+      return;
+    }
+
+    await Promise.all([carregarPendentes(), carregarTudo()]);
   }
 
   async function handleFecharDia() {
@@ -171,6 +245,20 @@ export default function Montagem({ usuario, armazem }: Props) {
     }
 
     await carregarTudo();
+  }
+
+  function nomeArmazemPorId(id: number | null): string {
+    if (id == null) return '-';
+    return armazens.find((a) => a.id === id)?.codigo ?? '-';
+  }
+
+  function direcaoTexto(m: Movimento): string {
+    if (m.tipo === 'entrada') {
+      return m.recebido_de_armazem_codigo ? `Recebido de ${m.recebido_de_armazem_codigo}` : 'Entrada';
+    }
+    if (m.armazem_destino_id) return `Enviado para ${nomeArmazemPorId(m.armazem_destino_id)}`;
+    if (m.contraparte) return `Enviado para ${m.contraparte}`;
+    return 'Saida';
   }
 
   const idsJaEstornados = new Set(
@@ -243,20 +331,63 @@ export default function Montagem({ usuario, armazem }: Props) {
 
   return (
     <div>
+      {!carregandoPendentes && pendentes.length > 0 && (
+        <section className="cartao somente-tela">
+          <h2>Transferencias chegando{outroArmazem ? ` de ${outroArmazem.codigo}` : ''}</h2>
+          <p className="subtitulo">
+            Confira fisicamente o que chegou antes de confirmar - os itens abaixo veem exatamente do
+            que foi enviado, sem precisar redigitar nada.
+          </p>
+          <div className="tabela-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data do envio</th>
+                  <th>Itens</th>
+                  <th>Qtd.</th>
+                  <th className="somente-tela">Acoes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendentes.map((t) => (
+                  <tr key={chaveTransferencia(t)}>
+                    <td>{t.data} {t.hora}</td>
+                    <td>
+                      {t.itens
+                        .map((it) => `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`)
+                        .join(' + ')}
+                    </td>
+                    <td>{t.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
+                    <td className="somente-tela">
+                      <button
+                        type="button"
+                        onClick={() => handleConfirmar(t)}
+                        disabled={confirmando === chaveTransferencia(t)}
+                      >
+                        {confirmando === chaveTransferencia(t) ? 'Confirmando...' : 'Confirmar recebimento'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       <section className="cartao">
-        <h2>Peca para montagem {tipo === 'saida' ? '- saida' : '- entrada'} do galpao</h2>
+        <h2>Registrar saida do galpao</h2>
         <p className="subtitulo">
-          {data} - responsavel: {usuario.nome}. Use para pecas soltas indo ou voltando entre B2 e a
-          montagem.
+          {data} - responsavel: {usuario.nome}. Pecas soltas ou scooters montados saindo daqui.
         </p>
 
         <form onSubmit={handleSubmit}>
           <div className="abas" style={{ marginBottom: 20 }}>
-            <button type="button" className={tipo === 'saida' ? 'ativo' : ''} onClick={() => setTipo('saida')}>
-              Saida do galpao
+            <button type="button" className={destino === 'armazem' ? 'ativo' : ''} onClick={() => setDestino('armazem')}>
+              {outroArmazem ? `Para ${outroArmazem.codigo}` : 'Para o outro armazem'}
             </button>
-            <button type="button" className={tipo === 'entrada' ? 'ativo' : ''} onClick={() => setTipo('entrada')}>
-              Entrada no galpao
+            <button type="button" className={destino === 'externo' ? 'ativo' : ''} onClick={() => setDestino('externo')}>
+              Outro destino (ex: tecnico externo)
             </button>
           </div>
 
@@ -265,22 +396,60 @@ export default function Montagem({ usuario, armazem }: Props) {
               Horario
               <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} required />
             </label>
+            {destino === 'externo' && (
+              <label>
+                Enviado para
+                <input
+                  value={enviadoPara}
+                  onChange={(e) => setEnviadoPara(e.target.value)}
+                  placeholder="Ex: Tecnico Joao - Eletronica Silva"
+                  required
+                />
+              </label>
+            )}
           </div>
+          {destino === 'externo' && (
+            <p className="subtitulo">
+              Anote o codigo/serie de cada peca no campo "Observacao" dela abaixo.
+            </p>
+          )}
 
-          <h3>Pecas deste lancamento</h3>
+          <h3>Itens deste lancamento</h3>
           {itens.map((item, indice) => (
             <div className="linha-item linha-item-peca" key={indice}>
+              <select
+                value={item.categoria}
+                onChange={(e) => atualizarItem(indice, { categoria: e.target.value as Categoria })}
+              >
+                {CATEGORIAS.map((c) => (
+                  <option key={c.valor} value={c.valor}>
+                    {c.rotulo}
+                  </option>
+                ))}
+              </select>
+
               <input
                 value={item.descricao}
                 onChange={(e) => atualizarItem(indice, { descricao: e.target.value })}
-                placeholder="Descricao da peca (ex: Retrovisor)"
-                list="sugestoes-peca"
+                placeholder="Descricao (ex: Retrovisor)"
+                list={`sugestoes-${item.categoria}`}
               />
-              <datalist id="sugestoes-peca">
-                {sugestoes.map((s) => (
+              <datalist id={`sugestoes-${item.categoria}`}>
+                {(sugestoesPorCategoria[item.categoria] ?? []).map((s) => (
                   <option key={s} value={s} />
                 ))}
               </datalist>
+
+              {CATEGORIAS_VEICULO.includes(item.categoria) && (
+                <select
+                  value={item.montagem}
+                  onChange={(e) => atualizarItem(indice, { montagem: e.target.value as MontagemVeiculo | '' })}
+                >
+                  <option value="">Montagem</option>
+                  <option value="montado">Montado</option>
+                  <option value="caixa">Em caixa</option>
+                </select>
+              )}
 
               <select
                 value={item.condicao}
@@ -292,6 +461,12 @@ export default function Montagem({ usuario, armazem }: Props) {
                 <option value="defeito">Defeito</option>
                 <option value="sucata">Sucata</option>
               </select>
+
+              <input
+                value={item.observacao}
+                onChange={(e) => atualizarItem(indice, { observacao: e.target.value })}
+                placeholder={destino === 'externo' ? 'Codigo/serie da peca' : 'Observacao (opcional)'}
+              />
 
               <input
                 type="number"
@@ -313,7 +488,7 @@ export default function Montagem({ usuario, armazem }: Props) {
           ))}
 
           <button type="button" className="secundario" onClick={adicionarLinhaItem}>
-            + adicionar peca
+            + adicionar item
           </button>
 
           {erro && <p className="erro">{erro}</p>}
@@ -348,7 +523,7 @@ export default function Montagem({ usuario, armazem }: Props) {
               <tr key={m.id}>
                 <td>{m.numero}</td>
                 <td>{m.hora}</td>
-                <td>{m.tipo === 'saida' ? 'Saida B2' : 'Entrada B2'}</td>
+                <td>{direcaoTexto(m)}</td>
                 <td>
                   {m.itens
                     .map((it) => `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`)

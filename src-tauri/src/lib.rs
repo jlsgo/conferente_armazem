@@ -93,6 +93,8 @@ pub fn run() {
             commands::fechamento_commands::fechar_dia,
             commands::fechamento_commands::buscar_fechamento_do_dia,
             commands::sync_commands::sincronizar_agora,
+            commands::sync_commands::buscar_transferencias_pendentes,
+            commands::sync_commands::confirmar_recebimento,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

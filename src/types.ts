@@ -65,6 +65,7 @@ export interface Movimento {
   id: number;
   numero: number;
   armazem_id: number;
+  armazem_destino_id: number | null;
   fluxo: Fluxo;
   tipo: TipoMovimento;
   data: string;
@@ -81,7 +82,18 @@ export interface Movimento {
   observacoes: string | null;
   status: string;
   estornado_de: number | null;
+  recebido_de_armazem_codigo: string | null;
+  recebido_de_id_origem: number | null;
   hash_integridade: string;
+  itens: MovimentoItem[];
+}
+
+export interface TransferenciaPendente {
+  armazem_origem_codigo: string;
+  id_origem: number;
+  data: string;
+  hora: string;
+  armazem_destino_codigo: string | null;
   itens: MovimentoItem[];
 }
 

@@ -95,6 +95,22 @@ não deixe ela ficar desatualizada.
   `Dashboard.tsx`, gestor-only) e tentativa automatica em segundo plano na abertura do
   app; a logica local e testada, o passo de rede exige credenciais Turso reais do
   usuario pra validar (documentado). 85 testes Rust (66 -> 85).
+- **Confirmacao de recebimento entre A4 e B2**: a tela de Montagem agora libera as 4
+  categorias (nao so peca) e ganhou um seletor de destino ao registrar uma saida —
+  "outro armazem" (marca `armazem_destino_id` sozinho, so existem os dois) ou "outro
+  destino" (ex.: tecnico externo pra reparo de bateria/modulo/motor, com o
+  codigo/serie de cada peca no campo Observacao). Uma nova secao no topo da tela
+  mostra "transferencias aguardando confirmacao" — busca ao vivo no Turso o que foi
+  endereçado ao meu armazem e ainda nao foi confirmado nem estornado do lado de quem
+  enviou; "Confirmar recebimento" copia os itens automaticamente (sem redigitar) e
+  sincroniza na hora. Descoberta no caminho: `transferencia_origem_id` (no schema
+  desde o inicio) nao servia pra isso — e FK pra linha *na mesma tabela local*, e o
+  envio original vive no PC do outro armazem; a solucao usa colunas novas sem FK
+  (`recebido_de_armazem_codigo`/`recebido_de_id_origem`, migration
+  `0004_transferencias.sql`) guardando a chave composta que ja identifica a linha no
+  Turso — detalhes em `docs/ARQUITETURA.md`. Verificado de ponta a ponta contra o
+  Turso real (simulando os dois PCs), incluindo o caso de estorno cancelar a
+  pendencia do outro lado. 88 testes Rust (85 -> 88).
 
 ## Sprint 4 (resto) — Distribuicao real
 
@@ -108,15 +124,10 @@ A4/B2):
 
 ## Sprint 5 — Mais de um armazem "conversarem" (resto)
 
-Confirmado que ha internet real (mesmo que intermitente) nos dois PCs, e a fundacao de
-sync (envio unidirecional pro Turso) ja esta em "Feito" acima. Falta:
+Confirmado que ha internet real (mesmo que intermitente) nos dois PCs. A sincronizacao
+(envio unidirecional) e a confirmacao de recebimento entre B2 e A4 ja estao em "Feito"
+acima. Falta:
 
-- Usar `armazem_destino_id` / `transferencia_origem_id` (ja no schema, sem logica ainda)
-  para o check-in de confirmacao entre B2 e A4 que o usuario descreveu: quem libera uma
-  peca registra a saida, quem recebe do outro lado confirma a entrada, fechando o ciclo
-  e evitando extravio no trajeto. Constroi em cima de `movimentos_consolidados` (a
-  tabela remota que a v1 do sync ja envia) — o lado que recebe le de la e escreve uma
-  confirmacao de volta.
 - Painel consolidado (visao dos dois armazens juntos) para gestao, lendo
   `movimentos_consolidados` no Turso.
 - **Importacao de historico**: pedir os XLSX/ODS originais se existirem (os PDFs em

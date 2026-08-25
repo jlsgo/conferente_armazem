@@ -52,6 +52,11 @@ pub fn criar_movimento(
             motivo: payload.motivo,
             valor_centavos: payload.valor_centavos,
             observacoes: payload.observacoes,
+            // So a confirmacao de recebimento (comando dedicado
+            // `sync_commands::confirmar_recebimento`) preenche isso - nunca vem
+            // do payload comum de lancamento.
+            recebido_de_armazem_codigo: None,
+            recebido_de_id_origem: None,
             itens: payload.itens,
         },
     )

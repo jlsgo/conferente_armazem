@@ -85,7 +85,7 @@ se busca com "menor superficie de ataque". Como toda impressora e a maioria dos 
 operacionais ja oferecem "salvar como PDF" no proprio dialogo de impressao, isso cobre a
 necessidade de exportar sem nenhuma dependencia nova.
 
-## Sincronizacao com Turso (v1: envio unidirecional)
+## Sincronizacao com Turso e confirmacao de recebimento entre armazens
 
 Cada PC (A4 e B2) continua sendo 100% local e funcional offline — a sincronizacao e um
 extra oportunista, nunca uma dependencia pra uso diario. `db::sync` envia os lancamentos
@@ -97,6 +97,8 @@ seguro se a rede cair no meio do envio. Isso acontece:
   falha (sem internet, por exemplo) so grava um aviso no log, nunca trava o app.
 - Sob demanda, pelo botao "Sincronizar agora" no cabecalho (so gestor), que chama o
   comando `sincronizar_agora`.
+- Logo apos confirmar o recebimento de uma transferencia (ver abaixo), pra fechar o
+  ciclo sem esperar o proximo sync automatico.
 
 **Configurar numa maquina** (uma vez, por PC): crie uma conta em turso.tech, instale a
 CLI (`curl -sSfL https://get.tur.so/install.sh | bash`), rode
@@ -104,18 +106,47 @@ CLI (`curl -sSfL https://get.tur.so/install.sh | bash`), rode
 URL (`libsql://...`) e o token em duas linhas no arquivo `turso.txt`, na mesma pasta do
 banco local (`<diretorio de dados do usuario>/turso.txt`). Sem esse arquivo, a
 sincronizacao e pulada silenciosamente — comportamento identico a nao ter configurado.
+**O mesmo arquivo `turso.txt` serve pros dois PCs** (A4 e B2 compartilham o mesmo banco
+Turso, so o `armazem_codigo` de cada linha muda).
 
-**O que esta fora do escopo desta v1** (proxima fatia, nao implementada ainda): a
-confirmacao de recebimento entre armazens (ex.: B2 libera uma peca, A4 confirma quando
-ela chega) usando `movimentos.armazem_destino_id`/`transferencia_origem_id` (ambos ja no
-schema, sem logica ainda) e um painel consolidado de leitura sobre
-`movimentos_consolidados`. Esta v1 so da visibilidade cruzada (a tabela remota) e a base
-de envio sobre a qual essa confirmacao sera construida.
+### Confirmacao de recebimento (transferencias entre A4 e B2)
 
-`db::sync::ler_config_turso`/`movimentos_pendentes`/`marcar_sincronizado` sao puramente
-locais e cobertos por teste automatizado. O passo de rede (`enviar_para_turso`) so pode
-ser validado de ponta a ponta com uma conta/banco Turso real configurada — nao ha como
-testar isso automaticamente sem credenciais de verdade.
+A tela de Montagem registra a saida de peca/scooter montado do galpao com um destino:
+"outro armazem" (padrao) ou "outro destino" (ex.: tecnico externo pra conserto de
+bateria/modulo/motor — nesse caso o codigo/serie de cada peca vai no campo Observacao
+do item, e "pra quem" no campo `contraparte`, sem precisar de coluna nova). Quando o
+destino e o outro armazem, `armazem_destino_id` e preenchido sozinho (so existem dois
+armazens, sem pergunta extra) e a linha aparece, depois de sincronizada, na tela do
+outro armazem como "aguardando confirmacao" — o conferente de la clica "Confirmar
+recebimento" (comando `confirmar_recebimento`) e os itens sao copiados automaticamente,
+sem redigitar nada.
+
+**Descoberta durante a implementacao**: `transferencia_origem_id INTEGER REFERENCES
+movimentos(id)` (no schema desde o inicio, pensado exatamente pra isso) acabou nao
+servindo — e uma FK pra uma linha *na mesma tabela local*, e o envio original vive no
+banco de **outro PC**; o id local de um PC nao tem relacao com o id local do outro, e o
+FK (com `foreign_keys=ON`) rejeitaria o insert. A coluna fica no schema sem uso (nao foi
+removida — pode servir pra um caso same-DB futuro). Em vez dela, `movimentos` ganhou
+`recebido_de_armazem_codigo`/`recebido_de_id_origem` (migration `0004_transferencias.sql`,
+sem FK), guardando a mesma chave composta `(armazem_codigo, id_origem)` que ja identifica
+uma linha em `movimentos_consolidados`.
+
+A tabela remota tambem precisou crescer depois de ja estar em uso com dados reais —
+`db::sync::SQL_ALTER_TABELA_REMOTA` roda `ALTER TABLE ... ADD COLUMN` a cada sincronizacao
+(erro ignorado de proposito: a unica forma de falhar e a coluna ja existir). A consulta de
+"o que esta pendente pra mim" (`buscar_pendentes_recebimento`) exclui tanto o que ja foi
+confirmado quanto o que foi estornado do lado de quem enviou (dois `NOT EXISTS`), e
+`confirmar_recebimento` busca a transferencia de novo no Turso pela chave — nunca confia
+nos itens que o frontend mandar de volta — e confere que ela estava mesmo endereçada ao
+armazem de quem esta confirmando antes de aceitar.
+
+`db::sync::ler_config_turso`/`movimentos_pendentes`/`marcar_sincronizado` e a logica pura
+de parsing (`linha_para_transferencia`) sao cobertas por teste automatizado. O passo de
+rede em si (`enviar_para_turso`, `buscar_pendentes_recebimento`, `buscar_transferencia`)
+so pode ser validado de ponta a ponta com uma conta/banco Turso real — foi verificado
+manualmente simulando os dois PCs (dois bancos SQLite em memoria separados) contra o
+Turso real: envio de B2, confirmacao em A4, e o caso de um envio estornado em B2 nao
+aparecer mais como pendente em A4.
 
 ## Migrations
 

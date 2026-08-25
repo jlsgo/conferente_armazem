@@ -7,6 +7,7 @@ import type {
   Movimento,
   NovoMovimento,
   NovoUsuarioInput,
+  TransferenciaPendente,
   Usuario,
 } from '../types';
 
@@ -153,6 +154,36 @@ export async function sincronizarAgora(): Promise<SincronizarResult> {
   try {
     const mensagem = await invoke<string>('sincronizar_agora');
     return { ok: true, mensagem };
+  } catch (err) {
+    return { ok: false, error: erroParaTexto(err) };
+  }
+}
+
+export async function buscarTransferenciasPendentes(): Promise<TransferenciaPendente[]> {
+  try {
+    return await invoke<TransferenciaPendente[]>('buscar_transferencias_pendentes');
+  } catch {
+    // Melhor-esforco: sem internet ou sem sync configurado, so nao mostra a secao.
+    return [];
+  }
+}
+
+export interface ConfirmarRecebimentoResult extends OkResult {
+  movimento?: Movimento;
+}
+
+export async function confirmarRecebimento(
+  origemArmazemCodigo: string,
+  origemId: number,
+  hora: string
+): Promise<ConfirmarRecebimentoResult> {
+  try {
+    const movimento = await invoke<Movimento>('confirmar_recebimento', {
+      origem_armazem_codigo: origemArmazemCodigo,
+      origem_id: origemId,
+      hora,
+    });
+    return { ok: true, movimento };
   } catch (err) {
     return { ok: false, error: erroParaTexto(err) };
   }

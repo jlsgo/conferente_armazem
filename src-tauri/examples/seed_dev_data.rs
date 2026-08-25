@@ -108,6 +108,8 @@ fn registrar(
             motivo: motivo.map(String::from),
             valor_centavos,
             observacoes: observacoes.map(String::from),
+            recebido_de_armazem_codigo: None,
+            recebido_de_id_origem: None,
             itens,
         },
     ) {

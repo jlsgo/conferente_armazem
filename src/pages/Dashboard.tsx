@@ -81,7 +81,7 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
 
       <main>
         {aba === 'lancamentos' && <Lancamentos usuario={usuario} armazem={armazem} />}
-        {aba === 'montagem' && <Montagem usuario={usuario} armazem={armazem} />}
+        {aba === 'montagem' && <Montagem usuario={usuario} armazem={armazem} armazens={armazens} />}
         {aba === 'sac' && <Sac usuario={usuario} armazem={armazem} />}
         {aba === 'historico' && <Historico usuario={usuario} />}
         {aba === 'usuarios' && ehGestor && <Usuarios armazens={armazens} />}

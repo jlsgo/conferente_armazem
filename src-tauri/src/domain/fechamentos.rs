@@ -221,6 +221,8 @@ mod tests {
                 motivo: None,
                 valor_centavos: None,
                 observacoes: None,
+                recebido_de_armazem_codigo: None,
+                recebido_de_id_origem: None,
                 itens: vec![MovimentoItemInput {
                     categoria: "scooter".into(),
                     descricao: None,
@@ -267,6 +269,8 @@ mod tests {
                 motivo: None,
                 valor_centavos: None,
                 observacoes: None,
+                recebido_de_armazem_codigo: None,
+                recebido_de_id_origem: None,
                 itens: vec![MovimentoItemInput {
                     categoria: "scooter".into(),
                     descricao: None,
