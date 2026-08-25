@@ -84,3 +84,26 @@ pub fn sugestoes_descricao(state: State<AppState>, categoria: String) -> AppResu
     let conn = state.conn()?;
     movimentos::sugestoes_descricao(&conn, &categoria)
 }
+
+#[tauri::command(rename_all = "snake_case")]
+#[allow(clippy::too_many_arguments)]
+pub fn buscar_historico(
+    state: State<AppState>,
+    armazem_id: i64,
+    fluxo: String,
+    data_inicio: Option<String>,
+    data_fim: Option<String>,
+    cliente: Option<String>,
+    numero_pedido: Option<String>,
+) -> AppResult<Vec<Movimento>> {
+    let conn = state.conn()?;
+    movimentos::buscar_historico(
+        &conn,
+        armazem_id,
+        &fluxo,
+        data_inicio.as_deref(),
+        data_fim.as_deref(),
+        cliente.as_deref(),
+        numero_pedido.as_deref(),
+    )
+}

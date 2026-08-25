@@ -9,6 +9,7 @@ import {
   sugestoesDescricao,
 } from '../lib/api';
 import FechamentoImpressao from '../components/FechamentoImpressao';
+import { situacaoInfo } from '../lib/situacao';
 
 interface Props {
   usuario: Usuario;
@@ -20,6 +21,7 @@ interface ItemForm {
   descricao: string;
   montagem: Montagem | '';
   quantidade: number;
+  observacao: string;
 }
 
 const CATEGORIAS: { valor: Categoria; rotulo: string }[] = [
@@ -43,7 +45,7 @@ function horaAtual(): string {
 }
 
 function novoItemVazio(): ItemForm {
-  return { categoria: 'scooter', descricao: '', montagem: '', quantidade: 1 };
+  return { categoria: 'scooter', descricao: '', montagem: '', quantidade: 1, observacao: '' };
 }
 
 export default function Lancamentos({ usuario, armazem }: Props) {
@@ -59,8 +61,10 @@ export default function Lancamentos({ usuario, armazem }: Props) {
   const [hora, setHora] = useState(horaAtual());
   const [turno, setTurno] = useState<'diurno' | 'noturno'>('diurno');
   const [numeroPedido, setNumeroPedido] = useState('');
+  const [codigoRastreio, setCodigoRastreio] = useState('');
   const [contraparte, setContraparte] = useState('');
   const [quemRetirou, setQuemRetirou] = useState('');
+  const [observacoes, setObservacoes] = useState('');
   const [itens, setItens] = useState<ItemForm[]>([novoItemVazio()]);
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -110,8 +114,10 @@ export default function Lancamentos({ usuario, armazem }: Props) {
     // carimba o lote todo de uma vez). Manter o ultimo valor digitado evita
     // que ela tenha que reajustar o campo a cada lancamento do mesmo lote.
     setNumeroPedido('');
+    setCodigoRastreio('');
     setContraparte('');
     setQuemRetirou('');
+    setObservacoes('');
     setItens([novoItemVazio()]);
   }
 
@@ -126,6 +132,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
         descricao: it.descricao.trim() || null,
         montagem: it.montagem || null,
         quantidade: it.quantidade,
+        observacao: it.observacao.trim() || null,
       }));
 
     if (itensValidos.length === 0) {
@@ -142,8 +149,10 @@ export default function Lancamentos({ usuario, armazem }: Props) {
       hora,
       turno,
       numero_pedido: numeroPedido || null,
+      codigo_rastreio: codigoRastreio || null,
       contraparte: contraparte || null,
       quem_retirou: quemRetirou || null,
+      observacoes: observacoes || null,
       itens: itensValidos,
     });
     setEnviando(false);
@@ -206,7 +215,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
   );
 
   if (carregandoLista) {
-    return <p>Carregando...</p>;
+    return <p className="carregando">Carregando...</p>;
   }
 
   if (fechamento) {
@@ -311,7 +320,22 @@ export default function Lancamentos({ usuario, armazem }: Props) {
               Quem retirou
               <input value={quemRetirou} onChange={(e) => setQuemRetirou(e.target.value)} />
             </label>
+
+            <label>
+              Codigo de rastreio
+              <input value={codigoRastreio} onChange={(e) => setCodigoRastreio(e.target.value)} />
+            </label>
           </div>
+
+          <label>
+            Observacoes do pedido
+            <textarea
+              value={observacoes}
+              onChange={(e) => setObservacoes(e.target.value)}
+              rows={2}
+              placeholder="Opcional - qualquer detalhe que nao caiba nos campos acima"
+            />
+          </label>
 
           <h3>Itens deste pedido</h3>
           {itens.map((item, indice) => (
@@ -349,6 +373,12 @@ export default function Lancamentos({ usuario, armazem }: Props) {
               </select>
 
               <input
+                value={item.observacao}
+                onChange={(e) => atualizarItem(indice, { observacao: e.target.value })}
+                placeholder="Observacao (opcional)"
+              />
+
+              <input
                 type="number"
                 min={1}
                 value={item.quantidade}
@@ -383,6 +413,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
 
       <section className="cartao">
         <h2>Lancamentos de hoje ({data})</h2>
+        <div className="tabela-scroll">
         <table>
           <thead>
             <tr>
@@ -390,9 +421,11 @@ export default function Lancamentos({ usuario, armazem }: Props) {
               <th>Horario</th>
               <th>Pedido</th>
               <th>Coleta</th>
+              <th>Rastreio</th>
               <th>Itens</th>
               <th>Qtd.</th>
               <th>Quem retirou</th>
+              <th>Observacoes</th>
               <th>Registrado por</th>
               <th>Situacao</th>
               {ehGestor && <th className="somente-tela">Acoes</th>}
@@ -405,15 +438,22 @@ export default function Lancamentos({ usuario, armazem }: Props) {
                 <td>{m.hora}</td>
                 <td>{m.numero_pedido || '-'}</td>
                 <td>{m.contraparte || '-'}</td>
+                <td>{m.codigo_rastreio || '-'}</td>
                 <td>
                   {m.itens
-                    .map((it) => `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`)
+                    .map(
+                      (it) =>
+                        `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}${it.observacao ? ' - ' + it.observacao : ''}`
+                    )
                     .join(' + ')}
                 </td>
                 <td>{m.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
                 <td>{m.quem_retirou || '-'}</td>
+                <td>{m.observacoes || '-'}</td>
                 <td>{m.usuario_nome}</td>
-                <td>{m.estornado_de ? 'ESTORNO' : m.tipo === 'saida' ? 'BAIXA' : 'ENTRADA'}</td>
+                <td>
+                  <span className={situacaoInfo(m).classe}>{situacaoInfo(m).texto}</span>
+                </td>
                 {ehGestor && (
                   <td className="somente-tela">
                     {!m.estornado_de && !idsJaEstornados.has(m.id) && (
@@ -432,13 +472,14 @@ export default function Lancamentos({ usuario, armazem }: Props) {
             ))}
             {lancamentos.length === 0 && (
               <tr>
-                <td colSpan={ehGestor ? 10 : 9} className="rodape-tabela">
+                <td colSpan={ehGestor ? 12 : 11} className="rodape-tabela">
                   Nenhum lancamento registrado ainda hoje.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+        </div>
         <p className="rodape-tabela">
           <strong>{totalGeralDoDia}</strong> unidades no total ({lancamentos.length} pedidos)
         </p>

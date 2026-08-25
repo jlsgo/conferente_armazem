@@ -1,4 +1,5 @@
 import type { Armazem, Fechamento, Movimento } from '../types';
+import { situacaoInfo } from '../lib/situacao';
 
 type Variante = 'armazem' | 'montagem' | 'sac';
 
@@ -18,11 +19,6 @@ const TITULOS: Record<Variante, string> = {
 
 function formatarReais(centavos: number): string {
   return (centavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
-function situacao(m: Movimento): string {
-  if (m.estornado_de) return 'ESTORNO';
-  return m.tipo === 'saida' ? 'BAIXA' : 'ENTRADA';
 }
 
 export default function FechamentoImpressao({
@@ -53,6 +49,7 @@ export default function FechamentoImpressao({
         </p>
       </div>
 
+      <div className="tabela-scroll">
       <table>
         <thead>
           <tr>
@@ -71,11 +68,13 @@ export default function FechamentoImpressao({
                 <th>Coleta</th>
               </>
             )}
+            {variante === 'armazem' && <th>Rastreio</th>}
             <th>Itens</th>
             <th>Qtd.</th>
             {variante === 'armazem' && <th>Quem retirou</th>}
             {variante === 'montagem' && <th>Condicao</th>}
             {variante === 'sac' && <th>Garantia/Venda</th>}
+            {variante === 'armazem' && <th>Observacoes</th>}
             <th>Registrado por</th>
             <th>Situacao</th>
           </tr>
@@ -98,9 +97,13 @@ export default function FechamentoImpressao({
                   <td>{m.contraparte || '-'}</td>
                 </>
               )}
+              {variante === 'armazem' && <td>{m.codigo_rastreio || '-'}</td>}
               <td>
                 {m.itens
-                  .map((it) => `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`)
+                  .map(
+                    (it) =>
+                      `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}${it.observacao ? ' - ' + it.observacao : ''}`
+                  )
                   .join(' + ')}
               </td>
               <td>{m.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
@@ -117,12 +120,16 @@ export default function FechamentoImpressao({
                       : '-'}
                 </td>
               )}
+              {variante === 'armazem' && <td>{m.observacoes || '-'}</td>}
               <td>{m.usuario_nome}</td>
-              <td>{situacao(m)}</td>
+              <td>
+                <span className={situacaoInfo(m).classe}>{situacaoInfo(m).texto}</span>
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
+      </div>
 
       <p className="total-fechamento">
         <strong>{totalGeral}</strong> unidades no total ({lancamentos.length} pedidos)

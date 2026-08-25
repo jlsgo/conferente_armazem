@@ -5,6 +5,8 @@ use rusqlite_migration::{Migrations, M};
 
 use crate::domain::errors::{AppError, AppResult};
 
+pub mod backup;
+
 fn migrations() -> Migrations<'static> {
     Migrations::new(vec![
         M::up(include_str!("../../migrations/0001_init.sql")),

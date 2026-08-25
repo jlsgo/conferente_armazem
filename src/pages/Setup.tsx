@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import type { Armazem } from '../types';
 import { setupPrimeiroUsuario } from '../lib/api';
+import logoEcoviva from '../assets/ecoviva-logo.png';
 
 interface Props {
   armazens: Armazem[];
@@ -45,6 +46,7 @@ export default function Setup({ armazens, onConcluido }: Props) {
   return (
     <div className="tela-centralizada">
       <form className="cartao" onSubmit={handleSubmit}>
+        <img src={logoEcoviva} alt="Ecoviva" className="logo-ecoviva" />
         <h1>Configuracao inicial</h1>
         <p className="subtitulo">
           Este computador ainda nao tem nenhum usuario cadastrado. Crie a primeira conta

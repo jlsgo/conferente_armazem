@@ -1,11 +1,16 @@
 :root {
   --verde: #1f8a4c;
   --verde-escuro: #14612f;
+  --verde-claro: #e6f4ec;
   --texto: #1c2733;
   --texto-suave: #5b6b7a;
   --borda: #d9e1e7;
   --fundo: #f4f7f6;
   --erro: #c62828;
+  --erro-claro: #fdecea;
+  --aviso: #b06e00;
+  --aviso-claro: #fff4e5;
+  --anel-foco: rgba(31, 138, 76, 0.25);
   font-family: 'Segoe UI', Roboto, Arial, sans-serif;
 }
 
@@ -17,14 +22,24 @@ body {
   margin: 0;
   background: var(--fundo);
   color: var(--texto);
+  -webkit-font-smoothing: antialiased;
 }
 
 .tela-centralizada {
   min-height: 100vh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 24px;
+  background: linear-gradient(180deg, var(--verde-claro) 0%, var(--fundo) 45%);
+}
+
+.logo-ecoviva {
+  display: block;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
 }
 
 .cartao {
@@ -40,6 +55,17 @@ body {
 .cartao h1 {
   margin: 0 0 4px;
   color: var(--verde-escuro);
+  text-align: center;
+}
+
+.cartao h2 {
+  margin-top: 0;
+  color: var(--texto);
+}
+
+.cartao h3 {
+  color: var(--texto);
+  margin-bottom: 12px;
 }
 
 .subtitulo {
@@ -58,7 +84,8 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   display: block;
   width: 100%;
   margin-top: 6px;
@@ -66,6 +93,33 @@ select {
   border: 1px solid var(--borda);
   border-radius: 8px;
   font-size: 14px;
+  font-family: inherit;
+  background: #fff;
+  color: var(--texto);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+textarea {
+  resize: vertical;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: #b9c6ce;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--verde);
+  box-shadow: 0 0 0 3px var(--anel-foco);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9aa9b3;
 }
 
 button {
@@ -77,6 +131,20 @@ button {
   font-weight: 600;
   background: var(--verde);
   color: #fff;
+  transition: background-color 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--verde-escuro);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--anel-foco);
 }
 
 button:disabled {
@@ -90,46 +158,88 @@ button.secundario {
   border: 1px solid var(--borda);
 }
 
+button.secundario:hover:not(:disabled) {
+  background: var(--fundo);
+  border-color: #b9c6ce;
+}
+
 .erro {
   color: var(--erro);
+  background: var(--erro-claro);
+  border: 1px solid #f3c6c2;
+  border-radius: 8px;
+  padding: 8px 12px;
   font-size: 13px;
-  margin: -6px 0 14px;
+  margin: -2px 0 14px;
 }
 
 .pagina {
-  padding: 24px 40px;
-  max-width: 1100px;
+  padding: 24px 40px 48px;
+  max-width: 1320px;
   margin: 0 auto;
 }
 
 .topo {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
+  gap: 16px;
   margin-bottom: 24px;
+}
+
+.topo-marca {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.topo-marca img {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
 }
 
 .topo h1 {
   margin: 0;
   color: var(--verde-escuro);
+  font-size: 22px;
 }
 
 .abas {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin: 16px 0;
+  border-bottom: 1px solid var(--borda);
+  padding-bottom: 12px;
 }
 
 .abas button {
   background: transparent;
   color: var(--texto-suave);
-  border: 1px solid var(--borda);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 8px 18px;
+}
+
+.abas button:hover:not(:disabled) {
+  background: var(--verde-claro);
+  color: var(--verde-escuro);
 }
 
 .abas button.ativo {
   background: var(--verde);
   color: #fff;
   border-color: var(--verde);
+}
+
+.abas button.ativo:hover:not(:disabled) {
+  background: var(--verde-escuro);
+}
+
+.tabela-scroll {
+  overflow-x: auto;
+  margin: -4px;
+  padding: 4px;
 }
 
 table {
@@ -141,13 +251,61 @@ table {
 th,
 td {
   text-align: left;
-  padding: 8px 10px;
+  padding: 10px;
   border-bottom: 1px solid var(--borda);
 }
 
 th {
+  white-space: nowrap;
+}
+
+thead th {
+  background: var(--fundo);
   color: var(--texto-suave);
   font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 2px solid var(--borda);
+}
+
+tbody tr:hover {
+  background: var(--verde-claro);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.badge-saida {
+  background: #e8edff;
+  color: #2b3a9e;
+}
+
+.badge-entrada {
+  background: var(--verde-claro);
+  color: var(--verde-escuro);
+}
+
+.badge-estorno {
+  background: var(--erro-claro);
+  color: var(--erro);
+}
+
+.carregando {
+  color: var(--texto-suave);
+  padding: 32px 0;
+  text-align: center;
 }
 
 .rodape-tabela {
@@ -181,7 +339,7 @@ th {
 }
 
 .linha-item-veiculo {
-  grid-template-columns: 130px 1fr 130px 90px auto;
+  grid-template-columns: 130px 1fr 130px 1fr 90px auto;
 }
 
 .linha-item-peca {
@@ -251,8 +409,20 @@ th {
   .somente-tela {
     display: none !important;
   }
+  .area-impressao table {
+    font-size: 11px;
+  }
+  .area-impressao .tabela-scroll {
+    overflow: visible;
+  }
+  .area-impressao th,
+  .area-impressao td {
+    padding: 4px 6px;
+  }
   @page {
-    size: A4;
-    margin: 16mm;
+    /* Paisagem: a tabela de Saida de Armazem ganhou colunas (rastreio,
+       observacoes) e nao cabe direito em retrato. */
+    size: A4 landscape;
+    margin: 14mm;
   }
 }

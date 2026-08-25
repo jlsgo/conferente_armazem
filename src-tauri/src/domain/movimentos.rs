@@ -69,10 +69,12 @@ pub struct Movimento {
     pub usuario_id: i64,
     pub usuario_nome: String,
     pub numero_pedido: Option<String>,
+    pub codigo_rastreio: Option<String>,
     pub contraparte: Option<String>,
     pub quem_retirou: Option<String>,
     pub motivo: Option<String>,
     pub valor_centavos: Option<i64>,
+    pub observacoes: Option<String>,
     pub status: String,
     pub estornado_de: Option<i64>,
     pub hash_integridade: String,
@@ -699,76 +701,44 @@ pub fn buscar_movimento(conn: &Connection, id: i64) -> AppResult<Movimento> {
     let encontrado = conn
         .query_row(
             "SELECT m.armazem_id, m.fluxo, m.tipo, m.data, m.hora, m.turno, m.usuario_id, u.nome,
-                    m.numero_pedido, m.contraparte, m.quem_retirou, m.motivo, m.valor_centavos,
-                    m.status, m.estornado_de, m.hash_integridade
+                    m.numero_pedido, m.codigo_rastreio, m.contraparte, m.quem_retirou, m.motivo,
+                    m.valor_centavos, m.observacoes, m.status, m.estornado_de, m.hash_integridade
              FROM movimentos m JOIN usuarios u ON u.id = m.usuario_id
              WHERE m.id = ?1",
             params![id],
             |r| {
-                Ok((
-                    r.get::<_, i64>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, String>(2)?,
-                    r.get::<_, String>(3)?,
-                    r.get::<_, String>(4)?,
-                    r.get::<_, String>(5)?,
-                    r.get::<_, i64>(6)?,
-                    r.get::<_, String>(7)?,
-                    r.get::<_, Option<String>>(8)?,
-                    r.get::<_, Option<String>>(9)?,
-                    r.get::<_, Option<String>>(10)?,
-                    r.get::<_, Option<String>>(11)?,
-                    r.get::<_, Option<i64>>(12)?,
-                    r.get::<_, String>(13)?,
-                    r.get::<_, Option<i64>>(14)?,
-                    r.get::<_, String>(15)?,
-                ))
+                Ok(Movimento {
+                    id,
+                    numero: 0,
+                    armazem_id: r.get(0)?,
+                    fluxo: r.get(1)?,
+                    tipo: r.get(2)?,
+                    data: r.get(3)?,
+                    hora: r.get(4)?,
+                    turno: r.get(5)?,
+                    usuario_id: r.get(6)?,
+                    usuario_nome: r.get(7)?,
+                    numero_pedido: r.get(8)?,
+                    codigo_rastreio: r.get(9)?,
+                    contraparte: r.get(10)?,
+                    quem_retirou: r.get(11)?,
+                    motivo: r.get(12)?,
+                    valor_centavos: r.get(13)?,
+                    observacoes: r.get(14)?,
+                    status: r.get(15)?,
+                    estornado_de: r.get(16)?,
+                    hash_integridade: r.get(17)?,
+                    itens: Vec::new(),
+                })
             },
         )
         .optional()?;
 
-    let (
-        armazem_id,
-        fluxo,
-        tipo,
-        data,
-        hora,
-        turno,
-        usuario_id,
-        usuario_nome,
-        numero_pedido,
-        contraparte,
-        quem_retirou,
-        motivo,
-        valor_centavos,
-        status,
-        estornado_de,
-        hash_integridade,
-    ) = encontrado.ok_or_else(|| AppError::Validation("Lancamento nao encontrado.".into()))?;
+    let mut movimento =
+        encontrado.ok_or_else(|| AppError::Validation("Lancamento nao encontrado.".into()))?;
+    movimento.itens = carregar_itens(conn, id)?;
 
-    let itens = carregar_itens(conn, id)?;
-
-    Ok(Movimento {
-        id,
-        numero: 0,
-        armazem_id,
-        fluxo,
-        tipo,
-        data,
-        hora,
-        turno,
-        usuario_id,
-        usuario_nome,
-        numero_pedido,
-        contraparte,
-        quem_retirou,
-        motivo,
-        valor_centavos,
-        status,
-        estornado_de,
-        hash_integridade,
-        itens,
-    })
+    Ok(movimento)
 }
 
 pub fn listar_movimentos_do_dia(
@@ -779,8 +749,8 @@ pub fn listar_movimentos_do_dia(
 ) -> AppResult<Vec<Movimento>> {
     let mut stmt = conn.prepare(
         "SELECT m.id, m.armazem_id, m.fluxo, m.tipo, m.data, m.hora, m.turno, m.usuario_id, u.nome,
-                m.numero_pedido, m.contraparte, m.quem_retirou, m.motivo, m.valor_centavos,
-                m.status, m.estornado_de, m.hash_integridade
+                m.numero_pedido, m.codigo_rastreio, m.contraparte, m.quem_retirou, m.motivo,
+                m.valor_centavos, m.observacoes, m.status, m.estornado_de, m.hash_integridade
          FROM movimentos m JOIN usuarios u ON u.id = m.usuario_id
          WHERE m.armazem_id = ?1 AND m.fluxo = ?2 AND m.data = ?3
          ORDER BY m.id ASC",
@@ -800,13 +770,15 @@ pub fn listar_movimentos_do_dia(
                 usuario_id: r.get(7)?,
                 usuario_nome: r.get(8)?,
                 numero_pedido: r.get(9)?,
-                contraparte: r.get(10)?,
-                quem_retirou: r.get(11)?,
-                motivo: r.get(12)?,
-                valor_centavos: r.get(13)?,
-                status: r.get(14)?,
-                estornado_de: r.get(15)?,
-                hash_integridade: r.get(16)?,
+                codigo_rastreio: r.get(10)?,
+                contraparte: r.get(11)?,
+                quem_retirou: r.get(12)?,
+                motivo: r.get(13)?,
+                valor_centavos: r.get(14)?,
+                observacoes: r.get(15)?,
+                status: r.get(16)?,
+                estornado_de: r.get(17)?,
+                hash_integridade: r.get(18)?,
                 itens: Vec::new(),
             })
         })?
@@ -814,6 +786,83 @@ pub fn listar_movimentos_do_dia(
 
     for (indice, movimento) in movimentos.iter_mut().enumerate() {
         movimento.numero = indice as i64 + 1;
+        movimento.itens = carregar_itens(conn, movimento.id)?;
+    }
+
+    Ok(movimentos)
+}
+
+const LIMITE_HISTORICO: i64 = 500;
+
+/// Busca lancamentos de qualquer dia (nao so hoje), com filtros opcionais de
+/// intervalo de data, cliente/coleta (`contraparte`, busca parcial) e numero do
+/// pedido (busca parcial). Usada pela aba de Historico. `armazem_id`/`fluxo`
+/// continuam obrigatorios - a busca nunca cruza armazem nem fluxo. Limitada as
+/// `LIMITE_HISTORICO` linhas mais recentes; sem paginacao nesta versao.
+#[allow(clippy::too_many_arguments)]
+pub fn buscar_historico(
+    conn: &Connection,
+    armazem_id: i64,
+    fluxo: &str,
+    data_inicio: Option<&str>,
+    data_fim: Option<&str>,
+    cliente: Option<&str>,
+    numero_pedido: Option<&str>,
+) -> AppResult<Vec<Movimento>> {
+    let mut stmt = conn.prepare(
+        "SELECT m.id, m.armazem_id, m.fluxo, m.tipo, m.data, m.hora, m.turno, m.usuario_id, u.nome,
+                m.numero_pedido, m.codigo_rastreio, m.contraparte, m.quem_retirou, m.motivo,
+                m.valor_centavos, m.observacoes, m.status, m.estornado_de, m.hash_integridade
+         FROM movimentos m JOIN usuarios u ON u.id = m.usuario_id
+         WHERE m.armazem_id = ?1 AND m.fluxo = ?2
+           AND (?3 IS NULL OR m.data >= ?3)
+           AND (?4 IS NULL OR m.data <= ?4)
+           AND (?5 IS NULL OR m.contraparte LIKE '%' || ?5 || '%')
+           AND (?6 IS NULL OR m.numero_pedido LIKE '%' || ?6 || '%')
+         ORDER BY m.data DESC, m.hora DESC, m.id DESC
+         LIMIT ?7",
+    )?;
+
+    let mut movimentos = stmt
+        .query_map(
+            params![
+                armazem_id,
+                fluxo,
+                data_inicio,
+                data_fim,
+                cliente,
+                numero_pedido,
+                LIMITE_HISTORICO
+            ],
+            |r| {
+                Ok(Movimento {
+                    id: r.get(0)?,
+                    numero: 0,
+                    armazem_id: r.get(1)?,
+                    fluxo: r.get(2)?,
+                    tipo: r.get(3)?,
+                    data: r.get(4)?,
+                    hora: r.get(5)?,
+                    turno: r.get(6)?,
+                    usuario_id: r.get(7)?,
+                    usuario_nome: r.get(8)?,
+                    numero_pedido: r.get(9)?,
+                    codigo_rastreio: r.get(10)?,
+                    contraparte: r.get(11)?,
+                    quem_retirou: r.get(12)?,
+                    motivo: r.get(13)?,
+                    valor_centavos: r.get(14)?,
+                    observacoes: r.get(15)?,
+                    status: r.get(16)?,
+                    estornado_de: r.get(17)?,
+                    hash_integridade: r.get(18)?,
+                    itens: Vec::new(),
+                })
+            },
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    for movimento in movimentos.iter_mut() {
         movimento.itens = carregar_itens(conn, movimento.id)?;
     }
 
@@ -1421,5 +1470,271 @@ mod tests {
 
         let resultado = estornar_movimento(&mut conn, estorno.id, gestor_id, "estornar o estorno?");
         assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn estorno_rejeita_gestor_de_outro_armazem() {
+        let (mut conn, armazem_b2, usuario_id) = conexao_de_teste();
+        let armazem_a4: i64 = conn
+            .query_row("SELECT id FROM armazens WHERE codigo = 'A4'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        let original = criar_movimento(
+            &mut conn,
+            movimento_base(armazem_b2, usuario_id, item_simples()),
+        )
+        .unwrap();
+
+        // Gestor fixo no armazem A4 nao pode estornar um lancamento do B2,
+        // mesmo sendo gestor.
+        let gestor_a4 = criar_gestor(&conn, Some(armazem_a4));
+        let resultado = estornar_movimento(&mut conn, original.id, gestor_a4, "engano");
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn estorno_rejeita_movimento_inexistente() {
+        let (mut conn, armazem_id, _usuario_id) = conexao_de_teste();
+        let gestor_id = criar_gestor(&conn, Some(armazem_id));
+        let resultado = estornar_movimento(&mut conn, 999_999, gestor_id, "engano");
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn estorno_rejeita_usuario_desativado_apos_virar_gestor() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let gestor_id = criar_gestor(&conn, Some(armazem_id));
+        let original = criar_movimento(
+            &mut conn,
+            movimento_base(armazem_id, usuario_id, item_simples()),
+        )
+        .unwrap();
+
+        // Gestor foi desativado (ex.: desligado da empresa) depois de ter
+        // sido cadastrado - a sessao antiga nao pode continuar autorizando
+        // estornos.
+        conn.execute(
+            "UPDATE usuarios SET ativo = 0 WHERE id = ?1",
+            params![gestor_id],
+        )
+        .unwrap();
+
+        let resultado = estornar_movimento(&mut conn, original.id, gestor_id, "engano");
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn buscar_movimento_retorna_erro_para_id_inexistente() {
+        let (conn, _armazem_id, _usuario_id) = conexao_de_teste();
+        let resultado = buscar_movimento(&conn, 999_999);
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn rejeita_quantidade_negativa() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let itens = vec![MovimentoItemInput {
+            categoria: "scooter".into(),
+            descricao: None,
+            montagem: None,
+            condicao: None,
+            quantidade: -5,
+            observacao: None,
+        }];
+        let resultado = criar_movimento(&mut conn, movimento_base(armazem_id, usuario_id, itens));
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn rejeita_movimento_com_armazem_destino_inativo() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let armazem_a4: i64 = conn
+            .query_row("SELECT id FROM armazens WHERE codigo = 'A4'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        conn.execute(
+            "UPDATE armazens SET ativo = 0 WHERE id = ?1",
+            params![armazem_a4],
+        )
+        .unwrap();
+
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.armazem_destino_id = Some(armazem_a4);
+        let resultado = criar_movimento(&mut conn, novo);
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    // --- Historico ---
+
+    fn movimento_com(
+        armazem_id: i64,
+        usuario_id: i64,
+        data: &str,
+        numero_pedido: &str,
+        contraparte: &str,
+    ) -> NovoMovimento {
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.data = data.into();
+        novo.numero_pedido = Some(numero_pedido.into());
+        novo.contraparte = Some(contraparte.into());
+        novo
+    }
+
+    #[test]
+    fn historico_filtra_por_intervalo_de_data() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        criar_movimento(
+            &mut conn,
+            movimento_com(armazem_id, usuario_id, "2026-08-10", "1", "Cliente A"),
+        )
+        .unwrap();
+        criar_movimento(
+            &mut conn,
+            movimento_com(armazem_id, usuario_id, "2026-08-15", "2", "Cliente A"),
+        )
+        .unwrap();
+        criar_movimento(
+            &mut conn,
+            movimento_com(armazem_id, usuario_id, "2026-08-20", "3", "Cliente A"),
+        )
+        .unwrap();
+
+        let resultado = buscar_historico(
+            &conn,
+            armazem_id,
+            "saida_armazem",
+            Some("2026-08-12"),
+            Some("2026-08-18"),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(resultado.len(), 1);
+        assert_eq!(resultado[0].numero_pedido.as_deref(), Some("2"));
+    }
+
+    #[test]
+    fn historico_filtra_por_cliente_parcial_sem_case() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        criar_movimento(
+            &mut conn,
+            movimento_com(
+                armazem_id,
+                usuario_id,
+                "2026-08-10",
+                "1",
+                "DISK&TENHA LOGISTICA",
+            ),
+        )
+        .unwrap();
+        criar_movimento(
+            &mut conn,
+            movimento_com(armazem_id, usuario_id, "2026-08-11", "2", "Correios"),
+        )
+        .unwrap();
+
+        let resultado = buscar_historico(
+            &conn,
+            armazem_id,
+            "saida_armazem",
+            None,
+            None,
+            Some("disk"),
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(resultado.len(), 1);
+        assert_eq!(resultado[0].numero_pedido.as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn historico_filtra_por_numero_pedido_parcial() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        criar_movimento(
+            &mut conn,
+            movimento_com(armazem_id, usuario_id, "2026-08-10", "3893", "Cliente A"),
+        )
+        .unwrap();
+        criar_movimento(
+            &mut conn,
+            movimento_com(armazem_id, usuario_id, "2026-08-11", "4001", "Cliente A"),
+        )
+        .unwrap();
+
+        let resultado = buscar_historico(
+            &conn,
+            armazem_id,
+            "saida_armazem",
+            None,
+            None,
+            None,
+            Some("389"),
+        )
+        .unwrap();
+
+        assert_eq!(resultado.len(), 1);
+        assert_eq!(resultado[0].numero_pedido.as_deref(), Some("3893"));
+    }
+
+    #[test]
+    fn historico_combina_filtros() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        criar_movimento(
+            &mut conn,
+            movimento_com(armazem_id, usuario_id, "2026-08-10", "3893", "DISK&TENHA"),
+        )
+        .unwrap();
+        criar_movimento(
+            &mut conn,
+            movimento_com(armazem_id, usuario_id, "2026-08-11", "3893", "Correios"),
+        )
+        .unwrap();
+
+        let resultado = buscar_historico(
+            &conn,
+            armazem_id,
+            "saida_armazem",
+            None,
+            None,
+            Some("disk"),
+            Some("3893"),
+        )
+        .unwrap();
+
+        assert_eq!(resultado.len(), 1);
+        assert_eq!(resultado[0].contraparte.as_deref(), Some("DISK&TENHA"));
+    }
+
+    #[test]
+    fn historico_nao_vaza_outro_armazem_nem_outro_fluxo() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let armazem_a4: i64 = conn
+            .query_row("SELECT id FROM armazens WHERE codigo = 'A4'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+
+        criar_movimento(
+            &mut conn,
+            movimento_com(armazem_id, usuario_id, "2026-08-10", "1", "Cliente A"),
+        )
+        .unwrap();
+
+        let mut outro_fluxo = movimento_com(armazem_id, usuario_id, "2026-08-10", "2", "Cliente A");
+        outro_fluxo.fluxo = "peca_montagem".into();
+        outro_fluxo.itens[0].condicao = Some("boa".into());
+        criar_movimento(&mut conn, outro_fluxo).unwrap();
+
+        let resultado_fluxo_certo =
+            buscar_historico(&conn, armazem_id, "saida_armazem", None, None, None, None).unwrap();
+        assert_eq!(resultado_fluxo_certo.len(), 1);
+
+        let resultado_outro_armazem =
+            buscar_historico(&conn, armazem_a4, "saida_armazem", None, None, None, None).unwrap();
+        assert!(resultado_outro_armazem.is_empty());
     }
 }

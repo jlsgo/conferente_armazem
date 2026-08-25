@@ -37,18 +37,46 @@ não deixe ela ficar desatualizada.
   `FechamentoImpressao` ganhou uma prop `variante` (`armazem`/`montagem`/`sac`) pra
   imprimir cada fluxo com as colunas certas. Aba de navegacao no `Dashboard.tsx` agora
   aparece pra qualquer usuario logado (antes so gestor via nav).
+- **Sprint 4 (parte executavel)**: `Lancamentos.tsx` ganhou os campos que ja existiam
+  no banco mas nao tinham UI — `codigo_rastreio`, `observacoes` do movimento e
+  `observacao` por item — refletidos na tabela do dia e na impressao do fechamento
+  (que virou paisagem, retrato nao cabia mais colunas). Backup automatico
+  (`db::backup::backup_automatico`, feature `backup` do `rusqlite` via Online Backup
+  API) roda a cada abertura do app, um arquivo por dia em `backups/`, retencao de 14
+  dias — procedimento de restauracao documentado em `docs/ARQUITETURA.md`. Workflow
+  `.github/workflows/build-installer.yml` (novo, separado do `ci.yml`) gera o
+  instalador Windows (`.msi`/`.exe`) sob demanda via `workflow_dispatch` ou tag `v*`.
+- **Polimento visual + aba de Historico**: logo da Ecoviva no login/setup/cabecalho
+  (`src/assets/ecoviva-logo.png`, mesmo icone do instalador); hover/focus em
+  botoes e campos, badges coloridos de situacao (`src/lib/situacao.ts`, compartilhado
+  entre as 4 telas), tabelas com zebra striping e scroll horizontal em vez de
+  quebrar o layout. Nova aba **Historico** (`src/pages/Historico.tsx`) — busca
+  lancamentos de qualquer dia (nao so hoje) por periodo, cliente/coleta e numero de
+  pedido, com o mesmo botao de estornar das outras telas; backend em
+  `domain::movimentos::buscar_historico` (SQL com filtros opcionais via `?N IS NULL
+  OR ...`, limite de 500 linhas, sem paginacao ainda). Dados de teste pra inspecionar
+  tudo isso: `src-tauri/examples/seed_dev_data.rs` (`cargo run --example
+  seed_dev_data`, idempotente pra usuarios, so avisa e pula lancamento que colidir
+  com dia ja fechado).
 
-## Sprint 4 — Completar Saida de Armazem + distribuicao real
+- **Testes de seguranca e erros**: 12 testes novos (54 -> 66) fechando lacunas que a
+  suite anterior nao cobria: estorno por gestor de outro armazem (isolamento entre
+  A4/B2), estorno por usuario desativado depois de ja ter sido cadastrado, estorno de
+  lancamento inexistente, `buscar_movimento`/quantidade negativa/armazem destino
+  inativo, e no `auth.rs` - login de usuario desativado (mesma mensagem generica de um
+  login inexistente, sem vazar que a conta existe), login com senha vazia, cadastro de
+  usuario por um `solicitante_id` que nao existe, e confirmacao de que a senha nunca e
+  gravada em texto puro e usa salt diferente por conta (`domain/auth.rs`). Novo teste em
+  `domain/errors.rs` trava que `AppError::Database` nunca vaze o texto interno de um
+  erro de SQL (nome de coluna/tabela) para a mensagem mostrada na tela.
 
-- Adicionar `observacoes` do movimento e do item na tela (lacuna apontada no plano de
-  melhorias: hoje a descricao livre nao substitui a coluna de observacoes das planilhas).
-- Exibir no fechamento impresso os campos que ja existem no banco mas nao aparecem na
-  tela hoje (ex.: codigo de rastreio).
-- Gerar e testar o instalador Windows de verdade (`.msi`/`.exe` via `cargo tauri build`
-  no CI `windows-latest`, ou numa maquina Windows) — ate agora so validamos que o app
-  compila e roda no Linux deste ambiente.
-- Backup automatico local (copia diaria do arquivo `ecoviva-armazem.db` para outra
-  pasta/pendrive) — nenhum backup existe hoje alem do proprio arquivo SQLite.
+## Sprint 4 (resto) — Distribuicao real
+
+Fora do que da pra fazer neste ambiente (sem Windows real, sem acesso aos PCs de
+A4/B2):
+
+- Baixar e testar de verdade o instalador gerado pelo `build-installer.yml` numa
+  maquina Windows.
 - Instalar nos PCs reais de A4 e B2 e acompanhar o primeiro uso das conferentes (piloto
   em paralelo com a planilha, conforme a "Decisao atual" do plano de melhorias).
 

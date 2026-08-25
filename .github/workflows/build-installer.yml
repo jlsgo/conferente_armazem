@@ -1,0 +1,47 @@
+name: Build installer
+
+# Workflow separado do ci.yml (que roda em todo push/PR). Este so roda quando
+# pedido explicitamente - pelo botao "Run workflow" na aba Actions do GitHub,
+# ou ao empurrar uma tag `v*` - porque gerar o instalador (tauri build) e bem
+# mais lento que so testar/compilar, e nao precisa rodar a cada commit.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  windows-installer:
+    name: Gera o instalador Windows (.msi / .exe)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instala Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instala toolchain Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache do Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Instala dependencias do frontend
+        run: npm ci
+
+      - name: Gera o instalador (tauri build)
+        run: npm run dist
+
+      - name: Publica o instalador como artefato do workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecoviva-controle-armazem-windows
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error

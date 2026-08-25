@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import type { Usuario } from '../types';
 import { login as autenticar } from '../lib/api';
+import logoEcoviva from '../assets/ecoviva-logo.png';
 
 interface Props {
   onLogin: (usuario: Usuario) => void;
@@ -30,6 +31,7 @@ export default function Login({ onLogin }: Props) {
   return (
     <div className="tela-centralizada">
       <form className="cartao" onSubmit={handleSubmit}>
+        <img src={logoEcoviva} alt="Ecoviva" className="logo-ecoviva" />
         <h1>Ecoviva</h1>
         <p className="subtitulo">Controle de entradas e saidas do armazem</p>
 

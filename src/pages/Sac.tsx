@@ -9,6 +9,7 @@ import {
   sugestoesDescricao,
 } from '../lib/api';
 import FechamentoImpressao from '../components/FechamentoImpressao';
+import { situacaoInfo } from '../lib/situacao';
 
 interface Props {
   usuario: Usuario;
@@ -205,7 +206,7 @@ export default function Sac({ usuario, armazem }: Props) {
   );
 
   if (carregandoLista) {
-    return <p>Carregando...</p>;
+    return <p className="carregando">Carregando...</p>;
   }
 
   if (fechamento) {
@@ -377,6 +378,7 @@ export default function Sac({ usuario, armazem }: Props) {
 
       <section className="cartao">
         <h2>Lancamentos de hoje ({data})</h2>
+        <div className="tabela-scroll">
         <table>
           <thead>
             <tr>
@@ -413,7 +415,9 @@ export default function Sac({ usuario, armazem }: Props) {
                       : '-'}
                 </td>
                 <td>{m.usuario_nome}</td>
-                <td>{m.estornado_de ? 'ESTORNO' : m.tipo === 'saida' ? 'BAIXA' : 'ENTRADA'}</td>
+                <td>
+                  <span className={situacaoInfo(m).classe}>{situacaoInfo(m).texto}</span>
+                </td>
                 {ehGestor && (
                   <td className="somente-tela">
                     {!m.estornado_de && !idsJaEstornados.has(m.id) && (
@@ -439,6 +443,7 @@ export default function Sac({ usuario, armazem }: Props) {
             )}
           </tbody>
         </table>
+        </div>
         <p className="rodape-tabela">
           <strong>{totalGeralDoDia}</strong> pecas no total ({lancamentos.length} atendimentos)
         </p>

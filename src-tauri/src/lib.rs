@@ -22,6 +22,11 @@ pub fn run() {
 
             let diretorio_dados = app.path().app_data_dir()?;
             let conn = db::abrir(&diretorio_dados)?;
+
+            if let Err(e) = db::backup::backup_automatico(&conn, &diretorio_dados) {
+                log::warn!("Falha ao fazer backup automatico do banco: {e}");
+            }
+
             app.manage(AppState::new(conn));
 
             Ok(())
@@ -37,6 +42,7 @@ pub fn run() {
             commands::movimento_commands::estornar_movimento,
             commands::movimento_commands::listar_movimentos_do_dia,
             commands::movimento_commands::sugestoes_descricao,
+            commands::movimento_commands::buscar_historico,
             commands::fechamento_commands::fechar_dia,
             commands::fechamento_commands::buscar_fechamento_do_dia,
         ])

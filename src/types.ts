@@ -73,10 +73,12 @@ export interface Movimento {
   usuario_id: number;
   usuario_nome: string;
   numero_pedido: string | null;
+  codigo_rastreio: string | null;
   contraparte: string | null;
   quem_retirou: string | null;
   motivo: string | null;
   valor_centavos: number | null;
+  observacoes: string | null;
   status: string;
   estornado_de: number | null;
   hash_integridade: string;

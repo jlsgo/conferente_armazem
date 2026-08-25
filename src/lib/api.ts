@@ -100,6 +100,17 @@ export function sugestoesDescricao(categoria: Categoria): Promise<string[]> {
   return invoke<string[]>('sugestoes_descricao', { categoria });
 }
 
+export function buscarHistorico(params: {
+  armazem_id: number;
+  fluxo: Fluxo;
+  data_inicio?: string | null;
+  data_fim?: string | null;
+  cliente?: string | null;
+  numero_pedido?: string | null;
+}): Promise<Movimento[]> {
+  return invoke<Movimento[]>('buscar_historico', params);
+}
+
 export function buscarFechamentoDoDia(params: {
   armazem_id: number;
   fluxo: Fluxo;

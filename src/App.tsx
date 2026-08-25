@@ -22,7 +22,7 @@ export default function App() {
   if (loading || !status) {
     return (
       <div className="tela-centralizada">
-        <p>Carregando...</p>
+        <p className="carregando">Carregando...</p>
       </div>
     );
   }

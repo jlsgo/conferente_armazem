@@ -111,7 +111,7 @@ export default function Usuarios({ armazens }: Props) {
       <section className="cartao">
         <h2>Usuarios cadastrados</h2>
         {carregando ? (
-          <p>Carregando...</p>
+          <p className="carregando">Carregando...</p>
         ) : (
           <table>
             <thead>

@@ -38,6 +38,7 @@ domain/     Regras de negocio puras. Nao conhece Tauri nem SQL de UI - so recebe
 
 db/         Abertura da conexao SQLite, pragmas (WAL, foreign_keys), aplicacao das
             migrations e seed dos dois armazens (A4/B2).
+  backup.rs      backup automatico diario com retencao (ver secao propria abaixo).
 
 commands/   Wrappers finos com #[tauri::command]. So extraem o State, chamam
             domain::* e devolvem o Result. Nao tem logica de negocio aqui de proposito
@@ -94,6 +95,29 @@ computadores esta implementada ainda. Hoje o sistema e 100% local a cada PC.
 Arquivos SQL numerados em `src-tauri/migrations/`, aplicados por `rusqlite_migration` a
 cada abertura do banco (`db::abrir`). Para mudar o schema, **nunca edite uma migration ja
 existente** — crie um novo arquivo `000N_descricao.sql` com o proximo numero.
+
+## Backup automatico e restauracao
+
+`db::backup::backup_automatico` roda uma vez a cada abertura real do app (dentro do
+`.setup()` em `lib.rs`, logo apos `db::abrir`) e grava uma copia do banco em
+`<diretorio de dados do usuario>/backups/ecoviva-armazem-<AAAA-MM-DD>.db` — um arquivo
+por dia (roda de novo no mesmo dia so sobrescreve), mantendo os ultimos 14 dias. Usa a
+Online Backup API do SQLite (`Connection::backup`, feature `backup` do `rusqlite`), que
+lida corretamente com o modo WAL — diferente de simplesmente copiar o arquivo `.db` no
+sistema de arquivos, que poderia perder escritas ainda so no `-wal`. Falha no backup
+**nao impede o app de abrir**, so grava um aviso no log.
+
+**Para restaurar um backup** (recuperar de um problema, ou trocar de computador):
+1. Feche o app completamente.
+2. Localize a pasta de dados (no Windows, normalmente
+   `%APPDATA%\com.ecoviva.controlearmazem\`) e a subpasta `backups/` dentro dela.
+3. Copie o arquivo do dia desejado por cima de `ecoviva-armazem.db` (no mesmo
+   diretorio, um nivel acima de `backups/`).
+4. Abra o app normalmente.
+
+Nao ha teste automatizado desse passo a passo manual (e um procedimento de
+recuperacao de desastre, nao uma feature da UI) — os testes em `db::backup` cobrem
+so a geracao e a retencao dos arquivos de backup em si.
 
 ## Rodando localmente
 

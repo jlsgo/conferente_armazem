@@ -388,6 +388,115 @@ mod tests {
     }
 
     #[test]
+    fn login_rejeita_usuario_desativado_mesmo_com_senha_correta() {
+        let conn = conexao_de_teste();
+        let usuario_id = criar_usuario(
+            &conn,
+            NovoUsuario {
+                nome: "Karol",
+                login: "karol",
+                senha: "senha123",
+                armazem_id: None,
+                papel: "conferente",
+            },
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE usuarios SET ativo = 0 WHERE id = ?1",
+            params![usuario_id],
+        )
+        .unwrap();
+
+        // Mesma mensagem generica de "usuario ou senha invalidos" que um
+        // login inexistente - nao deve dar nenhuma pista de que o usuario
+        // existe mas foi desativado.
+        let resultado = login(&conn, "karol", "senha123");
+        assert!(matches!(resultado, Err(AppError::CredenciaisInvalidas)));
+    }
+
+    #[test]
+    fn login_rejeita_senha_vazia() {
+        let conn = conexao_de_teste();
+        criar_usuario(
+            &conn,
+            NovoUsuario {
+                nome: "Alice",
+                login: "alice",
+                senha: "senha123",
+                armazem_id: None,
+                papel: "conferente",
+            },
+        )
+        .unwrap();
+
+        let resultado = login(&conn, "alice", "");
+        assert!(matches!(resultado, Err(AppError::CredenciaisInvalidas)));
+    }
+
+    #[test]
+    fn senha_nunca_e_armazenada_em_texto_puro_e_usa_salt_diferente_a_cada_vez() {
+        let conn = conexao_de_teste();
+        criar_usuario(
+            &conn,
+            NovoUsuario {
+                nome: "Alice",
+                login: "alice",
+                senha: "senha-super-secreta",
+                armazem_id: None,
+                papel: "conferente",
+            },
+        )
+        .unwrap();
+        criar_usuario(
+            &conn,
+            NovoUsuario {
+                nome: "Bia",
+                login: "bia",
+                senha: "senha-super-secreta",
+                armazem_id: None,
+                papel: "conferente",
+            },
+        )
+        .unwrap();
+
+        let hashes: Vec<String> = conn
+            .prepare("SELECT senha_hash FROM usuarios ORDER BY login")
+            .unwrap()
+            .query_map([], |r| r.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+
+        for hash in &hashes {
+            assert_ne!(hash, "senha-super-secreta");
+            assert!(!hash.contains("senha-super-secreta"));
+            assert!(hash.starts_with("$argon2"));
+        }
+        // Mesma senha em duas contas diferentes precisa gerar hashes
+        // diferentes (salt aleatorio) - senao um vazamento do banco
+        // revelaria quais contas compartilham senha.
+        assert_ne!(hashes[0], hashes[1]);
+    }
+
+    #[test]
+    fn criar_usuario_como_gestor_rejeita_solicitante_inexistente() {
+        let conn = conexao_de_teste();
+        let resultado = criar_usuario_como_gestor(
+            &conn,
+            999_999,
+            NovoUsuario {
+                nome: "Invasor",
+                login: "invasor",
+                senha: "senha123",
+                armazem_id: None,
+                papel: "gestor",
+            },
+        );
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
+        assert_eq!(listar_usuarios(&conn, None).unwrap().len(), 0);
+    }
+
+    #[test]
     fn conferente_nao_pode_cadastrar_novo_usuario() {
         let conn = conexao_de_teste();
         let conferente_id = criar_usuario(
