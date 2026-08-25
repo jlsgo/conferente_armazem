@@ -536,6 +536,9 @@ tbody tr:last-child td {
 
 /* Impressao do fechamento: so a area-impressao aparece, no tamanho A4. */
 @media print {
+  body {
+    background: #fff;
+  }
   body * {
     visibility: hidden;
   }
@@ -551,29 +554,69 @@ tbody tr:last-child td {
     max-width: none;
     border: none;
     box-shadow: none;
+    /* .cartao tem padding:32px pra tela - em papel a margem do @page ja
+       resolve isso, e manter esse padding aqui sozinho custava ~17mm de
+       altura util, o suficiente pra empurrar a tabela pra outra pagina. */
+    padding: 0;
   }
   .somente-tela {
     display: none !important;
   }
+  /* Densidade calibrada pra caber ~40 lancamentos (um dia cheio de Saida de
+     Armazem) numa unica folha A4 deitada, como o Excel antigo conseguia -
+     testado com cargas de 40 linhas via Chrome headless antes de fixar estes
+     valores; passar disso (fonte maior, mais padding) volta a estourar
+     pagina. table-layout fixed + colgroup (ver FechamentoImpressao.tsx)
+     evita que Coleta/Itens fiquem espremidos e quebrem linha à toa. */
   .area-impressao table {
-    font-size: 12.5px;
-    line-height: 1.35;
+    font-size: 9.3px;
+    line-height: 1.05;
+    table-layout: fixed;
   }
   .area-impressao .tabela-scroll {
     overflow: visible;
   }
   .area-impressao th,
   .area-impressao td {
-    padding: 5px 7px;
+    padding: 1px 4px;
+    overflow-wrap: break-word;
+  }
+  .area-impressao thead th {
+    font-size: 8px;
+  }
+  .area-impressao .badge {
+    padding: 0 4px;
+    font-size: 8px;
   }
   .area-impressao h2 {
-    font-size: 16px;
+    font-size: 11px;
+    margin: 0 0 2px;
+  }
+  .area-impressao .cabecalho-impressao {
+    margin-bottom: 4px;
+  }
+  .area-impressao .cabecalho-impressao p {
+    margin: 1px 0;
+    font-size: 9px;
+  }
+  .area-impressao .rodape-tabela {
+    font-size: 8px;
+    margin-top: 2px;
+  }
+  .area-impressao .total-fechamento {
+    font-size: 9px;
+    margin-top: 2px;
+  }
+  .area-impressao .assinatura {
+    margin-top: 4mm;
   }
   @page {
     /* Paisagem pra caber a tabela (10 colunas em Saida de Armazem, com
        Itens/Observacoes em texto livre) com fonte legivel - retrato
-       obrigaria a fonte muito pequena pra nao cortar coluna. */
+       obrigaria a fonte muito pequena pra nao cortar coluna. Margem
+       reduzida (5mm) pra aproveitar ao maximo a folha, dentro do que a
+       maioria das impressoras a laser/jato de tinta aceita. */
     size: A4 landscape;
-    margin: 12mm;
+    margin: 5mm;
   }
 }

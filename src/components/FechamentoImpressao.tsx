@@ -17,6 +17,15 @@ const TITULOS: Record<Variante, string> = {
   sac: 'Controle de Saidas do SAC',
 };
 
+// Largura (%) de cada coluna na impressao, na mesma ordem dos <th> abaixo -
+// sem isso o layout automatico espreme Coleta/Itens pra caber Observacoes,
+// forcando quebra de linha em quase toda linha e estourando pra 2-3 paginas.
+const LARGURAS_COLUNAS: Record<Variante, number[]> = {
+  armazem: [3, 6, 8, 13, 24, 4, 8, 18, 8, 8],
+  montagem: [4, 7, 10, 38, 5, 10, 14, 12],
+  sac: [3, 6, 9, 15, 26, 4, 13, 12, 12],
+};
+
 function formatarReais(centavos: number): string {
   return (centavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
@@ -51,6 +60,11 @@ export default function FechamentoImpressao({
 
       <div className="tabela-scroll">
       <table>
+        <colgroup>
+          {LARGURAS_COLUNAS[variante].map((largura, i) => (
+            <col key={i} style={{ width: `${largura}%` }} />
+          ))}
+        </colgroup>
         <thead>
           <tr>
             <th>Nº</th>
