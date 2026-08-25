@@ -51,10 +51,10 @@ export default function FechamentoImpressao({
         </h2>
         <p>
           <strong>Data:</strong> {data} &nbsp; <strong>Responsavel(is):</strong> {responsaveis || '-'}
+          &nbsp; <strong>Fechado em:</strong> {fechamento.criado_em} (por {fechamento.usuario_nome})
         </p>
         <p className="rodape-tabela">
-          Fechado por {fechamento.usuario_nome} em {fechamento.criado_em} - hash de auditoria:{' '}
-          {fechamento.hash_integridade.slice(0, 16)}...
+          hash de auditoria: {fechamento.hash_integridade.slice(0, 16)}...
         </p>
       </div>
 

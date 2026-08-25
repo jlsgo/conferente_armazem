@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import type { Fluxo, Movimento, Usuario } from '../types';
-import { buscarHistorico, estornarMovimento } from '../lib/api';
+import { buscarFechamentoDoDia, buscarHistorico, estornarMovimento } from '../lib/api';
 import { situacaoInfo } from '../lib/situacao';
 import { baixarCsv, paraCsv } from '../lib/csv';
 
@@ -81,6 +81,7 @@ export default function Historico({ usuario }: Props) {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
   const [estornando, setEstornando] = useState<number | null>(null);
+  const [exportando, setExportando] = useState(false);
 
   const mostraFiltrosDePedido = fluxo !== 'peca_montagem';
 
@@ -114,51 +115,91 @@ export default function Historico({ usuario }: Props) {
     buscar();
   }
 
-  function handleExportar() {
-    let cabecalhos: string[];
-    let linhas: string[][];
+  async function handleExportar() {
+    setExportando(true);
+    try {
+      const datasUnicas = Array.from(new Set(resultados.map((m) => m.data)));
+      const fechamentosPorData = new Map<string, string>();
+      await Promise.all(
+        datasUnicas.map(async (d) => {
+          const fechamento = await buscarFechamentoDoDia({ armazem_id: armazemId, fluxo, data: d });
+          fechamentosPorData.set(d, fechamento ? fechamento.criado_em : '');
+        })
+      );
+      const fechadoEm = (m: Movimento) => fechamentosPorData.get(m.data) || 'dia ainda aberto';
 
-    if (fluxo === 'saida_armazem') {
-      cabecalhos = ['Data', 'Horario', 'Pedido', 'Coleta', 'Itens', 'Qtd.', 'Quem retirou', 'Registrado por', 'Situacao'];
-      linhas = resultados.map((m) => [
-        formatarData(m.data),
-        m.hora,
-        pedidoTexto(m),
-        m.contraparte || '-',
-        itensResumo(m),
-        String(qtdTotal(m)),
-        m.quem_retirou || '-',
-        m.usuario_nome,
-        situacaoInfo(m).texto,
-      ]);
-    } else if (fluxo === 'peca_montagem') {
-      cabecalhos = ['Data', 'Horario', 'Direcao', 'Itens', 'Qtd.', 'Registrado por', 'Situacao'];
-      linhas = resultados.map((m) => [
-        formatarData(m.data),
-        m.hora,
-        direcaoTexto(m),
-        itensResumo(m),
-        String(qtdTotal(m)),
-        m.usuario_nome,
-        situacaoInfo(m).texto,
-      ]);
-    } else {
-      cabecalhos = ['Data', 'Horario', 'Protocolo', 'Coleta', 'Itens', 'Qtd.', 'Garantia/Venda', 'Registrado por', 'Situacao'];
-      linhas = resultados.map((m) => [
-        formatarData(m.data),
-        m.hora,
-        m.numero_pedido || '-',
-        m.contraparte || '-',
-        itensResumo(m),
-        String(qtdTotal(m)),
-        garantiaVendaTexto(m),
-        m.usuario_nome,
-        situacaoInfo(m).texto,
-      ]);
+      let cabecalhos: string[];
+      let linhas: string[][];
+
+      if (fluxo === 'saida_armazem') {
+        cabecalhos = [
+          'Data',
+          'Horario',
+          'Pedido',
+          'Coleta',
+          'Itens',
+          'Qtd.',
+          'Quem retirou',
+          'Registrado por',
+          'Situacao',
+          'Fechado em',
+        ];
+        linhas = resultados.map((m) => [
+          formatarData(m.data),
+          m.hora,
+          pedidoTexto(m),
+          m.contraparte || '-',
+          itensResumo(m),
+          String(qtdTotal(m)),
+          m.quem_retirou || '-',
+          m.usuario_nome,
+          situacaoInfo(m).texto,
+          fechadoEm(m),
+        ]);
+      } else if (fluxo === 'peca_montagem') {
+        cabecalhos = ['Data', 'Horario', 'Direcao', 'Itens', 'Qtd.', 'Registrado por', 'Situacao', 'Fechado em'];
+        linhas = resultados.map((m) => [
+          formatarData(m.data),
+          m.hora,
+          direcaoTexto(m),
+          itensResumo(m),
+          String(qtdTotal(m)),
+          m.usuario_nome,
+          situacaoInfo(m).texto,
+          fechadoEm(m),
+        ]);
+      } else {
+        cabecalhos = [
+          'Data',
+          'Horario',
+          'Protocolo',
+          'Coleta',
+          'Itens',
+          'Qtd.',
+          'Garantia/Venda',
+          'Registrado por',
+          'Situacao',
+          'Fechado em',
+        ];
+        linhas = resultados.map((m) => [
+          formatarData(m.data),
+          m.hora,
+          m.numero_pedido || '-',
+          m.contraparte || '-',
+          itensResumo(m),
+          String(qtdTotal(m)),
+          garantiaVendaTexto(m),
+          m.usuario_nome,
+          situacaoInfo(m).texto,
+          fechadoEm(m),
+        ]);
+      }
+
+      const csv = paraCsv(cabecalhos, linhas);
+      baixarCsv(`historico_${fluxo}_${dataInicio}_a_${dataFim}.csv`, csv);
+    } finally {
+      setExportando(false);
     }
-
-    const csv = paraCsv(cabecalhos, linhas);
-    baixarCsv(`historico_${fluxo}_${dataInicio}_a_${dataFim}.csv`, csv);
   }
 
   async function handleEstornar(movimento: Movimento) {
@@ -245,9 +286,9 @@ export default function Historico({ usuario }: Props) {
               type="button"
               className="secundario"
               onClick={handleExportar}
-              disabled={carregando || resultados.length === 0}
+              disabled={carregando || exportando || resultados.length === 0}
             >
-              Exportar CSV
+              {exportando ? 'Exportando...' : 'Exportar CSV'}
             </button>
           </div>
         </form>
