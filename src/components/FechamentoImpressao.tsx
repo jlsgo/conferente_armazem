@@ -1,20 +1,49 @@
 import type { Armazem, Fechamento, Movimento } from '../types';
 
+type Variante = 'armazem' | 'montagem' | 'sac';
+
 interface Props {
   armazem: Armazem | undefined;
   data: string;
   fechamento: Fechamento;
   lancamentos: Movimento[];
+  variante?: Variante;
 }
 
-export default function FechamentoImpressao({ armazem, data, fechamento, lancamentos }: Props) {
+const TITULOS: Record<Variante, string> = {
+  armazem: 'Controle de Saidas de Armazem',
+  montagem: 'Controle de Pecas para Montagem',
+  sac: 'Controle de Saidas do SAC',
+};
+
+function formatarReais(centavos: number): string {
+  return (centavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function situacao(m: Movimento): string {
+  if (m.estornado_de) return 'ESTORNO';
+  return m.tipo === 'saida' ? 'BAIXA' : 'ENTRADA';
+}
+
+export default function FechamentoImpressao({
+  armazem,
+  data,
+  fechamento,
+  lancamentos,
+  variante = 'armazem',
+}: Props) {
   const responsaveis = Array.from(new Set(lancamentos.map((m) => m.usuario_nome))).join(', ');
-  const totalGeral = lancamentos.reduce((soma, m) => soma + m.itens.reduce((s, it) => s + it.quantidade, 0), 0);
+  const totalGeral = lancamentos.reduce(
+    (soma, m) => soma + (m.estornado_de ? -1 : 1) * m.itens.reduce((s, it) => s + it.quantidade, 0),
+    0
+  );
 
   return (
     <section className="cartao area-impressao">
       <div className="cabecalho-impressao">
-        <h2>Controle de Saidas de Armazem {armazem ? `- ${armazem.codigo}` : ''}</h2>
+        <h2>
+          {TITULOS[variante]} {armazem ? `- ${armazem.codigo}` : ''}
+        </h2>
         <p>
           <strong>Data:</strong> {data} &nbsp; <strong>Responsavel(is):</strong> {responsaveis || '-'}
         </p>
@@ -29,11 +58,24 @@ export default function FechamentoImpressao({ armazem, data, fechamento, lancame
           <tr>
             <th>Nº</th>
             <th>Horario</th>
-            <th>Pedido</th>
-            <th>Coleta</th>
+            {variante === 'armazem' && (
+              <>
+                <th>Pedido</th>
+                <th>Coleta</th>
+              </>
+            )}
+            {variante === 'montagem' && <th>Direcao</th>}
+            {variante === 'sac' && (
+              <>
+                <th>Protocolo</th>
+                <th>Coleta</th>
+              </>
+            )}
             <th>Itens</th>
             <th>Qtd.</th>
-            <th>Quem retirou</th>
+            {variante === 'armazem' && <th>Quem retirou</th>}
+            {variante === 'montagem' && <th>Condicao</th>}
+            {variante === 'sac' && <th>Garantia/Venda</th>}
             <th>Registrado por</th>
             <th>Situacao</th>
           </tr>
@@ -43,17 +85,40 @@ export default function FechamentoImpressao({ armazem, data, fechamento, lancame
             <tr key={m.id}>
               <td>{m.numero}</td>
               <td>{m.hora}</td>
-              <td>{m.numero_pedido || '-'}</td>
-              <td>{m.contraparte || '-'}</td>
+              {variante === 'armazem' && (
+                <>
+                  <td>{m.numero_pedido || '-'}</td>
+                  <td>{m.contraparte || '-'}</td>
+                </>
+              )}
+              {variante === 'montagem' && <td>{m.tipo === 'saida' ? 'Saida B2' : 'Entrada B2'}</td>}
+              {variante === 'sac' && (
+                <>
+                  <td>{m.numero_pedido || '-'}</td>
+                  <td>{m.contraparte || '-'}</td>
+                </>
+              )}
               <td>
                 {m.itens
                   .map((it) => `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`)
                   .join(' + ')}
               </td>
               <td>{m.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
-              <td>{m.quem_retirou || '-'}</td>
+              {variante === 'armazem' && <td>{m.quem_retirou || '-'}</td>}
+              {variante === 'montagem' && (
+                <td>{m.itens.map((it) => it.condicao).filter(Boolean).join(', ') || '-'}</td>
+              )}
+              {variante === 'sac' && (
+                <td>
+                  {m.motivo === 'venda'
+                    ? `Venda (${formatarReais(m.valor_centavos ?? 0)})`
+                    : m.motivo === 'garantia'
+                      ? 'Garantia'
+                      : '-'}
+                </td>
+              )}
               <td>{m.usuario_nome}</td>
-              <td>{m.tipo === 'saida' ? 'BAIXA' : 'ENTRADA'}</td>
+              <td>{situacao(m)}</td>
             </tr>
           ))}
         </tbody>
@@ -62,6 +127,12 @@ export default function FechamentoImpressao({ armazem, data, fechamento, lancame
       <p className="total-fechamento">
         <strong>{totalGeral}</strong> unidades no total ({lancamentos.length} pedidos)
       </p>
+      {fechamento.total_estornado > 0 && (
+        <p className="rodape-tabela">
+          Ajuste por estorno: -{fechamento.total_estornado} unidades. Total liquido do dia:{' '}
+          <strong>{fechamento.total_liquido}</strong>.
+        </p>
+      )}
 
       <div className="assinatura">
         <div className="linha-assinatura" />

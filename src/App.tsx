@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AppStatus, Usuario } from './types';
-import { getStatus } from './lib/api';
+import { getStatus, logout } from './lib/api';
 import Setup from './pages/Setup';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -42,7 +42,9 @@ export default function App() {
       usuario={usuario}
       armazem={armazem}
       armazens={status.armazens}
-      onSair={() => setUsuario(null)}
+      onSair={() => {
+        logout().finally(() => setUsuario(null));
+      }}
     />
   );
 }

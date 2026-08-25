@@ -15,35 +15,44 @@ não deixe ela ficar desatualizada.
   `docs/ARQUITETURA.md`); cadastro de mais usuarios (tela restrita a `papel = 'gestor'`,
   checado no backend); icone do instalador trocado pela marca Ecoviva; horario do
   lancamento nao reseta mais sozinho entre pedidos do mesmo lote.
+- **Sprint 2**: sessao real no backend (`AppState.sessao`) — `login`/`logout` passam a
+  controlar quem esta autenticado; `criar_movimento`, `fechar_dia` e `criar_usuario`
+  nao aceitam mais `usuario_id`/`solicitante_id` vindo do payload, usam a sessao.
+  Validacao de turno/montagem/condicao, limite de texto (500 caracteres) e quantidade
+  (100.000), e checagem de usuario/armazem ativos e correspondentes em toda escrita.
+  Hash de auditoria (`calcular_hash`) agora cobre todos os campos do movimento (nao so
+  uma fracao) e ha uma rotina `verificar_cadeia` que detecta alteracao direta no banco
+  (com teste). Estorno append-only (`estornar_movimento`, usa a coluna `estornado_de`
+  que ja existia no schema) — corrige um lancamento mesmo com o dia fechado, exige
+  gestor + justificativa, e o fechamento mostra `total_estornado`/`total_liquido`
+  calculados na hora (sem editar o registro do fechamento). UI: botao "Estornar" para
+  gestores em `Lancamentos.tsx`, botao "Fechar o dia" some para conferentes.
+- **Sprint 3**: telas de `Montagem.tsx` (fluxo `peca_montagem`: entrada/saida de peca
+  solta no galpao B2, condicao boa/defeito/sucata obrigatoria por item, sem
+  `numero_pedido`) e `Sac.tsx` (fluxo `sac`: protocolo, coleta, garantia/venda com
+  valor obrigatorio so quando venda, `tipo` fixo em `entrada` sem toggle pra reduzir
+  campo pro conferente preencher). Validacao das duas regras no backend
+  (`domain::movimentos::validar_novo_movimento`), nao so na tela. `Movimento` (Rust e
+  TS) passou a expor `motivo`/`valor_centavos`, que faltavam pra tela do SAC.
+  `FechamentoImpressao` ganhou uma prop `variante` (`armazem`/`montagem`/`sac`) pra
+  imprimir cada fluxo com as colunas certas. Aba de navegacao no `Dashboard.tsx` agora
+  aparece pra qualquer usuario logado (antes so gestor via nav).
 
-## Pendente do Sprint 1 (ficou pra depois)
+## Sprint 4 — Completar Saida de Armazem + distribuicao real
 
-- **Correcao apos o fechamento**: hoje, depois de fechado, o dia fica travado por
-  completo — nao existe ainda um "lancamento de ajuste/estorno" pra corrigir um erro
-  descoberto depois do fechamento. Por enquanto a unica saida e um gestor reabrir o caso
-  manualmente no banco. Vale planejar isso antes do fechamento do dia virar habito nas
-  duas pontas (A4 e B2).
-
-## Sprint 2 — Os outros dois fluxos
-
-O schema (`fluxo IN ('peca_montagem', 'sac')`) e o backend generico ja suportam os dois;
-falta so a tela:
-
-- **Peca para Montagem (B2 → A4)**: entrada/saida de pecas soltas, com condicao
-  (boa/defeito/sucata). Tela parecida com a de Lancamentos, mas para `categoria = 'peca'`
-  e sem o campo `numero_pedido` em destaque.
-- **SAC**: protocolo + garantia/venda + valor (so quando venda) + itens de peca.
-
-## Sprint 3 — Distribuicao real
-
+- Adicionar `observacoes` do movimento e do item na tela (lacuna apontada no plano de
+  melhorias: hoje a descricao livre nao substitui a coluna de observacoes das planilhas).
+- Exibir no fechamento impresso os campos que ja existem no banco mas nao aparecem na
+  tela hoje (ex.: codigo de rastreio).
 - Gerar e testar o instalador Windows de verdade (`.msi`/`.exe` via `cargo tauri build`
   no CI `windows-latest`, ou numa maquina Windows) — ate agora so validamos que o app
   compila e roda no Linux deste ambiente.
 - Backup automatico local (copia diaria do arquivo `ecoviva-armazem.db` para outra
   pasta/pendrive) — nenhum backup existe hoje alem do proprio arquivo SQLite.
-- Instalar nos PCs reais de A4 e B2 e acompanhar o primeiro uso das conferentes.
+- Instalar nos PCs reais de A4 e B2 e acompanhar o primeiro uso das conferentes (piloto
+  em paralelo com a planilha, conforme a "Decisao atual" do plano de melhorias).
 
-## Sprint 4 — Preparar para mais de um armazem "conversarem"
+## Sprint 5 — Preparar para mais de um armazem "conversarem"
 
 Depende de existir alguma janela de conectividade (ver conversa anterior — ainda nao
 confirmado se ha internet em algum ponto do dia):
@@ -55,6 +64,10 @@ confirmado se ha internet em algum ponto do dia):
   peca registra a saida, quem recebe do outro lado confirma a entrada, fechando o ciclo
   e evitando extravio no trajeto.
 - Painel consolidado (visao dos dois armazens juntos) para gestao.
+- **Importacao de historico**: pedir os XLSX/ODS originais se existirem (os PDFs em
+  `modelos_antigos/` quebram coluna e tem registros inconsistentes, entao ficam so como
+  arquivo de referencia); definir mapeamento de colunas por tipo de planilha; importar
+  somente depois de validacao humana dos totais.
 
 ## Depois disso
 

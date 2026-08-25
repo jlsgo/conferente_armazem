@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import type { Armazem, Categoria, Fechamento, Montagem, Movimento, MovimentoItemInput, TipoMovimento, Usuario } from '../types';
+import type { Armazem, Condicao, Fechamento, Movimento, MovimentoItemInput, TipoMovimento, Usuario } from '../types';
 import {
   criarMovimento,
   buscarFechamentoDoDia,
@@ -16,18 +16,10 @@ interface Props {
 }
 
 interface ItemForm {
-  categoria: Categoria;
   descricao: string;
-  montagem: Montagem | '';
+  condicao: Condicao | '';
   quantidade: number;
 }
-
-const CATEGORIAS: { valor: Categoria; rotulo: string }[] = [
-  { valor: 'scooter', rotulo: 'Scooter' },
-  { valor: 'triciclo', rotulo: 'Triciclo' },
-  { valor: 'patinete', rotulo: 'Patinete' },
-  { valor: 'peca', rotulo: 'Peca' },
-];
 
 function dataDeHoje(): string {
   const agora = new Date();
@@ -43,24 +35,21 @@ function horaAtual(): string {
 }
 
 function novoItemVazio(): ItemForm {
-  return { categoria: 'scooter', descricao: '', montagem: '', quantidade: 1 };
+  return { descricao: '', condicao: '', quantidade: 1 };
 }
 
-export default function Lancamentos({ usuario, armazem }: Props) {
+export default function Montagem({ usuario, armazem }: Props) {
   const armazemId = usuario.armazem_id as number;
   const data = dataDeHoje();
 
   const [lancamentos, setLancamentos] = useState<Movimento[]>([]);
   const [fechamento, setFechamento] = useState<Fechamento | null>(null);
   const [carregandoLista, setCarregandoLista] = useState(true);
-  const [sugestoesPorCategoria, setSugestoesPorCategoria] = useState<Partial<Record<Categoria, string[]>>>({});
+  const [sugestoes, setSugestoes] = useState<string[]>([]);
 
   const [tipo, setTipo] = useState<TipoMovimento>('saida');
   const [hora, setHora] = useState(horaAtual());
   const [turno, setTurno] = useState<'diurno' | 'noturno'>('diurno');
-  const [numeroPedido, setNumeroPedido] = useState('');
-  const [contraparte, setContraparte] = useState('');
-  const [quemRetirou, setQuemRetirou] = useState('');
   const [itens, setItens] = useState<ItemForm[]>([novoItemVazio()]);
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -71,29 +60,22 @@ export default function Lancamentos({ usuario, armazem }: Props) {
   async function carregarTudo() {
     setCarregandoLista(true);
     const [lista, fechamentoDoDia] = await Promise.all([
-      listarMovimentosDoDia({ armazem_id: armazemId, fluxo: 'saida_armazem', data }),
-      buscarFechamentoDoDia({ armazem_id: armazemId, fluxo: 'saida_armazem', data }),
+      listarMovimentosDoDia({ armazem_id: armazemId, fluxo: 'peca_montagem', data }),
+      buscarFechamentoDoDia({ armazem_id: armazemId, fluxo: 'peca_montagem', data }),
     ]);
     setLancamentos(lista);
     setFechamento(fechamentoDoDia);
     setCarregandoLista(false);
   }
 
-  async function garantirSugestoes(categoria: Categoria) {
-    if (sugestoesPorCategoria[categoria]) return;
-    const lista = await sugestoesDescricao(categoria);
-    setSugestoesPorCategoria((atual) => ({ ...atual, [categoria]: lista }));
-  }
-
   useEffect(() => {
     carregarTudo();
-    garantirSugestoes('scooter');
+    sugestoesDescricao('peca').then(setSugestoes);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function atualizarItem(indice: number, alteracoes: Partial<ItemForm>) {
     setItens((atual) => atual.map((it, i) => (i === indice ? { ...it, ...alteracoes } : it)));
-    if (alteracoes.categoria) garantirSugestoes(alteracoes.categoria);
   }
 
   function adicionarLinhaItem() {
@@ -105,13 +87,6 @@ export default function Lancamentos({ usuario, armazem }: Props) {
   }
 
   function limparFormulario() {
-    // O horario NAO reseta para "agora": nas planilhas antigas varios pedidos
-    // seguidos do mesmo lote sao registrados com o mesmo horario (a conferente
-    // carimba o lote todo de uma vez). Manter o ultimo valor digitado evita
-    // que ela tenha que reajustar o campo a cada lancamento do mesmo lote.
-    setNumeroPedido('');
-    setContraparte('');
-    setQuemRetirou('');
     setItens([novoItemVazio()]);
   }
 
@@ -119,31 +94,33 @@ export default function Lancamentos({ usuario, armazem }: Props) {
     e.preventDefault();
     setErro('');
 
+    if (itens.some((it) => !it.condicao)) {
+      setErro('Informe a condicao (boa, defeito ou sucata) de cada peca.');
+      return;
+    }
+
     const itensValidos: MovimentoItemInput[] = itens
       .filter((it) => it.quantidade > 0)
       .map((it) => ({
-        categoria: it.categoria,
+        categoria: 'peca',
         descricao: it.descricao.trim() || null,
-        montagem: it.montagem || null,
+        condicao: it.condicao || null,
         quantidade: it.quantidade,
       }));
 
     if (itensValidos.length === 0) {
-      setErro('Informe ao menos um item com quantidade valida.');
+      setErro('Informe ao menos uma peca com quantidade valida.');
       return;
     }
 
     setEnviando(true);
     const resultado = await criarMovimento({
       armazem_id: armazemId,
-      fluxo: 'saida_armazem',
+      fluxo: 'peca_montagem',
       tipo,
       data,
       hora,
       turno,
-      numero_pedido: numeroPedido || null,
-      contraparte: contraparte || null,
-      quem_retirou: quemRetirou || null,
       itens: itensValidos,
     });
     setEnviando(false);
@@ -166,7 +143,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
 
     setErro('');
     setFechando(true);
-    const resultado = await fecharDia({ armazem_id: armazemId, fluxo: 'saida_armazem', data });
+    const resultado = await fecharDia({ armazem_id: armazemId, fluxo: 'peca_montagem', data });
     setFechando(false);
 
     if (!resultado.ok) {
@@ -179,7 +156,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
 
   async function handleEstornar(movimento: Movimento) {
     const justificativa = window.prompt(
-      `Justificativa para estornar o lancamento nº ${movimento.numero} (pedido ${movimento.numero_pedido ?? '-'}):`
+      `Justificativa para estornar o lancamento nº ${movimento.numero}:`
     );
     if (!justificativa || !justificativa.trim()) return;
 
@@ -230,8 +207,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
                   .map((m) => (
                     <tr key={m.id}>
                       <td>
-                        Nº {m.numero} - pedido {m.numero_pedido || '-'} -{' '}
-                        {m.itens.reduce((s, it) => s + it.quantidade, 0)} un.
+                        Nº {m.numero} - {m.itens.reduce((s, it) => s + it.quantidade, 0)} un.
                       </td>
                       <td>
                         <button
@@ -254,7 +230,13 @@ export default function Lancamentos({ usuario, armazem }: Props) {
             </table>
           </section>
         )}
-        <FechamentoImpressao armazem={armazem} data={data} fechamento={fechamento} lancamentos={lancamentos} />
+        <FechamentoImpressao
+          armazem={armazem}
+          data={data}
+          fechamento={fechamento}
+          lancamentos={lancamentos}
+          variante="montagem"
+        />
       </div>
     );
   }
@@ -262,33 +244,23 @@ export default function Lancamentos({ usuario, armazem }: Props) {
   return (
     <div>
       <section className="cartao">
-        <h2>Registrar {tipo === 'saida' ? 'saida' : 'entrada'} do armazem</h2>
+        <h2>Peca para montagem {tipo === 'saida' ? '- saida' : '- entrada'} do galpao</h2>
         <p className="subtitulo">
-          {data} - responsavel: {usuario.nome}. O detalhe completo do pedido fica na outra
-          ferramenta - aqui basta o numero do pedido e a quantidade.
+          {data} - responsavel: {usuario.nome}. Use para pecas soltas indo ou voltando entre B2 e a
+          montagem.
         </p>
 
         <form onSubmit={handleSubmit}>
           <div className="abas" style={{ marginBottom: 20 }}>
             <button type="button" className={tipo === 'saida' ? 'ativo' : ''} onClick={() => setTipo('saida')}>
-              Saida
+              Saida do galpao
             </button>
             <button type="button" className={tipo === 'entrada' ? 'ativo' : ''} onClick={() => setTipo('entrada')}>
-              Entrada
+              Entrada no galpao
             </button>
           </div>
 
           <div className="grade-formulario">
-            <label>
-              Numero do pedido
-              <input
-                value={numeroPedido}
-                onChange={(e) => setNumeroPedido(e.target.value)}
-                placeholder="Ex: 3932"
-                required
-              />
-            </label>
-
             <label>
               Horario
               <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} required />
@@ -301,51 +273,32 @@ export default function Lancamentos({ usuario, armazem }: Props) {
                 <option value="noturno">Noturno</option>
               </select>
             </label>
-
-            <label>
-              Coleta (transportadora / cliente)
-              <input value={contraparte} onChange={(e) => setContraparte(e.target.value)} />
-            </label>
-
-            <label>
-              Quem retirou
-              <input value={quemRetirou} onChange={(e) => setQuemRetirou(e.target.value)} />
-            </label>
           </div>
 
-          <h3>Itens deste pedido</h3>
+          <h3>Pecas deste lancamento</h3>
           {itens.map((item, indice) => (
-            <div className="linha-item linha-item-veiculo" key={indice}>
-              <select
-                value={item.categoria}
-                onChange={(e) => atualizarItem(indice, { categoria: e.target.value as Categoria })}
-              >
-                {CATEGORIAS.map((c) => (
-                  <option key={c.valor} value={c.valor}>
-                    {c.rotulo}
-                  </option>
-                ))}
-              </select>
-
+            <div className="linha-item linha-item-peca" key={indice}>
               <input
                 value={item.descricao}
                 onChange={(e) => atualizarItem(indice, { descricao: e.target.value })}
-                placeholder="Detalhe opcional (ex: HE-15 GREEN)"
-                list={`sugestoes-${item.categoria}`}
+                placeholder="Descricao da peca (ex: Retrovisor)"
+                list="sugestoes-peca"
               />
-              <datalist id={`sugestoes-${item.categoria}`}>
-                {(sugestoesPorCategoria[item.categoria] ?? []).map((s) => (
+              <datalist id="sugestoes-peca">
+                {sugestoes.map((s) => (
                   <option key={s} value={s} />
                 ))}
               </datalist>
 
               <select
-                value={item.montagem}
-                onChange={(e) => atualizarItem(indice, { montagem: e.target.value as Montagem | '' })}
+                value={item.condicao}
+                onChange={(e) => atualizarItem(indice, { condicao: e.target.value as Condicao | '' })}
+                required
               >
-                <option value="">Montagem</option>
-                <option value="montado">Montado</option>
-                <option value="caixa">Em caixa</option>
+                <option value="">Condicao</option>
+                <option value="boa">Boa</option>
+                <option value="defeito">Defeito</option>
+                <option value="sucata">Sucata</option>
               </select>
 
               <input
@@ -368,14 +321,14 @@ export default function Lancamentos({ usuario, armazem }: Props) {
           ))}
 
           <button type="button" className="secundario" onClick={adicionarLinhaItem}>
-            + adicionar item
+            + adicionar peca
           </button>
 
           {erro && <p className="erro">{erro}</p>}
 
           <div style={{ marginTop: 20 }}>
             <button type="submit" disabled={enviando}>
-              {enviando ? 'Registrando...' : `Registrar ${tipo === 'saida' ? 'saida' : 'entrada'}`}
+              {enviando ? 'Registrando...' : 'Registrar'}
             </button>
           </div>
         </form>
@@ -388,11 +341,10 @@ export default function Lancamentos({ usuario, armazem }: Props) {
             <tr>
               <th>Nº</th>
               <th>Horario</th>
-              <th>Pedido</th>
-              <th>Coleta</th>
+              <th>Direcao</th>
               <th>Itens</th>
               <th>Qtd.</th>
-              <th>Quem retirou</th>
+              <th>Condicao</th>
               <th>Registrado por</th>
               <th>Situacao</th>
               {ehGestor && <th className="somente-tela">Acoes</th>}
@@ -403,15 +355,14 @@ export default function Lancamentos({ usuario, armazem }: Props) {
               <tr key={m.id}>
                 <td>{m.numero}</td>
                 <td>{m.hora}</td>
-                <td>{m.numero_pedido || '-'}</td>
-                <td>{m.contraparte || '-'}</td>
+                <td>{m.tipo === 'saida' ? 'Saida B2' : 'Entrada B2'}</td>
                 <td>
                   {m.itens
                     .map((it) => `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`)
                     .join(' + ')}
                 </td>
                 <td>{m.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
-                <td>{m.quem_retirou || '-'}</td>
+                <td>{m.itens.map((it) => it.condicao).filter(Boolean).join(', ') || '-'}</td>
                 <td>{m.usuario_nome}</td>
                 <td>{m.estornado_de ? 'ESTORNO' : m.tipo === 'saida' ? 'BAIXA' : 'ENTRADA'}</td>
                 {ehGestor && (
@@ -432,7 +383,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
             ))}
             {lancamentos.length === 0 && (
               <tr>
-                <td colSpan={ehGestor ? 10 : 9} className="rodape-tabela">
+                <td colSpan={ehGestor ? 9 : 8} className="rodape-tabela">
                   Nenhum lancamento registrado ainda hoje.
                 </td>
               </tr>
@@ -440,7 +391,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
           </tbody>
         </table>
         <p className="rodape-tabela">
-          <strong>{totalGeralDoDia}</strong> unidades no total ({lancamentos.length} pedidos)
+          <strong>{totalGeralDoDia}</strong> unidades no total ({lancamentos.length} lancamentos)
         </p>
 
         {ehGestor && (

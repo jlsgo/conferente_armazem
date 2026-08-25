@@ -41,7 +41,6 @@ export interface NovoMovimento {
   data: string;
   hora: string;
   turno: 'diurno' | 'noturno';
-  usuario_id: number;
   numero_pedido?: string | null;
   codigo_rastreio?: string | null;
   contraparte?: string | null;
@@ -76,7 +75,10 @@ export interface Movimento {
   numero_pedido: string | null;
   contraparte: string | null;
   quem_retirou: string | null;
+  motivo: string | null;
+  valor_centavos: number | null;
   status: string;
+  estornado_de: number | null;
   hash_integridade: string;
   itens: MovimentoItem[];
 }
@@ -91,6 +93,8 @@ export interface Fechamento {
   total_itens: number;
   hash_integridade: string;
   criado_em: string;
+  total_estornado: number;
+  total_liquido: number;
 }
 
 export interface NovoUsuarioInput {

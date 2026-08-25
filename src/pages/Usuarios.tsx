@@ -3,11 +3,10 @@ import type { Armazem, Usuario } from '../types';
 import { criarUsuario, listarUsuarios } from '../lib/api';
 
 interface Props {
-  usuarioLogado: Usuario;
   armazens: Armazem[];
 }
 
-export default function Usuarios({ usuarioLogado, armazens }: Props) {
+export default function Usuarios({ armazens }: Props) {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [carregando, setCarregando] = useState(true);
 
@@ -37,7 +36,7 @@ export default function Usuarios({ usuarioLogado, armazens }: Props) {
     setSucesso('');
     setEnviando(true);
 
-    const resultado = await criarUsuario(usuarioLogado.id, { nome, login, senha, armazem_id: armazemId, papel });
+    const resultado = await criarUsuario({ nome, login, senha, armazem_id: armazemId, papel });
     setEnviando(false);
 
     if (!resultado.ok) {

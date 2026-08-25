@@ -184,6 +184,10 @@ th {
   grid-template-columns: 130px 1fr 130px 90px auto;
 }
 
+.linha-item-peca {
+  grid-template-columns: 1fr 140px 90px auto;
+}
+
 .sucesso {
   color: var(--verde-escuro);
   font-size: 13px;

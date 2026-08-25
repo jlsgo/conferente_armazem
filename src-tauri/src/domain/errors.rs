@@ -11,6 +11,9 @@ pub enum AppError {
     #[error("Usuario ou senha invalidos.")]
     CredenciaisInvalidas,
 
+    #[error("Sessao nao encontrada. Faca login novamente.")]
+    NaoAutenticado,
+
     #[error("Erro interno de banco de dados.")]
     Database(#[from] rusqlite::Error),
 

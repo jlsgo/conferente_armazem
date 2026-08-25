@@ -60,9 +60,28 @@ export async function login(payload: { login: string; senha: string }): Promise<
   }
 }
 
+export async function logout(): Promise<void> {
+  await invoke('logout');
+}
+
 export async function criarMovimento(payload: NovoMovimento): Promise<CriarMovimentoResult> {
   try {
     const movimento = await invoke<Movimento>('criar_movimento', { payload });
+    return { ok: true, movimento };
+  } catch (err) {
+    return { ok: false, error: erroParaTexto(err) };
+  }
+}
+
+export async function estornarMovimento(
+  movimentoId: number,
+  justificativa: string
+): Promise<CriarMovimentoResult> {
+  try {
+    const movimento = await invoke<Movimento>('estornar_movimento', {
+      movimento_id: movimentoId,
+      justificativa,
+    });
     return { ok: true, movimento };
   } catch (err) {
     return { ok: false, error: erroParaTexto(err) };
@@ -93,7 +112,6 @@ export async function fecharDia(params: {
   armazem_id: number;
   fluxo: Fluxo;
   data: string;
-  usuario_id: number;
 }): Promise<FecharDiaResult> {
   try {
     const fechamento = await invoke<Fechamento>('fechar_dia', { payload: params });
@@ -107,9 +125,9 @@ export function listarUsuarios(armazemId?: number | null): Promise<Usuario[]> {
   return invoke<Usuario[]>('listar_usuarios', { armazem_id: armazemId ?? null });
 }
 
-export async function criarUsuario(solicitanteId: number, payload: NovoUsuarioInput): Promise<OkResult> {
+export async function criarUsuario(payload: NovoUsuarioInput): Promise<OkResult> {
   try {
-    await invoke('criar_usuario', { solicitante_id: solicitanteId, payload });
+    await invoke('criar_usuario', { payload });
     return { ok: true };
   } catch (err) {
     return { ok: false, error: erroParaTexto(err) };

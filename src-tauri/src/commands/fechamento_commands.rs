@@ -10,18 +10,18 @@ pub struct FecharDiaPayload {
     pub armazem_id: i64,
     pub fluxo: String,
     pub data: String,
-    pub usuario_id: i64,
 }
 
 #[tauri::command(rename_all = "snake_case")]
 pub fn fechar_dia(state: State<AppState>, payload: FecharDiaPayload) -> AppResult<Fechamento> {
+    let usuario_id = state.usuario_logado()?;
     let mut conn = state.conn()?;
     fechamentos::fechar_dia(
         &mut conn,
         payload.armazem_id,
         &payload.fluxo,
         &payload.data,
-        payload.usuario_id,
+        usuario_id,
     )
 }
 

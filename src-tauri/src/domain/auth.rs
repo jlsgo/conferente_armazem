@@ -93,6 +93,18 @@ pub fn buscar_usuario(conn: &Connection, id: i64) -> AppResult<Usuario> {
     .map_err(|_| AppError::Validation("Usuario nao encontrado.".into()))
 }
 
+/// Como `buscar_usuario`, mas tambem rejeita usuario desativado. Usado em todo
+/// ponto de entrada que precisa confirmar "quem esta fazendo isso ainda pode
+/// fazer isso" (criar movimento, fechar dia, estornar, cadastrar usuario) -
+/// nunca confiando so no id vindo da sessao/payload sem reconferir no banco.
+pub fn buscar_usuario_ativo(conn: &Connection, id: i64) -> AppResult<Usuario> {
+    let usuario = buscar_usuario(conn, id)?;
+    if !usuario.ativo {
+        return Err(AppError::Validation("Usuario inativo.".into()));
+    }
+    Ok(usuario)
+}
+
 pub fn listar_usuarios(conn: &Connection, armazem_id: Option<i64>) -> AppResult<Vec<Usuario>> {
     let mut stmt = if armazem_id.is_some() {
         conn.prepare(&format!(
@@ -153,7 +165,7 @@ pub fn criar_usuario_como_gestor(
     solicitante_id: i64,
     novo: NovoUsuario,
 ) -> AppResult<i64> {
-    let solicitante = buscar_usuario(conn, solicitante_id)?;
+    let solicitante = buscar_usuario_ativo(conn, solicitante_id)?;
     if solicitante.papel != "gestor" {
         return Err(AppError::Validation(
             "Somente um gestor pode cadastrar novos usuarios.".into(),
@@ -339,6 +351,40 @@ mod tests {
         );
         assert!(resultado.is_ok());
         assert_eq!(listar_usuarios(&conn, None).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn gestor_inativo_nao_pode_cadastrar_novo_usuario() {
+        let conn = conexao_de_teste();
+        let gestor_id = criar_usuario(
+            &conn,
+            NovoUsuario {
+                nome: "Brenda",
+                login: "brenda",
+                senha: "senha123",
+                armazem_id: None,
+                papel: "gestor",
+            },
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE usuarios SET ativo = 0 WHERE id = ?1",
+            params![gestor_id],
+        )
+        .unwrap();
+
+        let resultado = criar_usuario_como_gestor(
+            &conn,
+            gestor_id,
+            NovoUsuario {
+                nome: "Karol",
+                login: "karol",
+                senha: "senha123",
+                armazem_id: None,
+                papel: "conferente",
+            },
+        );
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
     }
 
     #[test]

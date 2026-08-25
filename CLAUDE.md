@@ -62,10 +62,15 @@ actually build and run for local testing.
   that vehicle orders already have full detail in an external tool, referenced here by
   `numero_pedido`.
 - **Three `fluxo` values exist in the schema** (`saida_armazem`, `peca_montagem`, `sac`),
-  matching the three paper control sheets the client actually uses. Only
-  `saida_armazem` has a UI screen so far (`src/pages/Lancamentos.tsx`); `peca_montagem`
-  (parts released from warehouse B2 to assembly at A4) and `sac` (warranty/sale part
-  returns) are backend-ready but have no frontend yet.
+  matching the three paper control sheets the client actually uses, each with its own
+  screen: `src/pages/Lancamentos.tsx` (vehicles), `src/pages/Montagem.tsx` (loose parts
+  released from warehouse B2 to assembly at A4 — condition boa/defeito/sucata required
+  per item, validated in `domain::movimentos::validar_novo_movimento`), and
+  `src/pages/Sac.tsx` (warranty/sale part returns — `motivo` required
+  garantia/venda, `valor_centavos` required only when venda, also validated
+  domain-side, not just in the form). All three share `commands/movimento_commands.rs`
+  and `commands/fechamento_commands.rs` — the domain layer was already generic per
+  `fluxo` before these screens existed.
 - **Forward-compat for a future cross-warehouse check-in**: `movimentos` has
   `armazem_destino_id` and `transferencia_origem_id` (both nullable, unused today). These
   exist so that a future "confirm receipt at the destination warehouse" flow (to prevent
@@ -77,9 +82,25 @@ actually build and run for local testing.
   the client. Don't add "available stock" validation or reporting without re-confirming
   scope.
 - **Audit trail**: every `movimentos` row stores `hash_integridade`, a SHA-256 chained
-  over the previous row's hash plus this row's essential fields
-  (`domain::movimentos::calcular_hash`). Nothing currently verifies the chain or exposes
-  it in the UI — it's there for a future tamper-detection/closing-the-day feature.
+  over the previous row's hash plus every field of this row, including item-level
+  fields (`domain::movimentos::calcular_hash`/`CamposHash`) — a direct `UPDATE` on any
+  covered column breaks the chain. `domain::movimentos::verificar_cadeia` walks the
+  table and returns the first row whose stored hash no longer matches; it's
+  domain-only today (no Tauri command/UI), covered by unit tests.
+- **Session-based authorization**: `AppState.sessao` (set by the `login` command,
+  cleared by `logout`) is the only source of "who is doing this" for
+  `criar_movimento`, `fechar_dia`, `criar_usuario` and `estornar_movimento` — none of
+  them accept a `usuario_id`/`solicitante_id` from the JS payload anymore. Every
+  write also re-fetches the user from the DB (`auth::buscar_usuario_ativo`) and
+  checks `ativo` plus (when the user has a fixed `armazem_id`) that it matches the
+  armazem being written to; `fechar_dia` additionally requires `papel = 'gestor'`.
+- **Correction after closing**: `domain::movimentos::estornar_movimento` appends a
+  new row (`status = 'estorno'`, `estornado_de` pointing at the original) instead of
+  editing anything — it deliberately bypasses the "day is closed" guard, since that's
+  the only way to correct a mistake found after closing. Requires `papel = 'gestor'`
+  and a non-empty justification. `fechamentos::buscar_fechamento` computes
+  `total_estornado`/`total_liquido` live from current data — the stored `fechamentos`
+  row itself is never rewritten.
 - **Errors**: `domain::errors::AppError` (thiserror) has a custom `Serialize` impl that
   turns every variant into the plain Portuguese string shown directly in the UI. Keep
   error messages user-safe — never let raw `rusqlite::Error`/SQL text reach a variant's

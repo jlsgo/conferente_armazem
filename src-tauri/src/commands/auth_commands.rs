@@ -49,7 +49,15 @@ pub struct LoginPayload {
 #[tauri::command]
 pub fn login(state: State<AppState>, payload: LoginPayload) -> AppResult<Usuario> {
     let conn = state.conn()?;
-    auth::login(&conn, &payload.login, &payload.senha)
+    let usuario = auth::login(&conn, &payload.login, &payload.senha)?;
+    state.iniciar_sessao(usuario.id);
+    Ok(usuario)
+}
+
+#[tauri::command]
+pub fn logout(state: State<AppState>) -> AppResult<()> {
+    state.encerrar_sessao();
+    Ok(())
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -68,11 +76,8 @@ pub struct CriarUsuarioPayload {
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub fn criar_usuario(
-    state: State<AppState>,
-    solicitante_id: i64,
-    payload: CriarUsuarioPayload,
-) -> AppResult<()> {
+pub fn criar_usuario(state: State<AppState>, payload: CriarUsuarioPayload) -> AppResult<()> {
+    let solicitante_id = state.usuario_logado()?;
     let conn = state.conn()?;
     auth::criar_usuario_como_gestor(
         &conn,
