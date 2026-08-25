@@ -84,26 +84,38 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
       </header>
 
       <nav className="abas somente-tela" style={{ marginBottom: 20 }}>
-        <button className={aba === 'lancamentos' ? 'ativo' : ''} onClick={() => setAba('lancamentos')}>
+        <button
+          className={`aba-lancamentos${aba === 'lancamentos' ? ' ativo' : ''}`}
+          onClick={() => setAba('lancamentos')}
+        >
           Saida de Armazem
         </button>
-        <button className={aba === 'montagem' ? 'ativo' : ''} onClick={() => setAba('montagem')}>
+        <button
+          className={`aba-montagem${aba === 'montagem' ? ' ativo' : ''}`}
+          onClick={() => setAba('montagem')}
+        >
           Montagem
         </button>
-        <button className={aba === 'sac' ? 'ativo' : ''} onClick={() => setAba('sac')}>
+        <button className={`aba-sac${aba === 'sac' ? ' ativo' : ''}`} onClick={() => setAba('sac')}>
           SAC
         </button>
-        <button className={aba === 'historico' ? 'ativo' : ''} onClick={() => setAba('historico')}>
+        <button
+          className={`aba-historico${aba === 'historico' ? ' ativo' : ''}`}
+          onClick={() => setAba('historico')}
+        >
           Historico
         </button>
         {ehGestor && (
-          <button className={aba === 'usuarios' ? 'ativo' : ''} onClick={() => setAba('usuarios')}>
+          <button
+            className={`aba-usuarios${aba === 'usuarios' ? ' ativo' : ''}`}
+            onClick={() => setAba('usuarios')}
+          >
             Usuarios
           </button>
         )}
       </nav>
 
-      <main>
+      <main className={`conteudo-aba conteudo-aba-${aba}`}>
         {aba === 'lancamentos' && <Lancamentos usuario={usuario} armazem={armazem} />}
         {aba === 'montagem' && <Montagem usuario={usuario} armazem={armazem} armazens={armazens} />}
         {aba === 'sac' && <Sac usuario={usuario} armazem={armazem} />}

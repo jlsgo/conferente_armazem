@@ -16,6 +16,24 @@
   --info: #2563a8;
   --info-escuro: #1a4a7d;
   --anel-foco: rgba(31, 138, 76, 0.25);
+
+  /* Uma cor por aba/fluxo, pra reduzir o risco de a conferente lancar no
+     lugar errado - a cor do menu se repete como friso no topo do cartao. */
+  --cor-lancamentos: var(--verde);
+  --cor-lancamentos-escuro: var(--verde-escuro);
+  --cor-lancamentos-claro: var(--verde-claro);
+  --cor-montagem: #6b46c1;
+  --cor-montagem-escuro: #4c2f8c;
+  --cor-montagem-claro: #ede6fa;
+  --cor-sac: #c2660a;
+  --cor-sac-escuro: #914c05;
+  --cor-sac-claro: #fdead9;
+  --cor-historico: #2563a8;
+  --cor-historico-escuro: #1a4a7d;
+  --cor-historico-claro: #e3edf7;
+  --cor-usuarios: #0f8b8d;
+  --cor-usuarios-escuro: #0b6567;
+  --cor-usuarios-claro: #e0f5f5;
   font-family: 'Segoe UI', Roboto, Arial, sans-serif;
 }
 
@@ -277,6 +295,86 @@ button.info:hover:not(:disabled) {
 
 .abas button.ativo:hover:not(:disabled) {
   background: var(--verde-escuro);
+}
+
+/* Cada aba tem sua propria cor, ativa ou nao, pra ficar facil identificar
+   de relance em qual fluxo a conferente esta (Saida x Montagem x SAC...). */
+.abas button.aba-lancamentos:hover:not(:disabled) {
+  background: var(--cor-lancamentos-claro);
+  color: var(--cor-lancamentos-escuro);
+}
+.abas button.aba-lancamentos.ativo {
+  background: var(--cor-lancamentos);
+  border-color: var(--cor-lancamentos);
+}
+.abas button.aba-lancamentos.ativo:hover:not(:disabled) {
+  background: var(--cor-lancamentos-escuro);
+}
+
+.abas button.aba-montagem:hover:not(:disabled) {
+  background: var(--cor-montagem-claro);
+  color: var(--cor-montagem-escuro);
+}
+.abas button.aba-montagem.ativo {
+  background: var(--cor-montagem);
+  border-color: var(--cor-montagem);
+}
+.abas button.aba-montagem.ativo:hover:not(:disabled) {
+  background: var(--cor-montagem-escuro);
+}
+
+.abas button.aba-sac:hover:not(:disabled) {
+  background: var(--cor-sac-claro);
+  color: var(--cor-sac-escuro);
+}
+.abas button.aba-sac.ativo {
+  background: var(--cor-sac);
+  border-color: var(--cor-sac);
+}
+.abas button.aba-sac.ativo:hover:not(:disabled) {
+  background: var(--cor-sac-escuro);
+}
+
+.abas button.aba-historico:hover:not(:disabled) {
+  background: var(--cor-historico-claro);
+  color: var(--cor-historico-escuro);
+}
+.abas button.aba-historico.ativo {
+  background: var(--cor-historico);
+  border-color: var(--cor-historico);
+}
+.abas button.aba-historico.ativo:hover:not(:disabled) {
+  background: var(--cor-historico-escuro);
+}
+
+.abas button.aba-usuarios:hover:not(:disabled) {
+  background: var(--cor-usuarios-claro);
+  color: var(--cor-usuarios-escuro);
+}
+.abas button.aba-usuarios.ativo {
+  background: var(--cor-usuarios);
+  border-color: var(--cor-usuarios);
+}
+.abas button.aba-usuarios.ativo:hover:not(:disabled) {
+  background: var(--cor-usuarios-escuro);
+}
+
+/* Friso no topo do primeiro cartao da pagina, na cor da aba ativa - fica
+   visivel mesmo depois de rolar a pagina pra baixo do menu. */
+.conteudo-aba-lancamentos .cartao:first-of-type {
+  border-top: 4px solid var(--cor-lancamentos);
+}
+.conteudo-aba-montagem .cartao:first-of-type {
+  border-top: 4px solid var(--cor-montagem);
+}
+.conteudo-aba-sac .cartao:first-of-type {
+  border-top: 4px solid var(--cor-sac);
+}
+.conteudo-aba-historico .cartao:first-of-type {
+  border-top: 4px solid var(--cor-historico);
+}
+.conteudo-aba-usuarios .cartao:first-of-type {
+  border-top: 4px solid var(--cor-usuarios);
 }
 
 .tabela-scroll {
