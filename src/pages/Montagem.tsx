@@ -50,7 +50,6 @@ export default function Montagem({ usuario, armazem }: Props) {
 
   const [tipo, setTipo] = useState<TipoMovimento>('saida');
   const [hora, setHora] = useState(horaAtual());
-  const [turno, setTurno] = useState<'diurno' | 'noturno'>('diurno');
   const [itens, setItens] = useState<ItemForm[]>([novoItemVazio()]);
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -121,7 +120,7 @@ export default function Montagem({ usuario, armazem }: Props) {
       tipo,
       data,
       hora,
-      turno,
+      turno: 'diurno',
       itens: itensValidos,
     });
     setEnviando(false);
@@ -265,14 +264,6 @@ export default function Montagem({ usuario, armazem }: Props) {
             <label>
               Horario
               <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} required />
-            </label>
-
-            <label>
-              Turno
-              <select value={turno} onChange={(e) => setTurno(e.target.value as 'diurno' | 'noturno')}>
-                <option value="diurno">Diurno</option>
-                <option value="noturno">Noturno</option>
-              </select>
             </label>
           </div>
 

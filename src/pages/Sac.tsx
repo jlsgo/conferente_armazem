@@ -50,7 +50,6 @@ export default function Sac({ usuario, armazem }: Props) {
   const [sugestoes, setSugestoes] = useState<string[]>([]);
 
   const [hora, setHora] = useState(horaAtual());
-  const [turno, setTurno] = useState<'diurno' | 'noturno'>('diurno');
   const [protocolo, setProtocolo] = useState('');
   const [coleta, setColeta] = useState('');
   const [motivo, setMotivo] = useState<Motivo | ''>('');
@@ -135,7 +134,7 @@ export default function Sac({ usuario, armazem }: Props) {
       tipo: 'entrada',
       data,
       hora,
-      turno,
+      turno: 'diurno',
       numero_pedido: protocolo || null,
       contraparte: coleta || null,
       motivo,
@@ -288,14 +287,6 @@ export default function Sac({ usuario, armazem }: Props) {
             <label>
               Horario
               <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} required />
-            </label>
-
-            <label>
-              Turno
-              <select value={turno} onChange={(e) => setTurno(e.target.value as 'diurno' | 'noturno')}>
-                <option value="diurno">Diurno</option>
-                <option value="noturno">Noturno</option>
-              </select>
             </label>
 
             <label>

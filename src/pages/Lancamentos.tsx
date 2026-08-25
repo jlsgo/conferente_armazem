@@ -59,7 +59,6 @@ export default function Lancamentos({ usuario, armazem }: Props) {
 
   const [tipo, setTipo] = useState<TipoMovimento>('saida');
   const [hora, setHora] = useState(horaAtual());
-  const [turno, setTurno] = useState<'diurno' | 'noturno'>('diurno');
   const [numeroPedido, setNumeroPedido] = useState('');
   const [codigoRastreio, setCodigoRastreio] = useState('');
   const [contraparte, setContraparte] = useState('');
@@ -147,7 +146,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
       tipo,
       data,
       hora,
-      turno,
+      turno: 'diurno',
       numero_pedido: numeroPedido || null,
       codigo_rastreio: codigoRastreio || null,
       contraparte: contraparte || null,
@@ -301,14 +300,6 @@ export default function Lancamentos({ usuario, armazem }: Props) {
             <label>
               Horario
               <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} required />
-            </label>
-
-            <label>
-              Turno
-              <select value={turno} onChange={(e) => setTurno(e.target.value as 'diurno' | 'noturno')}>
-                <option value="diurno">Diurno</option>
-                <option value="noturno">Noturno</option>
-              </select>
             </label>
 
             <label>
