@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import type { Fluxo, Movimento, Usuario } from '../types';
 import { buscarHistorico, estornarMovimento } from '../lib/api';
 import { situacaoInfo } from '../lib/situacao';
+import { baixarCsv, paraCsv } from '../lib/csv';
 
 interface Props {
   usuario: Usuario;
@@ -35,6 +36,26 @@ function dataHaDias(dias: number): string {
   const mes = String(agora.getMonth() + 1).padStart(2, '0');
   const dia = String(agora.getDate()).padStart(2, '0');
   return `${ano}-${mes}-${dia}`;
+}
+
+function itensResumo(m: Movimento): string {
+  return m.itens
+    .map((it) => `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`)
+    .join(' + ');
+}
+
+function qtdTotal(m: Movimento): number {
+  return m.itens.reduce((s, it) => s + it.quantidade, 0);
+}
+
+function direcaoTexto(m: Movimento): string {
+  return m.tipo === 'saida' ? 'Saida B2' : 'Entrada B2';
+}
+
+function garantiaVendaTexto(m: Movimento): string {
+  if (m.motivo === 'venda') return `Venda (R$ ${((m.valor_centavos ?? 0) / 100).toFixed(2)})`;
+  if (m.motivo === 'garantia') return 'Garantia';
+  return '-';
 }
 
 export default function Historico({ usuario }: Props) {
@@ -82,6 +103,53 @@ export default function Historico({ usuario }: Props) {
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     buscar();
+  }
+
+  function handleExportar() {
+    let cabecalhos: string[];
+    let linhas: string[][];
+
+    if (fluxo === 'saida_armazem') {
+      cabecalhos = ['Data', 'Horario', 'Pedido', 'Coleta', 'Itens', 'Qtd.', 'Quem retirou', 'Registrado por', 'Situacao'];
+      linhas = resultados.map((m) => [
+        formatarData(m.data),
+        m.hora,
+        m.numero_pedido || '-',
+        m.contraparte || '-',
+        itensResumo(m),
+        String(qtdTotal(m)),
+        m.quem_retirou || '-',
+        m.usuario_nome,
+        situacaoInfo(m).texto,
+      ]);
+    } else if (fluxo === 'peca_montagem') {
+      cabecalhos = ['Data', 'Horario', 'Direcao', 'Itens', 'Qtd.', 'Registrado por', 'Situacao'];
+      linhas = resultados.map((m) => [
+        formatarData(m.data),
+        m.hora,
+        direcaoTexto(m),
+        itensResumo(m),
+        String(qtdTotal(m)),
+        m.usuario_nome,
+        situacaoInfo(m).texto,
+      ]);
+    } else {
+      cabecalhos = ['Data', 'Horario', 'Protocolo', 'Coleta', 'Itens', 'Qtd.', 'Garantia/Venda', 'Registrado por', 'Situacao'];
+      linhas = resultados.map((m) => [
+        formatarData(m.data),
+        m.hora,
+        m.numero_pedido || '-',
+        m.contraparte || '-',
+        itensResumo(m),
+        String(qtdTotal(m)),
+        garantiaVendaTexto(m),
+        m.usuario_nome,
+        situacaoInfo(m).texto,
+      ]);
+    }
+
+    const csv = paraCsv(cabecalhos, linhas);
+    baixarCsv(`historico_${fluxo}_${dataInicio}_a_${dataFim}.csv`, csv);
   }
 
   async function handleEstornar(movimento: Movimento) {
@@ -160,9 +228,19 @@ export default function Historico({ usuario }: Props) {
               </>
             )}
           </div>
-          <button type="submit" disabled={carregando}>
-            {carregando ? 'Buscando...' : 'Buscar'}
-          </button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button type="submit" disabled={carregando}>
+              {carregando ? 'Buscando...' : 'Buscar'}
+            </button>
+            <button
+              type="button"
+              className="secundario"
+              onClick={handleExportar}
+              disabled={carregando || resultados.length === 0}
+            >
+              Exportar CSV
+            </button>
+          </div>
         </form>
       </section>
 
@@ -211,32 +289,17 @@ export default function Historico({ usuario }: Props) {
                           <td>{m.contraparte || '-'}</td>
                         </>
                       )}
-                      {fluxo === 'peca_montagem' && <td>{m.tipo === 'saida' ? 'Saida B2' : 'Entrada B2'}</td>}
+                      {fluxo === 'peca_montagem' && <td>{direcaoTexto(m)}</td>}
                       {fluxo === 'sac' && (
                         <>
                           <td>{m.numero_pedido || '-'}</td>
                           <td>{m.contraparte || '-'}</td>
                         </>
                       )}
-                      <td>
-                        {m.itens
-                          .map(
-                            (it) =>
-                              `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`
-                          )
-                          .join(' + ')}
-                      </td>
-                      <td>{m.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
+                      <td>{itensResumo(m)}</td>
+                      <td>{qtdTotal(m)}</td>
                       {fluxo === 'saida_armazem' && <td>{m.quem_retirou || '-'}</td>}
-                      {fluxo === 'sac' && (
-                        <td>
-                          {m.motivo === 'venda'
-                            ? `Venda (R$ ${((m.valor_centavos ?? 0) / 100).toFixed(2)})`
-                            : m.motivo === 'garantia'
-                              ? 'Garantia'
-                              : '-'}
-                        </td>
-                      )}
+                      {fluxo === 'sac' && <td>{garantiaVendaTexto(m)}</td>}
                       <td>{m.usuario_nome}</td>
                       <td>
                         <span className={situacaoInfo(m).classe}>{situacaoInfo(m).texto}</span>

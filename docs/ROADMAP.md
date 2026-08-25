@@ -70,6 +70,14 @@ não deixe ela ficar desatualizada.
   `domain/errors.rs` trava que `AppError::Database` nunca vaze o texto interno de um
   erro de SQL (nome de coluna/tabela) para a mensagem mostrada na tela.
 
+- **Exportacao CSV na aba Historico**: botao "Exportar CSV" ao lado de "Buscar" em
+  `Historico.tsx`, baixa os resultados filtrados nas mesmas colunas ja mostradas na
+  tabela (varia por fluxo). 100% client-side (`src/lib/csv.ts`), sem lib nova e sem
+  precisar de capability `fs` do Tauri — usa Blob + `<a download>`, mesma familia de
+  solucao do `window.print()` do fechamento. BOM UTF-8 e `;` como separador para abrir
+  certo no Excel em Windows/PT-BR (senao acento quebra e numero espalha em colunas
+  erradas).
+
 ## Sprint 4 (resto) — Distribuicao real
 
 Fora do que da pra fazer neste ambiente (sem Windows real, sem acesso aos PCs de
@@ -99,7 +107,6 @@ confirmado se ha internet em algum ponto do dia):
 
 ## Depois disso
 
-- Relatorios e exportacao para Excel.
 - Escalar o mesmo instalador para novos armazens, se a empresa abrir mais.
 
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
