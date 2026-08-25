@@ -144,3 +144,16 @@ export async function criarUsuario(payload: NovoUsuarioInput): Promise<OkResult>
     return { ok: false, error: erroParaTexto(err) };
   }
 }
+
+export interface SincronizarResult extends OkResult {
+  mensagem?: string;
+}
+
+export async function sincronizarAgora(): Promise<SincronizarResult> {
+  try {
+    const mensagem = await invoke<string>('sincronizar_agora');
+    return { ok: true, mensagem };
+  } catch (err) {
+    return { ok: false, error: erroParaTexto(err) };
+  }
+}

@@ -174,6 +174,23 @@ pub fn criar_usuario_como_gestor(
     criar_usuario(conn, novo)
 }
 
+/// Como `listar_usuarios`, mas so se quem esta pedindo (`solicitante_id`) for
+/// um gestor - hoje so a tela `Usuarios.tsx` (gestor-only na UI) chama isso,
+/// mas o comando Tauri em si nao confiava so nisso antes desta checagem.
+pub fn listar_usuarios_como_gestor(
+    conn: &Connection,
+    solicitante_id: i64,
+    armazem_id: Option<i64>,
+) -> AppResult<Vec<Usuario>> {
+    let solicitante = buscar_usuario_ativo(conn, solicitante_id)?;
+    if solicitante.papel != "gestor" {
+        return Err(AppError::Validation(
+            "Somente um gestor pode listar usuarios.".into(),
+        ));
+    }
+    listar_usuarios(conn, armazem_id)
+}
+
 pub fn login(conn: &Connection, login_input: &str, senha: &str) -> AppResult<Usuario> {
     let mut stmt = conn.prepare(
         "SELECT id, nome, login, senha_hash, armazem_id, papel, ativo
@@ -494,6 +511,44 @@ mod tests {
         );
         assert!(matches!(resultado, Err(AppError::Validation(_))));
         assert_eq!(listar_usuarios(&conn, None).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn conferente_nao_pode_listar_usuarios() {
+        let conn = conexao_de_teste();
+        let conferente_id = criar_usuario(
+            &conn,
+            NovoUsuario {
+                nome: "Karol",
+                login: "karol",
+                senha: "senha123",
+                armazem_id: None,
+                papel: "conferente",
+            },
+        )
+        .unwrap();
+
+        let resultado = listar_usuarios_como_gestor(&conn, conferente_id, None);
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn gestor_pode_listar_usuarios() {
+        let conn = conexao_de_teste();
+        let gestor_id = criar_usuario(
+            &conn,
+            NovoUsuario {
+                nome: "Brenda",
+                login: "brenda",
+                senha: "senha123",
+                armazem_id: None,
+                papel: "gestor",
+            },
+        )
+        .unwrap();
+
+        let resultado = listar_usuarios_como_gestor(&conn, gestor_id, None).unwrap();
+        assert_eq!(resultado.len(), 1);
     }
 
     #[test]

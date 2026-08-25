@@ -3,6 +3,7 @@ use tauri::State;
 
 use crate::domain::errors::AppResult;
 use crate::domain::fechamentos::{self, Fechamento};
+use crate::domain::movimentos::autorizar_leitura;
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -32,6 +33,8 @@ pub fn buscar_fechamento_do_dia(
     fluxo: String,
     data: String,
 ) -> AppResult<Option<Fechamento>> {
+    let usuario_id = state.usuario_logado()?;
     let conn = state.conn()?;
+    autorizar_leitura(&conn, usuario_id, armazem_id)?;
     fechamentos::buscar_fechamento(&conn, armazem_id, &fluxo, &data)
 }

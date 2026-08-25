@@ -239,6 +239,24 @@ fn autorizar_movimento(conn: &Connection, usuario_id: i64, armazem_id: i64) -> A
     Ok(())
 }
 
+/// Confere que quem esta consultando existe, esta ativo, e (se tiver um
+/// armazem fixo) so pode consultar dados do proprio armazem. Usada em todo
+/// comando de leitura que recebe `armazem_id` (`listar_movimentos_do_dia`,
+/// `buscar_historico`, `buscar_fechamento_do_dia`) - ao contrario de
+/// `autorizar_movimento`, nao confere "armazem ativo": consultar o
+/// historico de um armazem desativado ainda e uma leitura legitima.
+pub fn autorizar_leitura(conn: &Connection, usuario_id: i64, armazem_id: i64) -> AppResult<()> {
+    let usuario = buscar_usuario_ativo(conn, usuario_id)?;
+    if let Some(armazem_do_usuario) = usuario.armazem_id {
+        if armazem_do_usuario != armazem_id {
+            return Err(AppError::Validation(
+                "Voce nao pode consultar dados de outro armazem.".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
 struct ItemHash {
     categoria: String,
     descricao: Option<String>,
@@ -676,7 +694,10 @@ pub fn verificar_cadeia(conn: &Connection) -> AppResult<Option<QuebraCadeia>> {
     Ok(None)
 }
 
-fn carregar_itens(conn: &Connection, movimento_id: i64) -> AppResult<Vec<MovimentoItem>> {
+pub(crate) fn carregar_itens(
+    conn: &Connection,
+    movimento_id: i64,
+) -> AppResult<Vec<MovimentoItem>> {
     let mut stmt = conn.prepare(
         "SELECT id, categoria, descricao, montagem, condicao, quantidade, observacao
          FROM movimento_itens WHERE movimento_id = ?1 ORDER BY id ASC",
@@ -1736,5 +1757,52 @@ mod tests {
         let resultado_outro_armazem =
             buscar_historico(&conn, armazem_a4, "saida_armazem", None, None, None, None).unwrap();
         assert!(resultado_outro_armazem.is_empty());
+    }
+
+    // --- Leitura protegida por sessao/armazem ---
+
+    #[test]
+    fn autorizar_leitura_rejeita_usuario_de_outro_armazem() {
+        let (conn, _armazem_b2, usuario_id) = conexao_de_teste();
+        let armazem_a4: i64 = conn
+            .query_row("SELECT id FROM armazens WHERE codigo = 'A4'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        // usuario_id pertence ao B2 (ver conexao_de_teste); tentando ler A4.
+        let resultado = autorizar_leitura(&conn, usuario_id, armazem_a4);
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn autorizar_leitura_rejeita_usuario_inativo() {
+        let (conn, armazem_id, usuario_id) = conexao_de_teste();
+        conn.execute(
+            "UPDATE usuarios SET ativo = 0 WHERE id = ?1",
+            params![usuario_id],
+        )
+        .unwrap();
+        let resultado = autorizar_leitura(&conn, usuario_id, armazem_id);
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn autorizar_leitura_permite_gestor_sem_armazem_fixo_ler_qualquer_armazem() {
+        let (conn, armazem_b2, _usuario_id) = conexao_de_teste();
+        let armazem_a4: i64 = conn
+            .query_row("SELECT id FROM armazens WHERE codigo = 'A4'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        let gestor_sem_armazem = criar_gestor(&conn, None);
+
+        assert!(autorizar_leitura(&conn, gestor_sem_armazem, armazem_b2).is_ok());
+        assert!(autorizar_leitura(&conn, gestor_sem_armazem, armazem_a4).is_ok());
+    }
+
+    #[test]
+    fn autorizar_leitura_permite_usuario_do_proprio_armazem() {
+        let (conn, armazem_id, usuario_id) = conexao_de_teste();
+        assert!(autorizar_leitura(&conn, usuario_id, armazem_id).is_ok());
     }
 }

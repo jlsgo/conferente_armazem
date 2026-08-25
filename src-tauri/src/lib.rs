@@ -27,7 +27,54 @@ pub fn run() {
                 log::warn!("Falha ao fazer backup automatico do banco: {e}");
             }
 
+            // Backup externo (pendrive/HD): so acontece se `backup_externo.txt`
+            // estiver configurado nesta maquina e a unidade estiver conectada
+            // agora - melhor-esforco, nunca trava a abertura do app.
+            if let Some(destino) = db::backup::ler_destino_externo(&diretorio_dados) {
+                if let Err(e) = db::backup::backup_externo(&conn, &destino) {
+                    log::warn!("Falha ao fazer backup externo do banco: {e}");
+                }
+            }
+
             app.manage(AppState::new(conn));
+
+            // Sincronizacao oportunista com o Turso (se configurada nesta
+            // maquina via turso.txt): tentativa em segundo plano, nunca
+            // trava a abertura do app se nao tiver internet ou o arquivo
+            // nao existir. Mesma logica de `sincronizar_agora`, mas sem
+            // exigir sessao (roda antes de qualquer login).
+            if let Some((url, token)) = db::sync::ler_config_turso(&diretorio_dados) {
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let state = app_handle.state::<AppState>();
+                    let pendentes = {
+                        let Ok(conn) = state.conn() else { return };
+                        match db::sync::movimentos_pendentes(&conn) {
+                            Ok(p) => p,
+                            Err(e) => {
+                                log::warn!("Falha ao preparar sincronizacao com o Turso: {e}");
+                                return;
+                            }
+                        }
+                    };
+                    match db::sync::enviar_para_turso(&url, &token, &pendentes).await {
+                        Ok(enviados) => {
+                            if let Ok(conn) = state.conn() {
+                                if let Err(e) = db::sync::marcar_sincronizado(&conn, &enviados) {
+                                    log::warn!(
+                                        "Falha ao marcar lancamentos como sincronizados: {e}"
+                                    );
+                                }
+                            }
+                            log::info!(
+                                "Sincronizacao com o Turso: {} lancamento(s) enviados.",
+                                enviados.len()
+                            );
+                        }
+                        Err(e) => log::warn!("Falha na sincronizacao com o Turso: {e}"),
+                    }
+                });
+            }
 
             Ok(())
         })
@@ -45,6 +92,7 @@ pub fn run() {
             commands::movimento_commands::buscar_historico,
             commands::fechamento_commands::fechar_dia,
             commands::fechamento_commands::buscar_fechamento_do_dia,
+            commands::sync_commands::sincronizar_agora,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

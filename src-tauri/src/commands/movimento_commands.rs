@@ -75,12 +75,15 @@ pub fn listar_movimentos_do_dia(
     fluxo: String,
     data: String,
 ) -> AppResult<Vec<Movimento>> {
+    let usuario_id = state.usuario_logado()?;
     let conn = state.conn()?;
+    movimentos::autorizar_leitura(&conn, usuario_id, armazem_id)?;
     movimentos::listar_movimentos_do_dia(&conn, armazem_id, &fluxo, &data)
 }
 
 #[tauri::command]
 pub fn sugestoes_descricao(state: State<AppState>, categoria: String) -> AppResult<Vec<String>> {
+    state.usuario_logado()?;
     let conn = state.conn()?;
     movimentos::sugestoes_descricao(&conn, &categoria)
 }
@@ -96,7 +99,9 @@ pub fn buscar_historico(
     cliente: Option<String>,
     numero_pedido: Option<String>,
 ) -> AppResult<Vec<Movimento>> {
+    let usuario_id = state.usuario_logado()?;
     let conn = state.conn()?;
+    movimentos::autorizar_leitura(&conn, usuario_id, armazem_id)?;
     movimentos::buscar_historico(
         &conn,
         armazem_id,

@@ -6,11 +6,13 @@ use rusqlite_migration::{Migrations, M};
 use crate::domain::errors::{AppError, AppResult};
 
 pub mod backup;
+pub mod sync;
 
 fn migrations() -> Migrations<'static> {
     Migrations::new(vec![
         M::up(include_str!("../../migrations/0001_init.sql")),
         M::up(include_str!("../../migrations/0002_fechamentos.sql")),
+        M::up(include_str!("../../migrations/0003_sync.sql")),
     ])
 }
 

@@ -62,8 +62,9 @@ pub fn logout(state: State<AppState>) -> AppResult<()> {
 
 #[tauri::command(rename_all = "snake_case")]
 pub fn listar_usuarios(state: State<AppState>, armazem_id: Option<i64>) -> AppResult<Vec<Usuario>> {
+    let solicitante_id = state.usuario_logado()?;
     let conn = state.conn()?;
-    auth::listar_usuarios(&conn, armazem_id)
+    auth::listar_usuarios_como_gestor(&conn, solicitante_id, armazem_id)
 }
 
 #[derive(Debug, Deserialize)]

@@ -78,6 +78,24 @@ não deixe ela ficar desatualizada.
   certo no Excel em Windows/PT-BR (senao acento quebra e numero espalha em colunas
   erradas).
 
+- **Endurecimento pra producao (leitura protegida, backup externo, sync v1)**: apos
+  avaliar "esta pronto pra producao?", 3 frentes fechadas com o usuario e implementadas:
+  (1) `listar_movimentos_do_dia`, `buscar_historico`, `buscar_fechamento_do_dia`,
+  `sugestoes_descricao` e `listar_usuarios` agora exigem sessao e (as tres primeiras)
+  conferem que o `armazem_id` pedido bate com o do usuario logado
+  (`domain::movimentos::autorizar_leitura`, `domain::auth::listar_usuarios_como_gestor`)
+  — antes so os comandos de escrita tinham essa checagem, um comando Tauri chamado
+  direto vazava dado de outro armazem. (2) Backup externo pra pendrive/HD
+  (`backup_externo.txt` na pasta de dados, `db::backup::backup_externo`, mesma retencao
+  de 14 dias do backup local) com restauracao testada de ponta a ponta
+  (`db::backup::verificar_backup_valido` + teste de integracao que faz backup, apaga o
+  banco original, restaura, e confere dados **e** cadeia de hash intactos). (3)
+  Sincronizacao oportunista v1 com o Turso/libSQL (envio unidirecional, ver
+  `docs/ARQUITETURA.md`) — `db::sync`, comando `sincronizar_agora` (botao no
+  `Dashboard.tsx`, gestor-only) e tentativa automatica em segundo plano na abertura do
+  app; a logica local e testada, o passo de rede exige credenciais Turso reais do
+  usuario pra validar (documentado). 85 testes Rust (66 -> 85).
+
 ## Sprint 4 (resto) — Distribuicao real
 
 Fora do que da pra fazer neste ambiente (sem Windows real, sem acesso aos PCs de
@@ -88,18 +106,19 @@ A4/B2):
 - Instalar nos PCs reais de A4 e B2 e acompanhar o primeiro uso das conferentes (piloto
   em paralelo com a planilha, conforme a "Decisao atual" do plano de melhorias).
 
-## Sprint 5 — Preparar para mais de um armazem "conversarem"
+## Sprint 5 — Mais de um armazem "conversarem" (resto)
 
-Depende de existir alguma janela de conectividade (ver conversa anterior — ainda nao
-confirmado se ha internet em algum ponto do dia):
+Confirmado que ha internet real (mesmo que intermitente) nos dois PCs, e a fundacao de
+sync (envio unidirecional pro Turso) ja esta em "Feito" acima. Falta:
 
-- Sincronizacao oportunista: quando o PC detectar internet, envia os lancamentos novos
-  para um backup/consolidacao central.
 - Usar `armazem_destino_id` / `transferencia_origem_id` (ja no schema, sem logica ainda)
   para o check-in de confirmacao entre B2 e A4 que o usuario descreveu: quem libera uma
   peca registra a saida, quem recebe do outro lado confirma a entrada, fechando o ciclo
-  e evitando extravio no trajeto.
-- Painel consolidado (visao dos dois armazens juntos) para gestao.
+  e evitando extravio no trajeto. Constroi em cima de `movimentos_consolidados` (a
+  tabela remota que a v1 do sync ja envia) — o lado que recebe le de la e escreve uma
+  confirmacao de volta.
+- Painel consolidado (visao dos dois armazens juntos) para gestao, lendo
+  `movimentos_consolidados` no Turso.
 - **Importacao de historico**: pedir os XLSX/ODS originais se existirem (os PDFs em
   `modelos_antigos/` quebram coluna e tem registros inconsistentes, entao ficam so como
   arquivo de referencia); definir mapeamento de colunas por tipo de planilha; importar

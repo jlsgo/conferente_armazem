@@ -6,6 +6,7 @@ import Sac from './Sac';
 import Historico from './Historico';
 import Usuarios from './Usuarios';
 import logoEcoviva from '../assets/ecoviva-logo.png';
+import { sincronizarAgora } from '../lib/api';
 
 interface Props {
   usuario: Usuario;
@@ -20,6 +21,17 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
   const [aba, setAba] = useState<Aba>('lancamentos');
   const ehGestor = usuario.papel === 'gestor';
 
+  const [sincronizando, setSincronizando] = useState(false);
+  const [mensagemSync, setMensagemSync] = useState('');
+
+  async function handleSincronizar() {
+    setSincronizando(true);
+    setMensagemSync('');
+    const resultado = await sincronizarAgora();
+    setSincronizando(false);
+    setMensagemSync(resultado.ok ? resultado.mensagem ?? '' : resultado.error ?? 'Falha ao sincronizar.');
+  }
+
   return (
     <div className="pagina">
       <header className="topo">
@@ -32,9 +44,19 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
             </p>
           </div>
         </div>
-        <button className="secundario somente-tela" onClick={onSair}>
-          Sair
-        </button>
+        <div className="somente-tela" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {ehGestor && (
+            <>
+              {mensagemSync && <span className="subtitulo">{mensagemSync}</span>}
+              <button className="secundario" onClick={handleSincronizar} disabled={sincronizando}>
+                {sincronizando ? 'Sincronizando...' : 'Sincronizar agora'}
+              </button>
+            </>
+          )}
+          <button className="secundario" onClick={onSair}>
+            Sair
+          </button>
+        </div>
       </header>
 
       <nav className="abas somente-tela" style={{ marginBottom: 20 }}>
