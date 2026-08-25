@@ -1,4 +1,4 @@
-# Ecoviva - Controle de Armazem
+# Controle de Armazem
 
 App desktop offline-first (Tauri v2 + Rust + SQLite, frontend React/TypeScript) para
 registrar as entradas e saidas dos armazens A4 e B2 da Ecoviva, substituindo as
