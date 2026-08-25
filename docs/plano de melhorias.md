@@ -255,3 +255,5 @@ das correcoes pos-fechamento, do backup e das validacoes de autorizacao no backe
 A comunicacao entre armazens sera implementada pela API online, pois eles estao
 em redes diferentes. A operacao local nao deve depender de uma conexao permanente:
 internet indisponivel significa apenas que eventos ficam pendentes para envio.
+
+
