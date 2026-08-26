@@ -291,7 +291,7 @@ movimenta entre A4 e B2. 102 testes Rust ao final (101 -> 102).
 Pedido do usuario: "testa todas as hipoteses de entrada e saida e ve se precisamos de
 mais campos". Mapeada cada combinacao fluxo x tipo contra `validar_novo_movimento` (que
 ja aceita `entrada`/`saida` livremente em qualquer fluxo) e contra o que cada tela
-realmente deixa o conferente fazer. 110 testes Rust ao final (106 -> 110).
+realmente deixa o conferente fazer. 106 testes Rust ao final (102 -> 106).
 
 - **Bug real encontrado e corrigido**: `Montagem.tsx` tinha perdido a opcao de
   "Entrada" manual - o commit que adicionou a transferencia entre armazens (`0c4c042`)
@@ -320,6 +320,16 @@ realmente deixa o conferente fazer. 110 testes Rust ao final (106 -> 110).
   igual pra `tipo=entrada`, onde "quem retirou" nao faz sentido (nada foi retirado,
   algo chegou). "Quem retirou" some pra entrada; "Coleta" muda de rotulo pra
   "Fornecedor / origem" nesse caso.
+
+## Versao 0.2.0
+
+Bump de `0.1.0` pra `0.2.0` (`package.json`, `Cargo.toml`, `tauri.conf.json` + lockfiles
+regenerados) - a versao ficava parada desde o inicio do projeto, sem nenhuma tag/release
+criada, mesmo depois de varias sprints inteiras. Passou a valer a pena marcar porque o
+instalador carrega a versao no nome do arquivo (`..._0.2.0_x64_en-US.msi`) - sem o bump,
+nao dava pra saber pelo nome do instalador se um PC de A4/B2 ja tinha a transferencia
+entre armazens ou o SAC com saida. `LEIA-ME.txt` do pendrive atualizado com os nomes de
+arquivo novos.
 
 ## Depois disso
 

@@ -1,6 +1,6 @@
 {
   "name": "ecoviva-controle-armazem",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Controle de entradas e saidas dos armazens Ecoviva (A4 e B2) - app desktop offline",
   "private": true,
   "type": "module",
