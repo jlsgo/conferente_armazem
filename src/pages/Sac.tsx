@@ -11,6 +11,7 @@ import {
 import FechamentoImpressao from '../components/FechamentoImpressao';
 import Carregando from '../components/Carregando';
 import { motivoSacTexto, situacaoInfo } from '../lib/situacao';
+import { formatarData } from '../lib/data';
 import { useToast } from '../lib/toast';
 
 interface Props {
@@ -178,7 +179,7 @@ export default function Sac({ usuario, armazem }: Props) {
   async function handleFecharDia() {
     if (lancamentos.length === 0) return;
     const confirmado = window.confirm(
-      `Fechar o dia ${data}? Depois disso nao sera mais possivel adicionar ou corrigir lancamentos deste dia neste armazem.`
+      `Fechar o dia ${formatarData(data)}? Depois disso nao sera mais possivel adicionar ou corrigir lancamentos deste dia neste armazem.`
     );
     if (!confirmado) return;
 
@@ -242,7 +243,7 @@ export default function Sac({ usuario, armazem }: Props) {
     return (
       <div>
         <p className="aviso-fechado">
-          O dia {data} ja foi fechado por {fechamento.usuario_nome}. Os lancamentos abaixo sao somente leitura.
+          O dia {formatarData(data)} ja foi fechado por {fechamento.usuario_nome}. Os lancamentos abaixo sao somente leitura.
         </p>
         {erro && <p className="erro">{erro}</p>}
         {ehGestor && (
@@ -299,7 +300,7 @@ export default function Sac({ usuario, armazem }: Props) {
       <section className="cartao">
         <h2>Registrar atendimento SAC</h2>
         <p className="subtitulo">
-          {data} - responsavel: {usuario.nome}.
+          {formatarData(data)} - responsavel: {usuario.nome}.
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -430,7 +431,7 @@ export default function Sac({ usuario, armazem }: Props) {
       </section>
 
       <section className="cartao">
-        <h2>Lancamentos de hoje ({data})</h2>
+        <h2>Lancamentos de hoje ({formatarData(data)})</h2>
         <div className="tabela-scroll">
         <table>
           <thead>

@@ -295,6 +295,19 @@
     return itens.reduce(function (s, it) { return s + (it.quantidade || 0); }, 0);
   }
 
+  // Banco manda data em AAAA-MM-DD (ou "AAAA-MM-DD HH:MM:SS" pra timestamps) -
+  // convertido pro formato brasileiro DD/MM/AAAA por manipulacao de string
+  // (sem `Date`), pra nao arriscar desvio de fuso horario.
+  function formatarData(data) {
+    var partes = data.split("-");
+    return partes[2] + "/" + partes[1] + "/" + partes[0];
+  }
+
+  function formatarDataHora(dataHora) {
+    var partes = dataHora.split(" ");
+    return partes[1] ? formatarData(partes[0]) + " " + partes[1] : formatarData(partes[0]);
+  }
+
   function resumoItens(itens) {
     return itens.map(function (it) {
       var base = it.quantidade + "x " + it.categoria + (it.descricao ? " (" + it.descricao + ")" : "");
@@ -321,7 +334,7 @@
     el.innerHTML = pendentes.map(function (m) {
       return '<p><span class="badge badge-pendente">pendente</span> ' +
         m.armazem_codigo + " &rarr; " + (m.armazem_destino_codigo || "?") + " - " +
-        m.data + " " + m.hora + " - " + resumoItens(m.itens) + "</p>";
+        formatarData(m.data) + " " + m.hora + " - " + resumoItens(m.itens) + "</p>";
     }).join("");
   }
 
@@ -351,14 +364,14 @@
         "<td>" + m.armazem_codigo + "</td>" +
         "<td>" + m.fluxo + "</td>" +
         "<td>" + m.tipo + "</td>" +
-        "<td>" + m.data + "</td>" +
+        "<td>" + formatarData(m.data) + "</td>" +
         "<td>" + m.hora + "</td>" +
         "<td>" + (m.numero_pedido || "-") + "</td>" +
         "<td>" + resumoItens(m.itens) + divergencia + "</td>" +
         "<td>" + totalItens(m.itens) + "</td>" +
         "<td>" + m.usuario_nome + "</td>" +
         "<td>" + situacao + "</td>" +
-        "<td>" + (m.enviado_em || "-") + "</td>" +
+        "<td>" + (m.enviado_em ? formatarDataHora(m.enviado_em) : "-") + "</td>" +
         "</tr>";
     }).join("");
     document.getElementById("rodape-tabela").textContent =

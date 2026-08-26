@@ -22,6 +22,7 @@ import FechamentoImpressao from '../components/FechamentoImpressao';
 import Carregando from '../components/Carregando';
 import TransferenciasChegando from '../components/TransferenciasChegando';
 import { situacaoInfo } from '../lib/situacao';
+import { formatarData } from '../lib/data';
 import { useToast } from '../lib/toast';
 
 interface Props {
@@ -201,7 +202,7 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
   async function handleFecharDia() {
     if (lancamentos.length === 0) return;
     const confirmado = window.confirm(
-      `Fechar o dia ${data}? Depois disso nao sera mais possivel adicionar ou corrigir lancamentos deste dia neste armazem.`
+      `Fechar o dia ${formatarData(data)}? Depois disso nao sera mais possivel adicionar ou corrigir lancamentos deste dia neste armazem.`
     );
     if (!confirmado) return;
 
@@ -279,7 +280,7 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
     return (
       <div>
         <p className="aviso-fechado">
-          O dia {data} ja foi fechado por {fechamento.usuario_nome}. Os lancamentos abaixo sao somente leitura.
+          O dia {formatarData(data)} ja foi fechado por {fechamento.usuario_nome}. Os lancamentos abaixo sao somente leitura.
         </p>
         {erro && <p className="erro">{erro}</p>}
         {ehGestor && (
@@ -337,7 +338,7 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
       <section className="cartao">
         <h2>Registrar {tipo === 'saida' ? 'saida' : 'entrada'} do galpao</h2>
         <p className="subtitulo">
-          {data} - responsavel: {usuario.nome}. Pecas soltas ou scooters montados
+          {formatarData(data)} - responsavel: {usuario.nome}. Pecas soltas ou scooters montados
           {tipo === 'saida' ? ' saindo daqui.' : ' chegando aqui (ex: compra de fornecedor).'}
         </p>
 
@@ -478,7 +479,7 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
       </section>
 
       <section className="cartao">
-        <h2>Lancamentos de hoje ({data})</h2>
+        <h2>Lancamentos de hoje ({formatarData(data)})</h2>
         <div className="tabela-scroll">
         <table>
           <thead>

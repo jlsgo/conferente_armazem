@@ -1,5 +1,6 @@
 import type { Armazem, Fechamento, Movimento } from '../types';
 import { motivoSacTexto, situacaoInfo } from '../lib/situacao';
+import { formatarData, formatarDataHora } from '../lib/data';
 
 type Variante = 'armazem' | 'montagem' | 'sac';
 
@@ -46,8 +47,8 @@ export default function FechamentoImpressao({
           {TITULOS[variante]} {armazem ? `- ${armazem.codigo}` : ''}
         </h2>
         <p>
-          <strong>Data:</strong> {data} &nbsp; <strong>Responsavel(is):</strong> {responsaveis || '-'}
-          &nbsp; <strong>Fechado em:</strong> {fechamento.criado_em} (por {fechamento.usuario_nome})
+          <strong>Data:</strong> {formatarData(data)} &nbsp; <strong>Responsavel(is):</strong> {responsaveis || '-'}
+          &nbsp; <strong>Fechado em:</strong> {formatarDataHora(fechamento.criado_em)} (por {fechamento.usuario_nome})
         </p>
         <p className="rodape-tabela">
           hash de auditoria: {fechamento.hash_integridade.slice(0, 16)}...

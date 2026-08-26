@@ -3,6 +3,7 @@ import type { Fluxo, Movimento, Usuario } from '../types';
 import { buscarFechamentoDoDia, buscarHistorico, estornarMovimento } from '../lib/api';
 import { motivoSacTexto, situacaoInfo } from '../lib/situacao';
 import { baixarCsv, paraCsv } from '../lib/csv';
+import { formatarData, formatarDataHora } from '../lib/data';
 import Carregando from '../components/Carregando';
 
 interface Props {
@@ -16,11 +17,6 @@ const ABAS: { valor: Fluxo; rotulo: string }[] = [
 ];
 
 const LIMITE_RESULTADOS = 500;
-
-function formatarData(data: string): string {
-  const [ano, mes, dia] = data.split('-');
-  return `${dia}/${mes}/${ano}`;
-}
 
 function dataDeHoje(): string {
   const agora = new Date();
@@ -119,7 +115,7 @@ export default function Historico({ usuario }: Props) {
       await Promise.all(
         datasUnicas.map(async (d) => {
           const fechamento = await buscarFechamentoDoDia({ armazem_id: armazemId, fluxo, data: d });
-          fechamentosPorData.set(d, fechamento ? fechamento.criado_em : '');
+          fechamentosPorData.set(d, fechamento ? formatarDataHora(fechamento.criado_em) : '');
         })
       );
       const fechadoEm = (m: Movimento) => fechamentosPorData.get(m.data) || 'dia ainda aberto';

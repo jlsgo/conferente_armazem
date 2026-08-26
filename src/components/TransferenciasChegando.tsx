@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Armazem, Fluxo, TransferenciaPendente } from '../types';
 import { buscarTransferenciasPendentes, confirmarRecebimento } from '../lib/api';
+import { formatarData } from '../lib/data';
 import { useToast } from '../lib/toast';
 
 interface Props {
@@ -129,7 +130,7 @@ export default function TransferenciasChegando({ fluxo, outroArmazem, onConfirma
               return (
                 <tr key={chave}>
                   <td>
-                    {t.data} {t.hora}
+                    {formatarData(t.data)} {t.hora}
                   </td>
                   <td>
                     {t.itens.map((it, indice) => (
