@@ -1,6 +1,11 @@
+import { useState } from 'react';
 import type { Armazem, Fechamento, Movimento } from '../types';
 import { motivoSacTexto, situacaoInfo } from '../lib/situacao';
 import { formatarData, formatarDataHora } from '../lib/data';
+import { paraCsv, baixarCsv } from '../lib/csv';
+import { baixarXlsx } from '../lib/xlsx';
+import { colunasFechamento, rodapeAuditoria } from '../lib/exportFechamento';
+import logoEcoviva from '../assets/ecoviva-logo.png';
 
 type Variante = 'armazem' | 'montagem' | 'sac';
 
@@ -34,16 +39,45 @@ export default function FechamentoImpressao({
   lancamentos,
   variante = 'armazem',
 }: Props) {
+  const [exportandoXlsx, setExportandoXlsx] = useState(false);
   const responsaveis = Array.from(new Set(lancamentos.map((m) => m.usuario_nome))).join(', ');
   const totalGeral = lancamentos.reduce(
     (soma, m) => soma + (m.estornado_de ? -1 : 1) * m.itens.reduce((s, it) => s + it.quantidade, 0),
     0
   );
 
+  function nomeBase(extensao: string): string {
+    return `fechamento_${variante}_${armazem?.codigo ?? 'armazem'}_${data}.${extensao}`;
+  }
+
+  function handleExportarCsv() {
+    const { cabecalhos, linha } = colunasFechamento(variante);
+    const linhas = lancamentos.map(linha);
+    const rodape = rodapeAuditoria(fechamento);
+    const linhasComRodape = [...linhas, [], ...rodape.map((r) => [r.rotulo, r.valor])];
+    baixarCsv(nomeBase('csv'), paraCsv(cabecalhos, linhasComRodape));
+  }
+
+  async function handleExportarXlsx() {
+    setExportandoXlsx(true);
+    try {
+      const { cabecalhos, linha } = colunasFechamento(variante);
+      const linhas = lancamentos.map(linha);
+      const rodape = rodapeAuditoria(fechamento);
+      await baixarXlsx(nomeBase('xlsx'), [
+        { nome: 'Fechamento', cabecalhos, linhas },
+        { nome: 'Auditoria', cabecalhos: ['Item', 'Valor'], linhas: rodape.map((r) => [r.rotulo, r.valor]) },
+      ]);
+    } finally {
+      setExportandoXlsx(false);
+    }
+  }
+
   return (
     <section className="cartao area-impressao">
       <div className="cabecalho-impressao">
         <h2>
+          <img src={logoEcoviva} alt="Ecoviva" className="logo-impressao" />
           {TITULOS[variante]} {armazem ? `- ${armazem.codigo}` : ''}
         </h2>
         <p>
@@ -151,9 +185,19 @@ export default function FechamentoImpressao({
         <p>Assinatura da conferente responsavel</p>
       </div>
 
-      <button className="somente-tela" onClick={() => window.print()}>
-        Imprimir / Salvar como PDF
-      </button>
+      <div className="somente-tela" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <button onClick={() => window.print()}>Imprimir / Salvar como PDF</button>
+        <button className="secundario" onClick={handleExportarCsv}>
+          Exportar CSV
+        </button>
+        <button className="secundario" onClick={handleExportarXlsx} disabled={exportandoXlsx}>
+          {exportandoXlsx ? 'Exportando...' : 'Exportar XLSX'}
+        </button>
+      </div>
+      <p className="somente-tela rodape-tabela">
+        Se a caixa de impressao nao mostrar automaticamente "Paisagem", selecione manualmente antes de
+        imprimir.
+      </p>
     </section>
   );
 }

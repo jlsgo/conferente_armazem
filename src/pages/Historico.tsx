@@ -3,6 +3,7 @@ import type { Fluxo, Movimento, Usuario } from '../types';
 import { buscarFechamentoDoDia, buscarHistorico, estornarMovimento } from '../lib/api';
 import { motivoSacTexto, situacaoInfo } from '../lib/situacao';
 import { baixarCsv, paraCsv } from '../lib/csv';
+import { baixarXlsx } from '../lib/xlsx';
 import { formatarData, formatarDataHora } from '../lib/data';
 import Carregando from '../components/Carregando';
 
@@ -73,6 +74,7 @@ export default function Historico({ usuario }: Props) {
   const [erro, setErro] = useState('');
   const [estornando, setEstornando] = useState<number | null>(null);
   const [exportando, setExportando] = useState(false);
+  const [exportandoXlsx, setExportandoXlsx] = useState(false);
 
   const mostraFiltrosDePedido = fluxo !== 'peca_montagem';
 
@@ -106,24 +108,25 @@ export default function Historico({ usuario }: Props) {
     buscar();
   }
 
-  async function handleExportar() {
-    setExportando(true);
-    setErro('');
-    try {
-      const datasUnicas = Array.from(new Set(resultados.map((m) => m.data)));
-      const fechamentosPorData = new Map<string, string>();
-      await Promise.all(
-        datasUnicas.map(async (d) => {
-          const fechamento = await buscarFechamentoDoDia({ armazem_id: armazemId, fluxo, data: d });
-          fechamentosPorData.set(d, fechamento ? formatarDataHora(fechamento.criado_em) : '');
-        })
-      );
-      const fechadoEm = (m: Movimento) => fechamentosPorData.get(m.data) || 'dia ainda aberto';
+  async function construirColunas(): Promise<{
+    cabecalhos: string[];
+    linhas: string[][];
+    fechamentosPorData: Map<string, string>;
+  }> {
+    const datasUnicas = Array.from(new Set(resultados.map((m) => m.data)));
+    const fechamentosPorData = new Map<string, string>();
+    await Promise.all(
+      datasUnicas.map(async (d) => {
+        const fechamento = await buscarFechamentoDoDia({ armazem_id: armazemId, fluxo, data: d });
+        fechamentosPorData.set(d, fechamento ? formatarDataHora(fechamento.criado_em) : '');
+      })
+    );
+    const fechadoEm = (m: Movimento) => fechamentosPorData.get(m.data) || 'dia ainda aberto';
 
-      let cabecalhos: string[];
-      let linhas: string[][];
+    let cabecalhos: string[];
+    let linhas: string[][];
 
-      if (fluxo === 'saida_armazem') {
+    if (fluxo === 'saida_armazem') {
         cabecalhos = [
           'Data',
           'Horario',
@@ -187,12 +190,47 @@ export default function Historico({ usuario }: Props) {
         ]);
       }
 
+    return { cabecalhos, linhas, fechamentosPorData };
+  }
+
+  async function handleExportarCsv() {
+    setExportando(true);
+    setErro('');
+    try {
+      const { cabecalhos, linhas } = await construirColunas();
       const csv = paraCsv(cabecalhos, linhas);
       baixarCsv(`historico_${fluxo}_${dataInicio}_a_${dataFim}.csv`, csv);
     } catch (err) {
       setErro(typeof err === 'string' ? err : 'Nao foi possivel exportar o CSV.');
     } finally {
       setExportando(false);
+    }
+  }
+
+  async function handleExportarXlsx() {
+    setExportandoXlsx(true);
+    setErro('');
+    try {
+      const { cabecalhos, linhas, fechamentosPorData } = await construirColunas();
+      const auditoria: string[][] = [
+        ['Sistema', 'Ecoviva - Sistema de Controle de Armazens'],
+        ['Periodo', `${formatarData(dataInicio)} a ${formatarData(dataFim)}`],
+        ['Exportado em', formatarDataHora(new Date().toISOString().replace('T', ' ').slice(0, 19))],
+        [],
+        ['Data', 'Fechado em'],
+        ...Array.from(fechamentosPorData.entries()).map(([d, fechado]) => [
+          formatarData(d),
+          fechado || 'dia ainda aberto',
+        ]),
+      ];
+      await baixarXlsx(`historico_${fluxo}_${dataInicio}_a_${dataFim}.xlsx`, [
+        { nome: 'Historico', cabecalhos, linhas },
+        { nome: 'Auditoria', cabecalhos: ['Item', 'Valor'], linhas: auditoria },
+      ]);
+    } catch (err) {
+      setErro(typeof err === 'string' ? err : 'Nao foi possivel exportar o XLSX.');
+    } finally {
+      setExportandoXlsx(false);
     }
   }
 
@@ -279,10 +317,18 @@ export default function Historico({ usuario }: Props) {
             <button
               type="button"
               className="secundario"
-              onClick={handleExportar}
+              onClick={handleExportarCsv}
               disabled={carregando || exportando || resultados.length === 0}
             >
               {exportando ? 'Exportando...' : 'Exportar CSV'}
+            </button>
+            <button
+              type="button"
+              className="secundario"
+              onClick={handleExportarXlsx}
+              disabled={carregando || exportandoXlsx || resultados.length === 0}
+            >
+              {exportandoXlsx ? 'Exportando...' : 'Exportar XLSX'}
             </button>
           </div>
         </form>

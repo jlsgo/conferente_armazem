@@ -133,3 +133,16 @@ actually build and run for local testing.
 - **Security**: `src-tauri/capabilities/default.json` only grants `core:default` — no
   `fs`, `shell`, `http`, or `dialog` plugin permissions. Adding a new Tauri plugin
   requires an explicit capability entry, not just a `Cargo.toml` dependency.
+- **CSV/XLSX export**: `src/lib/csv.ts` and `src/lib/xlsx.ts` both build the file
+  entirely in memory and trigger the download via a plain `<a download>` + `Blob`
+  (`URL.createObjectURL`) — no Tauri `fs`/`dialog` plugin involved, keeping the
+  capability set above untouched. `xlsx` (SheetJS) is pinned to `0.18.5` on npm
+  despite `npm audit` flagging it (unpatched prototype-pollution/ReDoS advisories,
+  fix only published to SheetJS's own CDN, not npm) — the advisories are read/parse
+  triggered and explicitly don't apply to export-only workflows per the upstream
+  advisory text; this app only calls `aoa_to_sheet`/`write`, never `read`/`readFile`
+  on an external file. Re-evaluate if that usage ever changes.
+  `src/lib/exportFechamento.ts` centralizes the per-`fluxo` column layout shared by
+  the daily fechamento export (`FechamentoImpressao.tsx`) and the audit-footer text
+  (`rodapeAuditoria`) — deliberately worded as a "reference" hash, not a forgery-proof
+  claim, since CSV/XLSX are editable by design (that's the point of exporting them).

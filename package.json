@@ -1,6 +1,6 @@
 {
   "name": "ecoviva-controle-armazem",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Controle de entradas e saidas dos armazens Ecoviva (A4 e B2) - app desktop offline",
   "private": true,
   "type": "module",
@@ -15,7 +15,8 @@
   "dependencies": {
     "@tauri-apps/api": "^2.9.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.9.1",

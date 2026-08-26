@@ -81,6 +81,16 @@
   .badge-estorno { background: var(--erro-claro); color: var(--erro); }
   .rodape { font-size: 0.75rem; opacity: 0.7; margin-top: 8px; }
   .escondido { display: none; }
+  .grade-stats { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+  .stat-tile { background: var(--verde-claro); border-radius: 6px; padding: 10px 14px; min-width: 130px; }
+  .stat-tile .valor { font-size: 1.4rem; font-weight: 700; color: var(--verde); }
+  .stat-tile .rotulo { font-size: 0.75rem; opacity: 0.75; }
+  .grafico-bloco { margin-top: 16px; }
+  .grafico-bloco h4 { margin: 0 0 8px; font-size: 0.9rem; }
+  .barra-linha { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; margin-bottom: 4px; }
+  .barra-linha .rotulo-barra { width: 100px; flex-shrink: 0; text-align: right; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .barra-linha svg { flex: 1; height: 16px; min-width: 60px; }
+  .barra-linha .valor-barra { width: 32px; text-align: right; }
 </style>
 </head>
 <body>
@@ -115,12 +125,46 @@
           <option value="sac">SAC</option>
         </select>
       </label>
-      <label>Data
-        <input id="filtro-data" type="date" />
+      <label>De
+        <input id="filtro-data-inicio" type="date" />
+      </label>
+      <label>Ate
+        <input id="filtro-data-fim" type="date" />
+      </label>
+      <label>Tipo
+        <select id="filtro-tipo">
+          <option value="">Todos</option>
+          <option value="entrada">Entrada</option>
+          <option value="saida">Saida</option>
+        </select>
+      </label>
+      <label>Situacao
+        <select id="filtro-situacao">
+          <option value="">Todas</option>
+          <option value="entrada">Entrada</option>
+          <option value="baixa">Baixa</option>
+          <option value="estorno">Estorno</option>
+        </select>
+      </label>
+      <label>Busca
+        <input id="filtro-busca" type="search" placeholder="Pedido, nome ou item" />
       </label>
       <label>&nbsp;
         <button id="botao-atualizar">Atualizar agora</button>
       </label>
+    </div>
+
+    <div class="cartao" id="cartao-insights">
+      <h3>Resumo do periodo filtrado</h3>
+      <div id="grade-stats" class="grade-stats"></div>
+      <div class="grafico-bloco">
+        <h4>Volume por dia</h4>
+        <div id="grafico-volume"></div>
+      </div>
+      <div class="grafico-bloco">
+        <h4>Top categorias de item</h4>
+        <div id="grafico-categorias"></div>
+      </div>
     </div>
 
     <div class="cartao">
@@ -324,6 +368,22 @@
     });
   }
 
+  // Mesma derivacao de src/lib/situacao.ts (situacaoInfo) - portada aqui
+  // porque este arquivo e standalone, sem import: estorno > baixa (saida) >
+  // entrada. Substitui o `m.status` cru do banco ("aberto"/"estorno"), que
+  // nao e o vocabulario ENTRADA/BAIXA/ESTORNO usado no resto do app.
+  function situacaoValor(m) {
+    if (m.estornado_de != null) return "estorno";
+    return m.tipo === "saida" ? "baixa" : "entrada";
+  }
+
+  function situacaoBadge(m) {
+    var valor = situacaoValor(m);
+    if (valor === "estorno") return '<span class="badge badge-estorno">ESTORNO</span>';
+    if (valor === "baixa") return "BAIXA";
+    return "ENTRADA";
+  }
+
   function renderizarPendentes(movimentos) {
     var el = document.getElementById("lista-pendentes");
     var pendentes = calcularPendentes(movimentos);
@@ -341,22 +401,33 @@
   function aplicarFiltros(movimentos) {
     var armazem = document.getElementById("filtro-armazem").value;
     var fluxo = document.getElementById("filtro-fluxo").value;
-    var data = document.getElementById("filtro-data").value;
+    var dataInicio = document.getElementById("filtro-data-inicio").value;
+    var dataFim = document.getElementById("filtro-data-fim").value;
+    var tipo = document.getElementById("filtro-tipo").value;
+    var situacao = document.getElementById("filtro-situacao").value;
+    var busca = document.getElementById("filtro-busca").value.trim().toLowerCase();
     return movimentos.filter(function (m) {
       if (armazem && m.armazem_codigo !== armazem) return false;
       if (fluxo && m.fluxo !== fluxo) return false;
-      if (data && m.data !== data) return false;
+      if (dataInicio && m.data < dataInicio) return false;
+      if (dataFim && m.data > dataFim) return false;
+      if (tipo && m.tipo !== tipo) return false;
+      if (situacao && situacaoValor(m) !== situacao) return false;
+      if (busca) {
+        var noPedido = (m.numero_pedido || "").toLowerCase().indexOf(busca) >= 0;
+        var noNome = (m.usuario_nome || "").toLowerCase().indexOf(busca) >= 0;
+        var noItem = m.itens.some(function (it) {
+          return (it.descricao || "").toLowerCase().indexOf(busca) >= 0;
+        });
+        if (!noPedido && !noNome && !noItem) return false;
+      }
       return true;
     });
   }
 
-  function renderizarTabela() {
-    var filtrados = aplicarFiltros(todosOsMovimentos);
+  function renderizarTabela(filtrados) {
     var corpo = document.getElementById("corpo-tabela");
     corpo.innerHTML = filtrados.map(function (m) {
-      var situacao = m.estornado_de != null
-        ? '<span class="badge badge-estorno">estorno</span>'
-        : m.status;
       var divergencia = temDivergencia(m.itens)
         ? ' <span class="badge badge-divergencia">divergencia</span>'
         : "";
@@ -370,12 +441,79 @@
         "<td>" + resumoItens(m.itens) + divergencia + "</td>" +
         "<td>" + totalItens(m.itens) + "</td>" +
         "<td>" + m.usuario_nome + "</td>" +
-        "<td>" + situacao + "</td>" +
+        "<td>" + situacaoBadge(m) + "</td>" +
         "<td>" + (m.enviado_em ? formatarDataHora(m.enviado_em) : "-") + "</td>" +
         "</tr>";
     }).join("");
     document.getElementById("rodape-tabela").textContent =
-      filtrados.length + " de " + todosOsMovimentos.length + " movimentos (ultimos 300 sincronizados).";
+      filtrados.length + " de " + todosOsMovimentos.length + " movimentos (ultimos 300 sincronizados). " +
+      "Se o periodo filtrado tiver mais de 300 movimentos, os mais antigos podem nao aparecer - refine os filtros.";
+  }
+
+  function calcularInsights(filtrados) {
+    var porDia = {}, porCategoria = {};
+    var totalEstorno = 0, totalUnidades = 0;
+    filtrados.forEach(function (m) {
+      var qtd = totalItens(m.itens);
+      totalUnidades += qtd;
+      porDia[m.data] = (porDia[m.data] || 0) + qtd;
+      if (m.estornado_de != null) totalEstorno += 1;
+      m.itens.forEach(function (it) {
+        porCategoria[it.categoria] = (porCategoria[it.categoria] || 0) + (it.quantidade || 0);
+      });
+    });
+    return {
+      porDia: porDia,
+      porCategoria: porCategoria,
+      totalMovimentos: filtrados.length,
+      totalUnidades: totalUnidades,
+      taxaEstorno: filtrados.length ? (totalEstorno / filtrados.length) : 0,
+      pendentesCount: calcularPendentes(filtrados).length
+    };
+  }
+
+  function svgBarraHorizontal(valor, max) {
+    var largura = max > 0 ? Math.round((valor / max) * 100) : 0;
+    return '<svg viewBox="0 0 100 16" preserveAspectRatio="none">' +
+      '<rect x="0" y="2" width="100" height="12" fill="var(--borda)" rx="2"></rect>' +
+      '<rect x="0" y="2" width="' + largura + '" height="12" fill="var(--verde)" rx="2"></rect>' +
+      '</svg>';
+  }
+
+  function renderizarInsights(filtrados) {
+    var dados = calcularInsights(filtrados);
+    document.getElementById("grade-stats").innerHTML = [
+      ["Movimentos", dados.totalMovimentos],
+      ["Unidades", dados.totalUnidades],
+      ["Transferencias pendentes", dados.pendentesCount],
+      ["Taxa de estorno", (dados.taxaEstorno * 100).toFixed(1) + "%"]
+    ].map(function (t) {
+      return '<div class="stat-tile"><div class="valor">' + t[1] + '</div><div class="rotulo">' + t[0] + '</div></div>';
+    }).join("");
+
+    var dias = Object.keys(dados.porDia).sort();
+    var maxDia = Math.max.apply(null, dias.map(function (d) { return dados.porDia[d]; }).concat([1]));
+    document.getElementById("grafico-volume").innerHTML = dias.map(function (d) {
+      return '<div class="barra-linha"><span class="rotulo-barra">' + formatarData(d) + '</span>' +
+        svgBarraHorizontal(dados.porDia[d], maxDia) +
+        '<span class="valor-barra">' + dados.porDia[d] + '</span></div>';
+    }).join("") || "<p>Sem dados no periodo.</p>";
+
+    var categorias = Object.keys(dados.porCategoria).sort(function (a, b) {
+      return dados.porCategoria[b] - dados.porCategoria[a];
+    });
+    var maxCat = Math.max.apply(null, categorias.map(function (c) { return dados.porCategoria[c]; }).concat([1]));
+    document.getElementById("grafico-categorias").innerHTML = categorias.map(function (c) {
+      return '<div class="barra-linha"><span class="rotulo-barra">' + c + '</span>' +
+        svgBarraHorizontal(dados.porCategoria[c], maxCat) +
+        '<span class="valor-barra">' + dados.porCategoria[c] + '</span></div>';
+    }).join("") || "<p>Sem dados no periodo.</p>";
+  }
+
+  function renderizarFiltrados() {
+    var filtrados = aplicarFiltros(todosOsMovimentos);
+    renderizarTabela(filtrados);
+    renderizarInsights(filtrados);
   }
 
   async function atualizar() {
@@ -383,7 +521,7 @@
     try {
       todosOsMovimentos = await buscarMovimentos();
       renderizarPendentes(todosOsMovimentos);
-      renderizarTabela();
+      renderizarFiltrados();
       elStatus.textContent = "Atualizado as " + new Date().toLocaleTimeString("pt-BR") +
         " - atualiza sozinho a cada 30s.";
     } catch (e) {
@@ -393,9 +531,10 @@
 
   function iniciar() {
     document.getElementById("botao-atualizar").addEventListener("click", atualizar);
-    ["filtro-armazem", "filtro-fluxo", "filtro-data"].forEach(function (id) {
-      document.getElementById(id).addEventListener("change", renderizarTabela);
+    ["filtro-armazem", "filtro-fluxo", "filtro-data-inicio", "filtro-data-fim", "filtro-tipo", "filtro-situacao"].forEach(function (id) {
+      document.getElementById(id).addEventListener("change", renderizarFiltrados);
     });
+    document.getElementById("filtro-busca").addEventListener("input", renderizarFiltrados);
     atualizar();
     if (intervaloAtualizacao) clearInterval(intervaloAtualizacao);
     intervaloAtualizacao = setInterval(atualizar, 30000);

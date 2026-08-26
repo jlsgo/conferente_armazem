@@ -331,6 +331,49 @@ nao dava pra saber pelo nome do instalador se um PC de A4/B2 ja tinha a transfer
 entre armazens ou o SAC com saida. `LEIA-ME.txt` do pendrive atualizado com os nomes de
 arquivo novos.
 
+## Polimentos pre-producao: impressao, exportacao e painel (Feito)
+
+Pedido do usuario com um PDF real de fechamento anexado, mostrando cabecalho de tabela
+ilegivel ("QUEM RETIROOUBSERVACOES"). Virou o pacote de polimento pra fechar a versao
+0.3.0.
+
+- **Bug real corrigido**: `th { white-space: nowrap; }` (regra base de tela,
+  `global.css:436`) vazava pro `@media print` sem ser resetado - em colunas estreitas
+  (8% de largura pra "Registrado por"/"Situacao"), o texto do cabecalho nao quebrava
+  linha e vazava visualmente pra celula vizinha. Corrigido com `white-space: normal`
+  em `.area-impressao thead th`. Reverificado com 40 lancamentos sinteticos via Chrome
+  headless (`--print-to-pdf`): cabecalho legivel, paisagem A4 mantida, ainda cabe numa
+  pagina so.
+- **Exportacao CSV/XLSX do fechamento diario**: novos botoes na tela de fechamento
+  (Lancamentos/Montagem/SAC) e um botao XLSX a mais no Historico (que ja tinha CSV).
+  `src/lib/exportFechamento.ts` centraliza as colunas por `fluxo` (espelhando
+  `FechamentoImpressao.tsx`) e o rodape de auditoria (`rodapeAuditoria` - hash de
+  referencia + timestamps, texto deliberadamente sem prometer inviolabilidade, ja que
+  CSV/XLSX sao editaveis por natureza). `src/lib/xlsx.ts` gera o arquivo inteiramente
+  em memoria (SheetJS `xlsx@0.18.5`) e baixa via `Blob`/`<a download>`, igual ao CSV -
+  nenhuma capability nova no Tauri. `xlsx@0.18.5` tem uma vulnerabilidade alta no
+  `npm audit` (poluicao de prototipo/ReDoS), mas o proprio aviso do fabricante diz que
+  so afeta quem *le* arquivo externo - nosso uso e so escrita. Avaliado trocar por
+  `exceljs` e descartado: 98 pacotes com dependencias obsoletas e vulnerabilidades
+  moderadas proprias, pior no total.
+- **Logo no fechamento impresso**: `ecoviva-logo.png` no cabecalho do PDF (so na
+  versao impressa - CSV/XLSX ficam so com texto, SheetJS Community nao embute imagem
+  de forma confiavel).
+- **Filtros novos no painel** (`painel/index.html`): intervalo de datas (De/Ate), tipo,
+  situacao e busca livre. A coluna "Situacao" da tabela, que mostrava o `status` cru do
+  banco, passou a usar a mesma derivacao ENTRADA/BAIXA/ESTORNO de
+  `src/lib/situacao.ts` (portada inline, o arquivo e standalone sem import).
+- **Insights no painel**: card com total de movimentos/unidades, transferencias
+  pendentes e taxa de estorno do periodo filtrado, mais dois graficos de barra (SVG
+  inline, sem lib externa) de volume por dia e top categorias - deliberadamente so
+  analytics de movimentacao, sem nenhuma nocao de saldo/estoque (regra ja documentada
+  no CLAUDE.md).
+
+## Versao 0.3.0
+
+Bump de `0.2.0` pra `0.3.0` junto com o pacote de polimento acima - mesmo motivo do
+bump anterior (nome do instalador no pendrive precisa refletir o que mudou).
+
 ## Depois disso
 
 - Escalar o mesmo instalador para novos armazens, se a empresa abrir mais.

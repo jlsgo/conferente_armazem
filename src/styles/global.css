@@ -653,6 +653,13 @@ tbody tr:last-child td {
   margin-bottom: 16px;
 }
 
+.logo-impressao {
+  height: 28px;
+  width: 28px;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
 .total-fechamento {
   font-size: 14px;
   margin-top: 10px;
@@ -724,6 +731,8 @@ tbody tr:last-child td {
   }
   .area-impressao thead th {
     font-size: 8px;
+    white-space: normal;
+    line-height: 1.05;
   }
   .area-impressao .badge {
     padding: 0 4px;
@@ -732,6 +741,11 @@ tbody tr:last-child td {
   .area-impressao h2 {
     font-size: 11px;
     margin: 0 0 2px;
+  }
+  .area-impressao .logo-impressao {
+    height: 14px;
+    width: 14px;
+    margin-right: 4px;
   }
   .area-impressao .cabecalho-impressao {
     margin-bottom: 4px;
