@@ -95,6 +95,7 @@ export interface Movimento {
 export interface TransferenciaPendente {
   armazem_origem_codigo: string;
   id_origem: number;
+  fluxo: Fluxo;
   data: string;
   hora: string;
   armazem_destino_codigo: string | null;

@@ -4,6 +4,7 @@ import { getStatus, logout } from './lib/api';
 import Setup from './pages/Setup';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import Carregando from './components/Carregando';
 
 export default function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
@@ -30,7 +31,7 @@ export default function App() {
   if (loading) {
     return (
       <div className="tela-centralizada">
-        <p className="carregando">Carregando...</p>
+        <Carregando />
       </div>
     );
   }

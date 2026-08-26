@@ -7,6 +7,8 @@ import Historico from './Historico';
 import Usuarios from './Usuarios';
 import logoEcoviva from '../assets/ecoviva-logo.png';
 import { sincronizarAgora, statusSincronizacao } from '../lib/api';
+import { IconAjuste, IconCaixa, IconChat, IconLogout, IconRelogio, IconSpinner, IconUsuarios } from '../components/Icon';
+import { useToast } from '../lib/toast';
 
 const INTERVALO_RETRY_SYNC_MS = 5 * 60 * 1000;
 
@@ -24,19 +26,23 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
   const ehGestor = usuario.papel === 'gestor';
 
   const [sincronizando, setSincronizando] = useState(false);
-  const [mensagemSync, setMensagemSync] = useState('');
   const [statusSync, setStatusSync] = useState<StatusSincronizacao | null>(null);
+  const { notificar } = useToast();
 
   async function atualizarStatusSync() {
     if (ehGestor) setStatusSync(await statusSincronizacao());
   }
 
-  async function handleSincronizar() {
+  async function handleSincronizar(manual: boolean) {
     setSincronizando(true);
-    setMensagemSync('');
     const resultado = await sincronizarAgora();
     setSincronizando(false);
-    setMensagemSync(resultado.ok ? resultado.mensagem ?? '' : resultado.error ?? 'Falha ao sincronizar.');
+    if (manual || !resultado.ok) {
+      notificar(
+        resultado.ok ? resultado.mensagem ?? 'Sincronizado.' : resultado.error ?? 'Falha ao sincronizar.',
+        resultado.ok ? 'sucesso' : 'erro'
+      );
+    }
     await atualizarStatusSync();
   }
 
@@ -44,7 +50,7 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
     if (!ehGestor) return;
     atualizarStatusSync();
     const intervalo = setInterval(() => {
-      handleSincronizar();
+      handleSincronizar(false);
     }, INTERVALO_RETRY_SYNC_MS);
     return () => clearInterval(intervalo);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -65,19 +71,20 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
         <div className="somente-tela" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {ehGestor && (
             <>
-              {mensagemSync && <span className="subtitulo">{mensagemSync}</span>}
-              {!mensagemSync && statusSync && statusSync.pendentes > 0 && (
+              {statusSync && statusSync.pendentes > 0 && (
                 <span className="subtitulo" title={statusSync.ultimo_erro ?? ''}>
                   {statusSync.pendentes} pendente{statusSync.pendentes > 1 ? 's' : ''}
                   {statusSync.com_erro > 0 ? ` (${statusSync.com_erro} com erro)` : ''}
                 </span>
               )}
-              <button className="info" onClick={handleSincronizar} disabled={sincronizando}>
+              <button className="info" onClick={() => handleSincronizar(true)} disabled={sincronizando}>
+                {sincronizando ? <IconSpinner size={15} /> : null}
                 {sincronizando ? 'Sincronizando...' : 'Sincronizar agora'}
               </button>
             </>
           )}
           <button className="secundario" onClick={onSair}>
+            <IconLogout size={15} />
             Sair
           </button>
         </div>
@@ -88,21 +95,25 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
           className={`aba-lancamentos${aba === 'lancamentos' ? ' ativo' : ''}`}
           onClick={() => setAba('lancamentos')}
         >
+          <IconCaixa size={15} />
           Saida de Armazem
         </button>
         <button
           className={`aba-montagem${aba === 'montagem' ? ' ativo' : ''}`}
           onClick={() => setAba('montagem')}
         >
+          <IconAjuste size={15} />
           Montagem
         </button>
         <button className={`aba-sac${aba === 'sac' ? ' ativo' : ''}`} onClick={() => setAba('sac')}>
+          <IconChat size={15} />
           SAC
         </button>
         <button
           className={`aba-historico${aba === 'historico' ? ' ativo' : ''}`}
           onClick={() => setAba('historico')}
         >
+          <IconRelogio size={15} />
           Historico
         </button>
         {ehGestor && (
@@ -110,13 +121,14 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
             className={`aba-usuarios${aba === 'usuarios' ? ' ativo' : ''}`}
             onClick={() => setAba('usuarios')}
           >
+            <IconUsuarios size={15} />
             Usuarios
           </button>
         )}
       </nav>
 
       <main className={`conteudo-aba conteudo-aba-${aba}`}>
-        {aba === 'lancamentos' && <Lancamentos usuario={usuario} armazem={armazem} />}
+        {aba === 'lancamentos' && <Lancamentos usuario={usuario} armazem={armazem} armazens={armazens} />}
         {aba === 'montagem' && <Montagem usuario={usuario} armazem={armazem} armazens={armazens} />}
         {aba === 'sac' && <Sac usuario={usuario} armazem={armazem} />}
         {aba === 'historico' && <Historico usuario={usuario} />}

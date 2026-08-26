@@ -7,21 +7,21 @@ import type {
   Montagem as MontagemVeiculo,
   Movimento,
   MovimentoItemInput,
-  TransferenciaPendente,
   Usuario,
 } from '../types';
 import {
   criarMovimento,
   buscarFechamentoDoDia,
-  buscarTransferenciasPendentes,
-  confirmarRecebimento,
   estornarMovimento,
   fecharDia,
   listarMovimentosDoDia,
   sugestoesDescricao,
 } from '../lib/api';
 import FechamentoImpressao from '../components/FechamentoImpressao';
+import Carregando from '../components/Carregando';
+import TransferenciasChegando from '../components/TransferenciasChegando';
 import { situacaoInfo } from '../lib/situacao';
+import { useToast } from '../lib/toast';
 
 interface Props {
   usuario: Usuario;
@@ -66,10 +66,6 @@ function novoItemVazio(): ItemForm {
   return { categoria: 'peca', descricao: '', montagem: '', condicao: '', quantidade: 1, observacao: '' };
 }
 
-function chaveTransferencia(t: TransferenciaPendente): string {
-  return `${t.armazem_origem_codigo}:${t.id_origem}`;
-}
-
 export default function Montagem({ usuario, armazem, armazens }: Props) {
   const armazemId = usuario.armazem_id as number;
   const data = dataDeHoje();
@@ -80,11 +76,7 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
   const [carregandoLista, setCarregandoLista] = useState(true);
   const [erroCarregamento, setErroCarregamento] = useState('');
   const [sugestoesPorCategoria, setSugestoesPorCategoria] = useState<Partial<Record<Categoria, string[]>>>({});
-
-  const [pendentes, setPendentes] = useState<TransferenciaPendente[]>([]);
-  const [carregandoPendentes, setCarregandoPendentes] = useState(true);
-  const [confirmando, setConfirmando] = useState<string | null>(null);
-  const [quantidadesRecebidas, setQuantidadesRecebidas] = useState<Record<string, number[]>>({});
+  const { notificar } = useToast();
 
   const [hora, setHora] = useState(horaAtual());
   const [destino, setDestino] = useState<Destino>('armazem');
@@ -115,44 +107,21 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
     }
   }
 
-  async function carregarPendentes() {
-    setCarregandoPendentes(true);
-    setPendentes(await buscarTransferenciasPendentes());
-    setCarregandoPendentes(false);
-  }
-
   async function garantirSugestoes(categoria: Categoria) {
     if (sugestoesPorCategoria[categoria]) return;
-    const lista = await sugestoesDescricao(categoria);
-    setSugestoesPorCategoria((atual) => ({ ...atual, [categoria]: lista }));
+    try {
+      const lista = await sugestoesDescricao(categoria);
+      setSugestoesPorCategoria((atual) => ({ ...atual, [categoria]: lista }));
+    } catch {
+      notificar('Nao foi possivel carregar as sugestoes de descricao. Pode digitar normalmente.', 'erro');
+    }
   }
 
   useEffect(() => {
     carregarTudo();
-    carregarPendentes();
     garantirSugestoes('peca');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    setQuantidadesRecebidas((atual) => {
-      const novo = { ...atual };
-      for (const t of pendentes) {
-        const chave = chaveTransferencia(t);
-        if (!novo[chave]) {
-          novo[chave] = t.itens.map((it) => it.quantidade);
-        }
-      }
-      return novo;
-    });
-  }, [pendentes]);
-
-  function atualizarQuantidadeRecebida(chave: string, indice: number, valor: number) {
-    setQuantidadesRecebidas((atual) => ({
-      ...atual,
-      [chave]: (atual[chave] ?? []).map((q, i) => (i === indice ? valor : q)),
-    }));
-  }
 
   function atualizarItem(indice: number, alteracoes: Partial<ItemForm>) {
     setItens((atual) => atual.map((it, i) => (i === indice ? { ...it, ...alteracoes } : it)));
@@ -224,27 +193,6 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
     await carregarTudo();
   }
 
-  async function handleConfirmar(t: TransferenciaPendente) {
-    setErro('');
-    const chave = chaveTransferencia(t);
-    setConfirmando(chave);
-    const quantidades = quantidadesRecebidas[chave] ?? t.itens.map((it) => it.quantidade);
-    const resultado = await confirmarRecebimento(
-      t.armazem_origem_codigo,
-      t.id_origem,
-      horaAtual(),
-      quantidades
-    );
-    setConfirmando(null);
-
-    if (!resultado.ok) {
-      setErro(resultado.error ?? 'Nao foi possivel confirmar o recebimento.');
-      return;
-    }
-
-    await Promise.all([carregarPendentes(), carregarTudo()]);
-  }
-
   async function handleFecharDia() {
     if (lancamentos.length === 0) return;
     const confirmado = window.confirm(
@@ -308,7 +256,7 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
   );
 
   if (carregandoLista) {
-    return <p className="carregando">Carregando...</p>;
+    return <Carregando />;
   }
 
   if (erroCarregamento) {
@@ -379,65 +327,7 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
 
   return (
     <div>
-      {!carregandoPendentes && pendentes.length > 0 && (
-        <section className="cartao somente-tela">
-          <h2>Transferencias chegando{outroArmazem ? ` de ${outroArmazem.codigo}` : ''}</h2>
-          <p className="subtitulo">
-            Confira fisicamente o que chegou antes de confirmar. A quantidade ja vem preenchida com o
-            que foi enviado - so mude se chegou diferente.
-          </p>
-          <div className="tabela-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Data do envio</th>
-                  <th>Itens (enviado / recebido)</th>
-                  <th className="somente-tela">Acoes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendentes.map((t) => {
-                  const chave = chaveTransferencia(t);
-                  return (
-                    <tr key={chave}>
-                      <td>{t.data} {t.hora}</td>
-                      <td>
-                        {t.itens.map((it, indice) => (
-                          <div key={indice} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                            <span>
-                              {it.categoria}
-                              {it.descricao ? ` (${it.descricao})` : ''} - enviado {it.quantidade}:
-                            </span>
-                            <input
-                              type="number"
-                              min={1}
-                              max={it.quantidade}
-                              value={quantidadesRecebidas[chave]?.[indice] ?? it.quantidade}
-                              onChange={(e) =>
-                                atualizarQuantidadeRecebida(chave, indice, Number(e.target.value))
-                              }
-                              style={{ width: 70 }}
-                            />
-                          </div>
-                        ))}
-                      </td>
-                      <td className="somente-tela">
-                        <button
-                          type="button"
-                          onClick={() => handleConfirmar(t)}
-                          disabled={confirmando === chave}
-                        >
-                          {confirmando === chave ? 'Confirmando...' : 'Confirmar recebimento'}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+      <TransferenciasChegando fluxo="peca_montagem" outroArmazem={outroArmazem} onConfirmado={carregarTudo} />
 
       <section className="cartao">
         <h2>Registrar saida do galpao</h2>
@@ -504,7 +394,7 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
                 ))}
               </datalist>
 
-              {CATEGORIAS_VEICULO.includes(item.categoria) && (
+              {CATEGORIAS_VEICULO.includes(item.categoria) ? (
                 <select
                   value={item.montagem}
                   onChange={(e) => atualizarItem(indice, { montagem: e.target.value as MontagemVeiculo | '' })}
@@ -513,6 +403,11 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
                   <option value="montado">Montado</option>
                   <option value="caixa">Em caixa</option>
                 </select>
+              ) : (
+                // Placeholder vazio pra manter o numero de colunas do grid
+                // constante (peca nao tem campo de montagem) - sem isso, as
+                // colunas seguintes ficam desalinhadas/espremidas.
+                <span />
               )}
 
               <select

@@ -71,12 +71,22 @@ actually build and run for local testing.
   domain-side, not just in the form). All three share `commands/movimento_commands.rs`
   and `commands/fechamento_commands.rs` — the domain layer was already generic per
   `fluxo` before these screens existed.
-- **Forward-compat for a future cross-warehouse check-in**: `movimentos` has
-  `armazem_destino_id` and `transferencia_origem_id` (both nullable, unused today). These
-  exist so that a future "confirm receipt at the destination warehouse" flow (to prevent
-  loss/theft of parts in transit between B2 and A4) doesn't require a destructive
-  migration — no confirmation logic is implemented yet, and it depends on cross-PC sync
-  that doesn't exist yet either (this app is 100% local per machine right now).
+- **Cross-warehouse transfer + receipt confirmation (A4 ↔ B2)**: implemented, and generic
+  across `fluxo` — a `saida` with `armazem_destino_id` set (either `saida_armazem` for
+  vehicles, from `Lancamentos.tsx`, or `peca_montagem` for loose parts, from
+  `Montagem.tsx`) is a pending transfer; each screen's `<TransferenciasChegando>`
+  component (`src/components/TransferenciasChegando.tsx`) polls
+  `buscar_transferencias_pendentes`/`confirmar_recebimento` and filters the result to its
+  own `fluxo` client-side, so a vehicle transfer is confirmed from Saida de Armazem and a
+  part transfer from Montagem. `transferencia_origem_id` (in the schema since the start)
+  turned out not to fit: it's an FK to a row in the *local* table, but the original send
+  lives on the other armazem's PC. The real mechanism uses `recebido_de_armazem_codigo`/
+  `recebido_de_id_origem` (migration `0004_transferencias.sql`, no FK — a composite key
+  into `movimentos_consolidados` on Turso) plus `db::sync::TransferenciaPendente.fluxo`
+  so `confirmar_recebimento` records the confirmation under the *same* fluxo as the
+  original send instead of a hardcoded one. `validar_quantidades_recebidas` rejects
+  receiving more than was sent (never trusts the frontend), accepts less as a legitimate
+  divergence. This depends on the Turso sync described below — see `docs/ARQUITETURA.md`.
 - **No inventory/stock balance tracking.** This system is a movement log/audit trail
   (who did what, when, how many), not a stock-level system — confirmed explicitly with
   the client. Don't add "available stock" validation or reporting without re-confirming

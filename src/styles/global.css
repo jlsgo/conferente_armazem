@@ -1,40 +1,50 @@
 :root {
-  --verde: #1f8a4c;
-  --verde-escuro: #14612f;
-  --verde-claro: #e6f4ec;
-  --texto: #1c2733;
-  --texto-suave: #5b6b7a;
-  --borda: #d9e1e7;
-  --fundo: #f4f7f6;
-  --erro: #c62828;
-  --erro-claro: #fdecea;
-  --aviso: #b06e00;
-  --aviso-claro: #fff4e5;
-  --aviso-escuro: #7a4b00;
-  --perigo: #c62828;
-  --perigo-escuro: #9e1f1f;
-  --info: #2563a8;
-  --info-escuro: #1a4a7d;
-  --anel-foco: rgba(31, 138, 76, 0.25);
+  --verde: #1a9350;
+  --verde-escuro: #0f6d3a;
+  --verde-claro: #e6f6ec;
+  --texto: #17212b;
+  --texto-suave: #64748b;
+  --borda: #e2e8f0;
+  --fundo: #f4f6f8;
+  --superficie: #ffffff;
+  --erro: #dc2626;
+  --erro-claro: #fef2f2;
+  --aviso: #b45309;
+  --aviso-claro: #fffbeb;
+  --aviso-escuro: #78350f;
+  --perigo: #dc2626;
+  --perigo-escuro: #b91c1c;
+  --info: #2563eb;
+  --info-escuro: #1d4ed8;
+  --anel-foco: rgba(26, 147, 80, 0.22);
 
   /* Uma cor por aba/fluxo, pra reduzir o risco de a conferente lancar no
      lugar errado - a cor do menu se repete como friso no topo do cartao. */
   --cor-lancamentos: var(--verde);
   --cor-lancamentos-escuro: var(--verde-escuro);
   --cor-lancamentos-claro: var(--verde-claro);
-  --cor-montagem: #6b46c1;
-  --cor-montagem-escuro: #4c2f8c;
-  --cor-montagem-claro: #ede6fa;
-  --cor-sac: #c2660a;
-  --cor-sac-escuro: #914c05;
-  --cor-sac-claro: #fdead9;
-  --cor-historico: #2563a8;
-  --cor-historico-escuro: #1a4a7d;
-  --cor-historico-claro: #e3edf7;
-  --cor-usuarios: #0f8b8d;
-  --cor-usuarios-escuro: #0b6567;
-  --cor-usuarios-claro: #e0f5f5;
-  font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+  --cor-montagem: #7c3aed;
+  --cor-montagem-escuro: #5b21b6;
+  --cor-montagem-claro: #f1eafd;
+  --cor-sac: #ea580c;
+  --cor-sac-escuro: #9a3412;
+  --cor-sac-claro: #fef0e7;
+  --cor-historico: #2563eb;
+  --cor-historico-escuro: #1d4ed8;
+  --cor-historico-claro: #eaf1fd;
+  --cor-usuarios: #0d9488;
+  --cor-usuarios-escuro: #0f766e;
+  --cor-usuarios-claro: #e3f6f4;
+
+  --raio-sm: 8px;
+  --raio-md: 12px;
+  --raio-lg: 16px;
+  --sombra-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --sombra-md: 0 6px 20px rgba(15, 23, 42, 0.08);
+  --sombra-lg: 0 16px 40px rgba(15, 23, 42, 0.14);
+  --transicao: 0.15s ease;
+
+  font-family: 'Segoe UI', system-ui, -apple-system, Roboto, Arial, sans-serif;
 }
 
 * {
@@ -46,6 +56,13 @@ body {
   background: var(--fundo);
   color: var(--texto);
   -webkit-font-smoothing: antialiased;
+  line-height: 1.45;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.01em;
 }
 
 .tela-centralizada {
@@ -55,24 +72,26 @@ body {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: linear-gradient(180deg, var(--verde-claro) 0%, var(--fundo) 45%);
+  background:
+    radial-gradient(720px 420px at 50% -10%, var(--verde-claro) 0%, transparent 60%),
+    var(--fundo);
 }
 
 .logo-ecoviva {
   display: block;
-  width: 64px;
-  height: 64px;
+  width: 60px;
+  height: 60px;
   margin: 0 auto 16px;
 }
 
 .cartao {
-  background: #fff;
+  background: var(--superficie);
   border: 1px solid var(--borda);
-  border-radius: 12px;
+  border-radius: var(--raio-lg);
   padding: 32px;
   width: 100%;
   max-width: 420px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--sombra-md);
 }
 
 .cartao h1 {
@@ -84,11 +103,13 @@ body {
 .cartao h2 {
   margin-top: 0;
   color: var(--texto);
+  font-size: 17px;
 }
 
 .cartao h3 {
   color: var(--texto);
   margin-bottom: 12px;
+  font-size: 15px;
 }
 
 .subtitulo {
@@ -100,10 +121,10 @@ body {
 
 label {
   display: block;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   margin-bottom: 14px;
-  color: var(--texto);
+  color: var(--texto-suave);
 }
 
 input,
@@ -114,12 +135,12 @@ textarea {
   margin-top: 6px;
   padding: 10px 12px;
   border: 1px solid var(--borda);
-  border-radius: 8px;
+  border-radius: var(--raio-sm);
   font-size: 14px;
   font-family: inherit;
-  background: #fff;
+  background: var(--superficie);
   color: var(--texto);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color var(--transicao), box-shadow var(--transicao), background-color var(--transicao);
 }
 
 textarea {
@@ -129,7 +150,7 @@ textarea {
 input:hover,
 select:hover,
 textarea:hover {
-  border-color: #b9c6ce;
+  border-color: #cbd5e1;
 }
 
 input:focus,
@@ -145,27 +166,38 @@ textarea::placeholder {
   color: #9aa9b3;
 }
 
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background: var(--fundo);
+  color: var(--texto-suave);
+}
+
 button {
   cursor: pointer;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--raio-sm);
   padding: 10px 16px;
   font-size: 14px;
   font-weight: 600;
+  font-family: inherit;
   background: var(--verde);
   color: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-  transition: background-color 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: var(--sombra-sm);
+  transition: background-color var(--transicao), transform 0.05s ease, box-shadow var(--transicao), filter var(--transicao);
 }
 
 button:hover:not(:disabled) {
   background: var(--verde-escuro);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--sombra-md);
 }
 
 button:active:not(:disabled) {
   transform: translateY(1px);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--sombra-sm);
 }
 
 button:focus-visible {
@@ -174,7 +206,7 @@ button:focus-visible {
 }
 
 button:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: default;
   box-shadow: none;
 }
@@ -182,7 +214,7 @@ button:disabled {
 /* Botao neutro: acoes que nao alteram nada salvo (ex.: adicionar linha, sair,
    exportar) - visualmente discreto, sem competir com o botao principal. */
 button.secundario {
-  background: transparent;
+  background: var(--superficie);
   color: var(--texto);
   border: 1px solid var(--borda);
   box-shadow: none;
@@ -190,7 +222,7 @@ button.secundario {
 
 button.secundario:hover:not(:disabled) {
   background: var(--fundo);
-  border-color: #b9c6ce;
+  border-color: #cbd5e1;
   box-shadow: none;
 }
 
@@ -227,8 +259,8 @@ button.info:hover:not(:disabled) {
 .erro {
   color: var(--erro);
   background: var(--erro-claro);
-  border: 1px solid #f3c6c2;
-  border-radius: 8px;
+  border: 1px solid #f6c9c4;
+  border-radius: var(--raio-sm);
   padding: 8px 12px;
   font-size: 13px;
   margin: -2px 0 14px;
@@ -255,15 +287,15 @@ button.info:hover:not(:disabled) {
 }
 
 .topo-marca img {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   flex-shrink: 0;
 }
 
 .topo h1 {
   margin: 0;
   color: var(--verde-escuro);
-  font-size: 22px;
+  font-size: 21px;
 }
 
 .abas {
@@ -272,6 +304,7 @@ button.info:hover:not(:disabled) {
   margin: 16px 0;
   border-bottom: 1px solid var(--borda);
   padding-bottom: 12px;
+  flex-wrap: wrap;
 }
 
 .abas button {
@@ -279,18 +312,21 @@ button.info:hover:not(:disabled) {
   color: var(--texto-suave);
   border: 1px solid transparent;
   border-radius: 999px;
-  padding: 8px 18px;
+  padding: 8px 16px 8px 12px;
+  box-shadow: none;
 }
 
 .abas button:hover:not(:disabled) {
   background: var(--verde-claro);
   color: var(--verde-escuro);
+  box-shadow: none;
 }
 
 .abas button.ativo {
   background: var(--verde);
   color: #fff;
   border-color: var(--verde);
+  box-shadow: var(--sombra-sm);
 }
 
 .abas button.ativo:hover:not(:disabled) {
@@ -410,6 +446,10 @@ thead th {
   border-bottom: 2px solid var(--borda);
 }
 
+tbody tr:nth-child(even) {
+  background: #fafbfc;
+}
+
 tbody tr:hover {
   background: var(--verde-claro);
 }
@@ -452,6 +492,21 @@ tbody tr:last-child td {
   color: var(--texto-suave);
   padding: 32px 0;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.icone-spinner {
+  animation: girar 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .rodape-tabela {
@@ -484,12 +539,16 @@ tbody tr:last-child td {
   margin-top: 0;
 }
 
+/* categoria | descricao | montagem | observacao | quantidade | remover */
 .linha-item-veiculo {
-  grid-template-columns: 130px 1fr 130px 1fr 90px auto;
+  grid-template-columns: 140px minmax(170px, 1fr) 140px minmax(160px, 1fr) 100px auto;
 }
 
+/* categoria | descricao | montagem (ou placeholder vazio) | condicao |
+   observacao | quantidade | remover - sempre 7 colunas, mesmo quando a
+   categoria e "peca" e o campo de montagem não aparece (ver Montagem.tsx). */
 .linha-item-peca {
-  grid-template-columns: 1fr 140px 90px auto;
+  grid-template-columns: 140px minmax(170px, 1fr) 140px 130px minmax(160px, 1fr) 100px auto;
 }
 
 .sucesso {
@@ -499,13 +558,95 @@ tbody tr:last-child td {
 }
 
 .aviso-fechado {
-  background: #fff4e5;
-  border: 1px solid #f0c36d;
-  color: #7a5200;
+  background: var(--aviso-claro);
+  border: 1px solid #f3d29a;
+  color: var(--aviso-escuro);
   padding: 10px 14px;
-  border-radius: 8px;
+  border-radius: var(--raio-sm);
   font-size: 14px;
   margin-bottom: 16px;
+}
+
+/* Notificacoes flutuantes pra falhas de fundo (rede/sync) que nao devem
+   travar a tela nem exigir clique - somem sozinhas depois de alguns
+   segundos, mas podem ser fechadas na hora. */
+.toast-viewport {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 360px;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-left: 4px solid var(--info);
+  border-radius: var(--raio-md);
+  padding: 12px 14px;
+  box-shadow: var(--sombra-lg);
+  font-size: 13px;
+  animation: entrar-toast 0.18s ease-out;
+}
+
+@keyframes entrar-toast {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast p {
+  margin: 0;
+  flex: 1;
+  color: var(--texto);
+  padding-top: 1px;
+}
+
+.toast svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.toast-erro {
+  border-left-color: var(--erro);
+}
+.toast-erro svg {
+  color: var(--erro);
+}
+
+.toast-sucesso {
+  border-left-color: var(--verde);
+}
+.toast-sucesso svg {
+  color: var(--verde-escuro);
+}
+
+.toast-info svg {
+  color: var(--info);
+}
+
+.toast-fechar {
+  background: transparent;
+  box-shadow: none;
+  padding: 2px;
+  color: var(--texto-suave);
+}
+
+.toast-fechar:hover:not(:disabled) {
+  background: var(--fundo);
+  color: var(--texto);
+  box-shadow: none;
 }
 
 .cabecalho-impressao {

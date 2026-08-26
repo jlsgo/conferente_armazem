@@ -10,11 +10,15 @@ import {
   verificarRetiradaPendente,
 } from '../lib/api';
 import FechamentoImpressao from '../components/FechamentoImpressao';
+import Carregando from '../components/Carregando';
+import TransferenciasChegando from '../components/TransferenciasChegando';
 import { situacaoInfo } from '../lib/situacao';
+import { useToast } from '../lib/toast';
 
 interface Props {
   usuario: Usuario;
   armazem: Armazem | undefined;
+  armazens: Armazem[];
 }
 
 interface ItemForm {
@@ -24,6 +28,8 @@ interface ItemForm {
   quantidade: number;
   observacao: string;
 }
+
+type Destino = 'cliente' | 'armazem';
 
 const CATEGORIAS: { valor: Categoria; rotulo: string }[] = [
   { valor: 'scooter', rotulo: 'Scooter' },
@@ -49,17 +55,20 @@ function novoItemVazio(): ItemForm {
   return { categoria: 'scooter', descricao: '', montagem: '', quantidade: 1, observacao: '' };
 }
 
-export default function Lancamentos({ usuario, armazem }: Props) {
+export default function Lancamentos({ usuario, armazem, armazens }: Props) {
   const armazemId = usuario.armazem_id as number;
   const data = dataDeHoje();
+  const outroArmazem = armazens.find((a) => a.id !== armazem?.id);
 
   const [lancamentos, setLancamentos] = useState<Movimento[]>([]);
   const [fechamento, setFechamento] = useState<Fechamento | null>(null);
   const [carregandoLista, setCarregandoLista] = useState(true);
   const [erroCarregamento, setErroCarregamento] = useState('');
   const [sugestoesPorCategoria, setSugestoesPorCategoria] = useState<Partial<Record<Categoria, string[]>>>({});
+  const { notificar } = useToast();
 
   const [tipo, setTipo] = useState<TipoMovimento>('saida');
+  const [destino, setDestino] = useState<Destino>('cliente');
   const [hora, setHora] = useState(horaAtual());
   const [numeroPedido, setNumeroPedido] = useState('');
   const [contraparte, setContraparte] = useState('');
@@ -95,8 +104,12 @@ export default function Lancamentos({ usuario, armazem }: Props) {
 
   async function garantirSugestoes(categoria: Categoria) {
     if (sugestoesPorCategoria[categoria]) return;
-    const lista = await sugestoesDescricao(categoria);
-    setSugestoesPorCategoria((atual) => ({ ...atual, [categoria]: lista }));
+    try {
+      const lista = await sugestoesDescricao(categoria);
+      setSugestoesPorCategoria((atual) => ({ ...atual, [categoria]: lista }));
+    } catch {
+      notificar('Nao foi possivel carregar as sugestoes de descricao. Pode digitar normalmente.', 'erro');
+    }
   }
 
   useEffect(() => {
@@ -128,6 +141,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
     setQuemRetirou('');
     setObservacoes('');
     setRetiradaParcial(false);
+    setDestino('cliente');
     setAlertaRetiradaPendente(null);
     setItens([novoItemVazio()]);
   }
@@ -149,6 +163,8 @@ export default function Lancamentos({ usuario, armazem }: Props) {
     e.preventDefault();
     setErro('');
 
+    const paraOutroArmazem = tipo === 'saida' && destino === 'armazem';
+
     const itensValidos: MovimentoItemInput[] = itens
       .filter((it) => it.quantidade > 0)
       .map((it) => ({
@@ -167,6 +183,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
     setEnviando(true);
     const resultado = await criarMovimento({
       armazem_id: armazemId,
+      armazem_destino_id: paraOutroArmazem ? (outroArmazem?.id ?? null) : null,
       fluxo: 'saida_armazem',
       tipo,
       data,
@@ -174,10 +191,10 @@ export default function Lancamentos({ usuario, armazem }: Props) {
       turno: 'diurno',
       numero_pedido: numeroPedido || null,
       codigo_rastreio: null,
-      contraparte: contraparte || null,
-      quem_retirou: quemRetirou || null,
+      contraparte: paraOutroArmazem ? null : contraparte || null,
+      quem_retirou: paraOutroArmazem ? null : quemRetirou || null,
       observacoes: observacoes || null,
-      retirada_completa: tipo === 'saida' ? !retiradaParcial : true,
+      retirada_completa: paraOutroArmazem ? true : tipo === 'saida' ? !retiradaParcial : true,
       itens: itensValidos,
     });
     setEnviando(false);
@@ -239,8 +256,21 @@ export default function Lancamentos({ usuario, armazem }: Props) {
     0
   );
 
+  const paraOutroArmazemNoForm = tipo === 'saida' && destino === 'armazem';
+
+  function nomeArmazemPorId(id: number | null): string {
+    if (id == null) return '-';
+    return armazens.find((a) => a.id === id)?.codigo ?? '-';
+  }
+
+  function colunaColeta(m: Movimento): string {
+    if (m.armazem_destino_id) return `Enviado para ${nomeArmazemPorId(m.armazem_destino_id)}`;
+    if (m.recebido_de_armazem_codigo) return `Recebido de ${m.recebido_de_armazem_codigo}`;
+    return m.contraparte || '-';
+  }
+
   if (carregandoLista) {
-    return <p className="carregando">Carregando...</p>;
+    return <Carregando />;
   }
 
   if (erroCarregamento) {
@@ -306,6 +336,8 @@ export default function Lancamentos({ usuario, armazem }: Props) {
 
   return (
     <div>
+      <TransferenciasChegando fluxo="saida_armazem" outroArmazem={outroArmazem} onConfirmado={carregarTudo} />
+
       <section className="cartao">
         <h2>Registrar {tipo === 'saida' ? 'saida' : 'entrada'} do armazem</h2>
         <p className="subtitulo">
@@ -318,20 +350,38 @@ export default function Lancamentos({ usuario, armazem }: Props) {
             <button type="button" className={tipo === 'saida' ? 'ativo' : ''} onClick={() => setTipo('saida')}>
               Saida
             </button>
-            <button type="button" className={tipo === 'entrada' ? 'ativo' : ''} onClick={() => setTipo('entrada')}>
+            <button
+              type="button"
+              className={tipo === 'entrada' ? 'ativo' : ''}
+              onClick={() => {
+                setTipo('entrada');
+                setDestino('cliente');
+              }}
+            >
               Entrada
             </button>
           </div>
 
+          {tipo === 'saida' && outroArmazem && (
+            <div className="abas" style={{ marginBottom: 20 }}>
+              <button type="button" className={destino === 'cliente' ? 'ativo' : ''} onClick={() => setDestino('cliente')}>
+                Cliente / coleta
+              </button>
+              <button type="button" className={destino === 'armazem' ? 'ativo' : ''} onClick={() => setDestino('armazem')}>
+                Transferir para {outroArmazem.codigo}
+              </button>
+            </div>
+          )}
+
           <div className="grade-formulario">
             <label>
-              Numero do pedido
+              Numero do pedido {paraOutroArmazemNoForm && '(opcional)'}
               <input
                 value={numeroPedido}
                 onChange={(e) => setNumeroPedido(e.target.value)}
                 onBlur={verificarPedidoPendente}
                 placeholder="Ex: 3932"
-                required
+                required={!paraOutroArmazemNoForm}
               />
             </label>
 
@@ -340,15 +390,19 @@ export default function Lancamentos({ usuario, armazem }: Props) {
               <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} required />
             </label>
 
-            <label>
-              Coleta (transportadora / cliente)
-              <input value={contraparte} onChange={(e) => setContraparte(e.target.value)} />
-            </label>
+            {!paraOutroArmazemNoForm && (
+              <>
+                <label>
+                  Coleta (transportadora / cliente)
+                  <input value={contraparte} onChange={(e) => setContraparte(e.target.value)} />
+                </label>
 
-            <label>
-              Quem retirou
-              <input value={quemRetirou} onChange={(e) => setQuemRetirou(e.target.value)} />
-            </label>
+                <label>
+                  Quem retirou
+                  <input value={quemRetirou} onChange={(e) => setQuemRetirou(e.target.value)} />
+                </label>
+              </>
+            )}
           </div>
 
           {alertaRetiradaPendente && (
@@ -369,7 +423,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
             />
           </label>
 
-          {tipo === 'saida' && (
+          {tipo === 'saida' && !paraOutroArmazemNoForm && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400 }}>
               <input
                 type="checkbox"
@@ -483,7 +537,7 @@ export default function Lancamentos({ usuario, armazem }: Props) {
                   {m.numero_pedido || '-'}
                   {!m.retirada_completa && <span className="badge badge-parcial"> parcial</span>}
                 </td>
-                <td>{m.contraparte || '-'}</td>
+                <td>{colunaColeta(m)}</td>
                 <td>
                   {m.itens
                     .map(

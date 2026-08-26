@@ -3,6 +3,7 @@ import type { Fluxo, Movimento, Usuario } from '../types';
 import { buscarFechamentoDoDia, buscarHistorico, estornarMovimento } from '../lib/api';
 import { situacaoInfo } from '../lib/situacao';
 import { baixarCsv, paraCsv } from '../lib/csv';
+import Carregando from '../components/Carregando';
 
 interface Props {
   usuario: Usuario;
@@ -117,6 +118,7 @@ export default function Historico({ usuario }: Props) {
 
   async function handleExportar() {
     setExportando(true);
+    setErro('');
     try {
       const datasUnicas = Array.from(new Set(resultados.map((m) => m.data)));
       const fechamentosPorData = new Map<string, string>();
@@ -197,6 +199,8 @@ export default function Historico({ usuario }: Props) {
 
       const csv = paraCsv(cabecalhos, linhas);
       baixarCsv(`historico_${fluxo}_${dataInicio}_a_${dataFim}.csv`, csv);
+    } catch (err) {
+      setErro(typeof err === 'string' ? err : 'Nao foi possivel exportar o CSV.');
     } finally {
       setExportando(false);
     }
@@ -297,7 +301,7 @@ export default function Historico({ usuario }: Props) {
       <section className="cartao">
         {erro && <p className="erro">{erro}</p>}
         {carregando ? (
-          <p className="carregando">Buscando...</p>
+          <Carregando texto="Buscando..." />
         ) : (
           <>
             <div className="tabela-scroll">

@@ -341,13 +341,18 @@ pub async fn enviar_para_turso(
     Ok(resultado)
 }
 
-/// Um envio (`saida` de `peca_montagem` com `armazem_destino_codigo`
-/// preenchido) visto do lado de quem vai receber - vem direto do Turso, nunca
-/// do banco local (o envio original vive no PC do outro armazem).
+/// Um envio (`saida` de `peca_montagem` OU `saida_armazem` com
+/// `armazem_destino_codigo` preenchido) visto do lado de quem vai receber -
+/// vem direto do Turso, nunca do banco local (o envio original vive no PC do
+/// outro armazem). O fluxo viaja junto pra `confirmar_recebimento` gravar a
+/// entrada de confirmacao no mesmo fluxo do envio original (uma transferencia
+/// de veiculo confirmada em Saida de Armazem, uma de peca solta em Montagem)
+/// e pra cada tela filtrar so as pendencias do seu proprio fluxo.
 #[derive(Debug, Serialize)]
 pub struct TransferenciaPendente {
     pub armazem_origem_codigo: String,
     pub id_origem: i64,
+    pub fluxo: String,
     pub data: String,
     pub hora: String,
     /// Sempre `Some` na pratica (so existe transferencia com destino
@@ -362,6 +367,7 @@ pub struct TransferenciaPendente {
 fn linha_para_transferencia(
     armazem_origem_codigo: String,
     id_origem: i64,
+    fluxo: String,
     data: String,
     hora: String,
     armazem_destino_codigo: Option<String>,
@@ -375,6 +381,7 @@ fn linha_para_transferencia(
     Ok(TransferenciaPendente {
         armazem_origem_codigo,
         id_origem,
+        fluxo,
         data,
         hora,
         armazem_destino_codigo,
@@ -383,10 +390,14 @@ fn linha_para_transferencia(
 }
 
 const SQL_PENDENTES_RECEBIMENTO: &str = "
-    SELECT armazem_codigo, id_origem, data, hora, armazem_destino_codigo, itens_json
+    SELECT armazem_codigo, id_origem, fluxo, data, hora, armazem_destino_codigo, itens_json
     FROM movimentos_consolidados m
     WHERE armazem_destino_codigo = ?1
-      AND fluxo = 'peca_montagem'
+      -- Fluxos que suportam transferencia fisica entre A4 e B2: veiculos
+      -- (saida_armazem) e peca solta (peca_montagem). SAC fica de fora: nao
+      -- faz sentido de negocio transferir uma devolucao de garantia entre
+      -- armazens.
+      AND fluxo IN ('peca_montagem', 'saida_armazem')
       AND tipo = 'saida'
       AND estornado_de IS NULL
       AND NOT EXISTS (
@@ -441,21 +452,25 @@ pub async fn buscar_pendentes_recebimento(
         let id_origem: i64 = row
             .get(1)
             .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
-        let data: String = row
+        let fluxo: String = row
             .get(2)
             .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
-        let hora: String = row
+        let data: String = row
             .get(3)
             .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
-        let armazem_destino_codigo: Option<String> = row
+        let hora: String = row
             .get(4)
             .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
-        let itens_json: String = row
+        let armazem_destino_codigo: Option<String> = row
             .get(5)
+            .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
+        let itens_json: String = row
+            .get(6)
             .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
         resultado.push(linha_para_transferencia(
             armazem_origem_codigo,
             id_origem,
+            fluxo,
             data,
             hora,
             armazem_destino_codigo,
@@ -486,7 +501,7 @@ pub async fn buscar_transferencia(
 
     let mut rows = remoto
         .query(
-            "SELECT armazem_codigo, id_origem, data, hora, armazem_destino_codigo, itens_json
+            "SELECT armazem_codigo, id_origem, fluxo, data, hora, armazem_destino_codigo, itens_json
              FROM movimentos_consolidados WHERE armazem_codigo = ?1 AND id_origem = ?2",
             libsql::params![armazem_origem_codigo, id_origem],
         )
@@ -507,22 +522,26 @@ pub async fn buscar_transferencia(
     let id_origem: i64 = row
         .get(1)
         .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
-    let data: String = row
+    let fluxo: String = row
         .get(2)
         .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
-    let hora: String = row
+    let data: String = row
         .get(3)
         .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
-    let armazem_destino_codigo: Option<String> = row
+    let hora: String = row
         .get(4)
         .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
-    let itens_json: String = row
+    let armazem_destino_codigo: Option<String> = row
         .get(5)
+        .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
+    let itens_json: String = row
+        .get(6)
         .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
 
     Ok(Some(linha_para_transferencia(
         armazem_origem_codigo,
         id_origem,
+        fluxo,
         data,
         hora,
         armazem_destino_codigo,
@@ -781,6 +800,7 @@ mod tests {
         let transferencia = linha_para_transferencia(
             "B2".into(),
             42,
+            "peca_montagem".into(),
             "2026-08-25".into(),
             "09:00".into(),
             Some("A4".into()),
@@ -790,6 +810,7 @@ mod tests {
 
         assert_eq!(transferencia.armazem_origem_codigo, "B2");
         assert_eq!(transferencia.id_origem, 42);
+        assert_eq!(transferencia.fluxo, "peca_montagem");
         assert_eq!(transferencia.armazem_destino_codigo.as_deref(), Some("A4"));
         assert_eq!(transferencia.itens.len(), 1);
         assert_eq!(transferencia.itens[0].quantidade, 3);
@@ -797,10 +818,27 @@ mod tests {
     }
 
     #[test]
+    fn linha_para_transferencia_preserva_fluxo_saida_armazem() {
+        let transferencia = linha_para_transferencia(
+            "A4".into(),
+            7,
+            "saida_armazem".into(),
+            "2026-08-25".into(),
+            "10:00".into(),
+            Some("B2".into()),
+            "[]".into(),
+        )
+        .unwrap();
+
+        assert_eq!(transferencia.fluxo, "saida_armazem");
+    }
+
+    #[test]
     fn linha_para_transferencia_rejeita_json_invalido() {
         let resultado = linha_para_transferencia(
             "B2".into(),
             1,
+            "peca_montagem".into(),
             "2026-08-25".into(),
             "09:00".into(),
             Some("A4".into()),

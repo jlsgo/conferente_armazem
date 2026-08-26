@@ -180,13 +180,11 @@ export async function statusSincronizacao(): Promise<StatusSincronizacao | null>
   }
 }
 
-export async function buscarTransferenciasPendentes(): Promise<TransferenciaPendente[]> {
-  try {
-    return await invoke<TransferenciaPendente[]>('buscar_transferencias_pendentes');
-  } catch {
-    // Melhor-esforco: sem internet ou sem sync configurado, so nao mostra a secao.
-    return [];
-  }
+export function buscarTransferenciasPendentes(): Promise<TransferenciaPendente[]> {
+  // "Sem sync configurado" ja volta Ok([]) do lado do Rust (nao rejeita) - so
+  // chega aqui como rejeicao uma falha de verdade (rede/IPC), que o chamador
+  // deve tratar (ver carregarPendentes em Montagem.tsx).
+  return invoke<TransferenciaPendente[]>('buscar_transferencias_pendentes');
 }
 
 export interface ConfirmarRecebimentoResult extends OkResult {

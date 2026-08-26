@@ -9,7 +9,9 @@ import {
   sugestoesDescricao,
 } from '../lib/api';
 import FechamentoImpressao from '../components/FechamentoImpressao';
+import Carregando from '../components/Carregando';
 import { situacaoInfo } from '../lib/situacao';
+import { useToast } from '../lib/toast';
 
 interface Props {
   usuario: Usuario;
@@ -49,6 +51,7 @@ export default function Sac({ usuario, armazem }: Props) {
   const [carregandoLista, setCarregandoLista] = useState(true);
   const [erroCarregamento, setErroCarregamento] = useState('');
   const [sugestoes, setSugestoes] = useState<string[]>([]);
+  const { notificar } = useToast();
 
   const [hora, setHora] = useState(horaAtual());
   const [protocolo, setProtocolo] = useState('');
@@ -83,7 +86,11 @@ export default function Sac({ usuario, armazem }: Props) {
 
   useEffect(() => {
     carregarTudo();
-    sugestoesDescricao('peca').then(setSugestoes);
+    sugestoesDescricao('peca')
+      .then(setSugestoes)
+      .catch(() =>
+        notificar('Nao foi possivel carregar as sugestoes de descricao. Pode digitar normalmente.', 'erro')
+      );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -214,7 +221,7 @@ export default function Sac({ usuario, armazem }: Props) {
   );
 
   if (carregandoLista) {
-    return <p className="carregando">Carregando...</p>;
+    return <Carregando />;
   }
 
   if (erroCarregamento) {

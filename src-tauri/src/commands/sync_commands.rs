@@ -188,6 +188,7 @@ pub async fn confirmar_recebimento(
     }
 
     let itens = validar_quantidades_recebidas(&transferencia.itens, &quantidades_recebidas)?;
+    let fluxo = transferencia.fluxo.clone();
 
     let movimento_confirmado = {
         let mut conn = state.conn()?;
@@ -197,7 +198,7 @@ pub async fn confirmar_recebimento(
             NovoMovimento {
                 armazem_id,
                 armazem_destino_id: None,
-                fluxo: "peca_montagem".into(),
+                fluxo,
                 tipo: "entrada".into(),
                 data,
                 hora,

@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import type { Armazem, Usuario } from '../types';
 import { criarUsuario, listarUsuarios } from '../lib/api';
+import Carregando from '../components/Carregando';
 
 interface Props {
   armazens: Armazem[];
@@ -9,6 +10,7 @@ interface Props {
 export default function Usuarios({ armazens }: Props) {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [carregando, setCarregando] = useState(true);
+  const [erroCarregamento, setErroCarregamento] = useState('');
 
   const [nome, setNome] = useState('');
   const [login, setLogin] = useState('');
@@ -20,9 +22,16 @@ export default function Usuarios({ armazens }: Props) {
 
   async function carregar() {
     setCarregando(true);
-    const lista = await listarUsuarios();
-    setUsuarios(lista);
-    setCarregando(false);
+    setErroCarregamento('');
+    try {
+      setUsuarios(await listarUsuarios());
+    } catch (err) {
+      setErroCarregamento(
+        typeof err === 'string' ? err : 'Nao foi possivel carregar os usuarios cadastrados.'
+      );
+    } finally {
+      setCarregando(false);
+    }
   }
 
   useEffect(() => {
@@ -111,7 +120,14 @@ export default function Usuarios({ armazens }: Props) {
       <section className="cartao">
         <h2>Usuarios cadastrados</h2>
         {carregando ? (
-          <p className="carregando">Carregando...</p>
+          <Carregando />
+        ) : erroCarregamento ? (
+          <div>
+            <p className="erro">{erroCarregamento}</p>
+            <button type="button" onClick={carregar}>
+              Tentar novamente
+            </button>
+          </div>
         ) : (
           <table>
             <thead>

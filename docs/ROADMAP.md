@@ -139,29 +139,33 @@ acesso fisico aos PCs reais, fora deste ambiente:
 
 Confirmado que ha internet real (mesmo que intermitente) nos dois PCs. A sincronizacao
 (envio unidirecional) e a confirmacao de recebimento entre B2 e A4 ja estao em "Feito"
-acima. Falta:
+acima. O painel consolidado (visao dos dois armazens juntos), que estava listado aqui
+como pendente, ja foi entregue pelo Sprint 7 (`painel/index.html`, item 3) - so falta
+mesmo:
 
-- Painel consolidado (visao dos dois armazens juntos) para gestao, lendo
-  `movimentos_consolidados` no Turso — detalhado como Sprint 7 abaixo.
 - **Importacao de historico**: pedir os XLSX/ODS originais se existirem (os PDFs em
   `modelos_antigos/` quebram coluna e tem registros inconsistentes, entao ficam so como
   arquivo de referencia); definir mapeamento de colunas por tipo de planilha; importar
   somente depois de validacao humana dos totais.
 
-## Sprint 6 — Resiliencia de erro no frontend
+## Sprint 6 — Resiliencia de erro no frontend (Feito)
 
 Item que ficou pendente do plano de melhorias original (P2 "Erros e recuperacao no
-frontend") e nunca virou sprint dedicado. Duplicidade de envio ja esta coberta (todo
-formulario desabilita o botao com `enviando` durante o request) — falta o resto:
+frontend"). Duplicidade de envio ja estava coberta (todo formulario desabilita o botao
+com `enviando` durante o request). Revisado o resto:
 
-- `App.tsx`: se `getStatus()` falhar na inicializacao (ex.: banco corrompido, erro de
-  IPC), o `loading` vira `false` mas `status` continua `null` — a tela fica presa em
-  "Carregando..." pra sempre, sem nenhuma mensagem nem botao de tentar de novo. Trocar
-  por uma tela de erro explicita com "Tentar novamente".
-- Revisar as buscas que rodam ao montar a tela (sugestoes de descricao em
-  `Lancamentos`/`Montagem`/`Sac`, busca de historico, "transferencias aguardando
-  confirmacao" em `Montagem`) pra garantir que uma falha de rede/IPC mostra mensagem em
-  vez de deixar a lista vazia sem explicacao.
+- `App.tsx` ja tratava o caso de `getStatus()` falhar na inicializacao — tela de erro
+  explicita com "Tentar novamente" em vez de ficar preso em "Carregando..." (nao
+  precisou de mudanca, so a checagem).
+- `Historico.tsx` ja tratava falha na busca (`erro` + retry via re-submit do formulario).
+- Os 4 pontos que realmente vazavam falha silenciosa (promise sem `catch`, lista so
+  ficava vazia sem explicacao): `garantirSugestoes` (autocomplete de descricao) em
+  `Lancamentos.tsx`, `Montagem.tsx` e `Sac.tsx`, e `carregarPendentes` ("transferencias
+  aguardando confirmacao" em `Montagem.tsx`, o mais provavel de falhar por depender do
+  Turso). Corrigido: as sugestoes agora mostram um aviso leve e nao-bloqueante
+  ("Nao foi possivel carregar as sugestoes... Pode digitar normalmente") em vez de
+  falhar calada; as pendentes ganharam estado de erro proprio com botao "Tentar
+  novamente", sem bloquear o resto da tela de Montagem.
 
 ## Sprint 7 — Painel do administrador em tempo quase real (Feito)
 
@@ -235,6 +239,52 @@ Rodada de acerto fino depois do Sprint 7, com o cliente ja testando de verdade.
   pego pelo CI (`windows-latest` falhando com "invalid path"), corrigido renomeando
   o arquivo. Lembrete pra qualquer commit futuro: nunca usar `: * ? " < > |` em
   nome de arquivo, o alvo real de instalacao e Windows.
+
+## Modernizacao de UI/UX e transferencia entre armazens em Saida de Armazem (Feito)
+
+Rodada pedida pelo usuario: "deixar o sistema mais bonito e moderno", tratar todos os
+erros que ainda escapavam calados, e levar a transferencia entre armazens (que so
+existia em Montagem) tambem pra Saida de Armazem, ja que veiculo/caixa tambem se
+movimenta entre A4 e B2. 102 testes Rust ao final (101 -> 102).
+
+- **Design/UI**: paleta refinada (cinzas mais neutros, sombras em camadas), icones SVG
+  inline (`src/components/Icon.tsx`, sem lib externa) nas abas do menu e em botoes-chave,
+  listras zebradas nas tabelas, spinner animado nos estados de carregamento
+  (`src/components/Carregando.tsx`) no lugar de so texto, e um sistema de notificacoes
+  flutuantes (`src/lib/toast.tsx`, `ToastProvider`/`useToast`) pra avisos de fundo
+  nao-bloqueantes (falha ao carregar sugestao, falha de sync) — antes viravam banner
+  fixo na tela ou nem apareciam.
+- **Auditoria completa de tratamento de erro** (nao so os pontos ja conhecidos):
+  revisado todo `await` de chamada ao backend em todas as 8 paginas do frontend contra o
+  comportamento real de cada funcao em `src/lib/api.ts` (quais rejeitam a promise vs
+  quais ja devolvem `{ok:false}`/`null`/`[]` internamente). Achados reais corrigidos: (1)
+  `buscarTransferenciasPendentes` engolia qualquer erro e sempre resolvia com `[]`,
+  entao o tratamento de erro adicionado na rodada anterior em `Montagem.tsx` nunca
+  disparava — corrigido na raiz, a funcao agora deixa o erro real (rede/IPC) propagar,
+  ja que "sem sync configurado" ja volta `Ok([])` direto do Rust; (2) `Usuarios.tsx`
+  podia ficar preso em "Carregando..." pra sempre se a listagem falhasse — ganhou erro +
+  retry; (3) exportar CSV no Historico falhava calado (estado resetava mas sem
+  mensagem) — ganhou mensagem de erro. Tambem auditados os `unwrap()`/`expect()`/
+  `panic!` do backend fora de teste: so existe um, o boilerplate padrao do Tauri em
+  `lib.rs`, nada de risco real.
+- **Transferencia entre armazens tambem em Saida de Armazem**: o backend da
+  transferencia (Sprint acima) estava com o fluxo fixo em `peca_montagem` em tres
+  lugares (`db::sync::SQL_PENDENTES_RECEBIMENTO` filtrava so esse fluxo,
+  `TransferenciaPendente` nem carregava o campo `fluxo`, e `confirmar_recebimento`
+  criava a entrada de confirmacao sempre como `peca_montagem`) — generalizado pra
+  tambem aceitar `saida_armazem`, com o fluxo da transferencia original viajando ate a
+  confirmacao. `Lancamentos.tsx` ganhou um seletor "Cliente/coleta" vs "Transferir para
+  {outro armazem}" (so aparece em `tipo=saida`, com `outroArmazem` calculado a partir do
+  novo prop `armazens`); numero do pedido fica opcional nesse caso (decisao confirmada
+  com o usuario - uma transferencia interna nao tem numero de pedido no sistema
+  externo, igual ja acontecia em Montagem) e os campos Coleta/Quem retirou/retirada
+  parcial somem (nao se aplicam a uma transferencia). A secao "transferencias chegando"
+  foi extraida pra um componente compartilhado
+  (`src/components/TransferenciasChegando.tsx`, recebe `fluxo` e filtra a lista
+  client-side) usado tanto por Montagem quanto por Lancamentos, pra nao duplicar as
+  ~130 linhas de logica (busca, confirmar, quantidade editavel por item). Decisao
+  tomada com o usuario: **nao** trazer a opcao "outro destino externo" (tecnico) pra
+  Saida de Armazem - so a transferencia entre os dois armazens mesmo.
 
 ## Depois disso
 
