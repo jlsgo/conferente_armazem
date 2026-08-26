@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import type { Armazem, Fechamento, Movimento, MovimentoItemInput, Usuario } from '../types';
+import type { Armazem, Fechamento, Movimento, MovimentoItemInput, TipoMovimento, Usuario } from '../types';
 import {
   criarMovimento,
   buscarFechamentoDoDia,
@@ -10,7 +10,7 @@ import {
 } from '../lib/api';
 import FechamentoImpressao from '../components/FechamentoImpressao';
 import Carregando from '../components/Carregando';
-import { situacaoInfo } from '../lib/situacao';
+import { motivoSacTexto, situacaoInfo } from '../lib/situacao';
 import { useToast } from '../lib/toast';
 
 interface Props {
@@ -18,7 +18,9 @@ interface Props {
   armazem: Armazem | undefined;
 }
 
-type Motivo = 'garantia' | 'venda';
+type MotivoEntrada = 'garantia' | 'venda';
+type MotivoSaida = 'entregue' | 'descarte';
+type Motivo = MotivoEntrada | MotivoSaida;
 
 interface ItemForm {
   descricao: string;
@@ -54,6 +56,7 @@ export default function Sac({ usuario, armazem }: Props) {
   const { notificar } = useToast();
 
   const [hora, setHora] = useState(horaAtual());
+  const [tipo, setTipo] = useState<TipoMovimento>('entrada');
   const [protocolo, setProtocolo] = useState('');
   const [coleta, setColeta] = useState('');
   const [motivo, setMotivo] = useState<Motivo | ''>('');
@@ -117,11 +120,11 @@ export default function Sac({ usuario, armazem }: Props) {
     setErro('');
 
     if (!motivo) {
-      setErro('Informe se e garantia ou venda.');
+      setErro(tipo === 'entrada' ? 'Informe se e garantia ou venda.' : 'Informe se foi entregue ao cliente ou descarte.');
       return;
     }
     let valorCentavos: number | null = null;
-    if (motivo === 'venda') {
+    if (tipo === 'entrada' && motivo === 'venda') {
       const valor = Number(valorReais.replace(',', '.'));
       if (!valorReais || Number.isNaN(valor) || valor <= 0) {
         setErro('Informe o valor da venda.');
@@ -147,7 +150,7 @@ export default function Sac({ usuario, armazem }: Props) {
     const resultado = await criarMovimento({
       armazem_id: armazemId,
       fluxo: 'sac',
-      tipo: 'entrada',
+      tipo,
       data,
       hora,
       turno: 'diurno',
@@ -300,6 +303,29 @@ export default function Sac({ usuario, armazem }: Props) {
         </p>
 
         <form onSubmit={handleSubmit}>
+          <div className="abas" style={{ marginBottom: 20 }}>
+            <button
+              type="button"
+              className={tipo === 'entrada' ? 'ativo' : ''}
+              onClick={() => {
+                setTipo('entrada');
+                setMotivo('');
+              }}
+            >
+              Entrada (devolucao do cliente)
+            </button>
+            <button
+              type="button"
+              className={tipo === 'saida' ? 'ativo' : ''}
+              onClick={() => {
+                setTipo('saida');
+                setMotivo('');
+              }}
+            >
+              Saida (fim do atendimento)
+            </button>
+          </div>
+
           <div className="grade-formulario">
             <label>
               Protocolo
@@ -322,15 +348,24 @@ export default function Sac({ usuario, armazem }: Props) {
             </label>
 
             <label>
-              Garantia ou venda
+              {tipo === 'entrada' ? 'Garantia ou venda' : 'Entregue ou descarte'}
               <select value={motivo} onChange={(e) => setMotivo(e.target.value as Motivo | '')} required>
                 <option value="">Selecione</option>
-                <option value="garantia">Garantia</option>
-                <option value="venda">Venda</option>
+                {tipo === 'entrada' ? (
+                  <>
+                    <option value="garantia">Garantia</option>
+                    <option value="venda">Venda</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="entregue">Entregue ao cliente</option>
+                    <option value="descarte">Descarte (sucata)</option>
+                  </>
+                )}
               </select>
             </label>
 
-            {motivo === 'venda' && (
+            {tipo === 'entrada' && motivo === 'venda' && (
               <label>
                 Valor da venda (R$)
                 <input
@@ -388,7 +423,7 @@ export default function Sac({ usuario, armazem }: Props) {
 
           <div style={{ marginTop: 20 }}>
             <button type="submit" disabled={enviando}>
-              {enviando ? 'Registrando...' : 'Registrar'}
+              {enviando ? 'Registrando...' : `Registrar ${tipo === 'entrada' ? 'entrada' : 'saida'}`}
             </button>
           </div>
         </form>
@@ -406,7 +441,7 @@ export default function Sac({ usuario, armazem }: Props) {
               <th>Coleta</th>
               <th>Itens</th>
               <th>Qtd.</th>
-              <th>Garantia/Venda</th>
+              <th>Motivo</th>
               <th>Registrado por</th>
               <th>Situacao</th>
               {ehGestor && <th className="somente-tela">Acoes</th>}
@@ -425,13 +460,7 @@ export default function Sac({ usuario, armazem }: Props) {
                     .join(' + ')}
                 </td>
                 <td>{m.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
-                <td>
-                  {m.motivo === 'venda'
-                    ? `Venda (R$ ${((m.valor_centavos ?? 0) / 100).toFixed(2)})`
-                    : m.motivo === 'garantia'
-                      ? 'Garantia'
-                      : '-'}
-                </td>
+                <td>{motivoSacTexto(m)}</td>
                 <td>{m.usuario_nome}</td>
                 <td>
                   <span className={situacaoInfo(m).classe}>{situacaoInfo(m).texto}</span>

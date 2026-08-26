@@ -7,6 +7,7 @@ import type {
   Montagem as MontagemVeiculo,
   Movimento,
   MovimentoItemInput,
+  TipoMovimento,
   Usuario,
 } from '../types';
 import {
@@ -79,6 +80,7 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
   const { notificar } = useToast();
 
   const [hora, setHora] = useState(horaAtual());
+  const [tipo, setTipo] = useState<TipoMovimento>('saida');
   const [destino, setDestino] = useState<Destino>('armazem');
   const [enviadoPara, setEnviadoPara] = useState('');
   const [itens, setItens] = useState<ItemForm[]>([novoItemVazio()]);
@@ -149,7 +151,7 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
       setErro('Informe a condicao (boa, defeito ou sucata) de cada item.');
       return;
     }
-    if (destino === 'externo' && !enviadoPara.trim()) {
+    if (tipo === 'saida' && destino === 'externo' && !enviadoPara.trim()) {
       setErro('Informe pra quem foi enviado (ex: nome do tecnico).');
       return;
     }
@@ -170,16 +172,19 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
       return;
     }
 
+    const paraOutroArmazem = tipo === 'saida' && destino === 'armazem';
+    const paraDestinoExterno = tipo === 'saida' && destino === 'externo';
+
     setEnviando(true);
     const resultado = await criarMovimento({
       armazem_id: armazemId,
-      armazem_destino_id: destino === 'armazem' ? (outroArmazem?.id ?? null) : null,
+      armazem_destino_id: paraOutroArmazem ? (outroArmazem?.id ?? null) : null,
       fluxo: 'peca_montagem',
-      tipo: 'saida',
+      tipo,
       data,
       hora,
       turno: 'diurno',
-      contraparte: destino === 'externo' ? enviadoPara.trim() : null,
+      contraparte: paraDestinoExterno ? enviadoPara.trim() : null,
       itens: itensValidos,
     });
     setEnviando(false);
@@ -330,27 +335,39 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
       <TransferenciasChegando fluxo="peca_montagem" outroArmazem={outroArmazem} onConfirmado={carregarTudo} />
 
       <section className="cartao">
-        <h2>Registrar saida do galpao</h2>
+        <h2>Registrar {tipo === 'saida' ? 'saida' : 'entrada'} do galpao</h2>
         <p className="subtitulo">
-          {data} - responsavel: {usuario.nome}. Pecas soltas ou scooters montados saindo daqui.
+          {data} - responsavel: {usuario.nome}. Pecas soltas ou scooters montados
+          {tipo === 'saida' ? ' saindo daqui.' : ' chegando aqui (ex: compra de fornecedor).'}
         </p>
 
         <form onSubmit={handleSubmit}>
           <div className="abas" style={{ marginBottom: 20 }}>
-            <button type="button" className={destino === 'armazem' ? 'ativo' : ''} onClick={() => setDestino('armazem')}>
-              {outroArmazem ? `Para ${outroArmazem.codigo}` : 'Para o outro armazem'}
+            <button type="button" className={tipo === 'saida' ? 'ativo' : ''} onClick={() => setTipo('saida')}>
+              Saida
             </button>
-            <button type="button" className={destino === 'externo' ? 'ativo' : ''} onClick={() => setDestino('externo')}>
-              Outro destino (ex: tecnico externo)
+            <button type="button" className={tipo === 'entrada' ? 'ativo' : ''} onClick={() => setTipo('entrada')}>
+              Entrada
             </button>
           </div>
+
+          {tipo === 'saida' && (
+            <div className="abas" style={{ marginBottom: 20 }}>
+              <button type="button" className={destino === 'armazem' ? 'ativo' : ''} onClick={() => setDestino('armazem')}>
+                {outroArmazem ? `Para ${outroArmazem.codigo}` : 'Para o outro armazem'}
+              </button>
+              <button type="button" className={destino === 'externo' ? 'ativo' : ''} onClick={() => setDestino('externo')}>
+                Outro destino (ex: tecnico externo)
+              </button>
+            </div>
+          )}
 
           <div className="grade-formulario">
             <label>
               Horario
               <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} required />
             </label>
-            {destino === 'externo' && (
+            {tipo === 'saida' && destino === 'externo' && (
               <label>
                 Enviado para
                 <input
@@ -362,7 +379,7 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
               </label>
             )}
           </div>
-          {destino === 'externo' && (
+          {tipo === 'saida' && destino === 'externo' && (
             <p className="subtitulo">
               Anote o codigo/serie de cada peca no campo "Observacao" dela abaixo.
             </p>
@@ -424,7 +441,7 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
               <input
                 value={item.observacao}
                 onChange={(e) => atualizarItem(indice, { observacao: e.target.value })}
-                placeholder={destino === 'externo' ? 'Codigo/serie da peca' : 'Observacao (opcional)'}
+                placeholder={tipo === 'saida' && destino === 'externo' ? 'Codigo/serie da peca' : 'Observacao (opcional)'}
               />
 
               <input
@@ -454,7 +471,7 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
 
           <div style={{ marginTop: 20 }}>
             <button type="submit" disabled={enviando}>
-              {enviando ? 'Registrando...' : 'Registrar'}
+              {enviando ? 'Registrando...' : `Registrar ${tipo === 'saida' ? 'saida' : 'entrada'}`}
             </button>
           </div>
         </form>

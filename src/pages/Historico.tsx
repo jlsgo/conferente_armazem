@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import type { Fluxo, Movimento, Usuario } from '../types';
 import { buscarFechamentoDoDia, buscarHistorico, estornarMovimento } from '../lib/api';
-import { situacaoInfo } from '../lib/situacao';
+import { motivoSacTexto, situacaoInfo } from '../lib/situacao';
 import { baixarCsv, paraCsv } from '../lib/csv';
 import Carregando from '../components/Carregando';
 
@@ -60,12 +60,6 @@ function qtdTotal(m: Movimento): number {
 
 function direcaoTexto(m: Movimento): string {
   return m.tipo === 'saida' ? 'Saida B2' : 'Entrada B2';
-}
-
-function garantiaVendaTexto(m: Movimento): string {
-  if (m.motivo === 'venda') return `Venda (R$ ${((m.valor_centavos ?? 0) / 100).toFixed(2)})`;
-  if (m.motivo === 'garantia') return 'Garantia';
-  return '-';
 }
 
 export default function Historico({ usuario }: Props) {
@@ -178,7 +172,7 @@ export default function Historico({ usuario }: Props) {
           'Coleta',
           'Itens',
           'Qtd.',
-          'Garantia/Venda',
+          'Motivo',
           'Registrado por',
           'Situacao',
           'Fechado em',
@@ -190,7 +184,7 @@ export default function Historico({ usuario }: Props) {
           m.contraparte || '-',
           itensResumo(m),
           String(qtdTotal(m)),
-          garantiaVendaTexto(m),
+          motivoSacTexto(m),
           m.usuario_nome,
           situacaoInfo(m).texto,
           fechadoEm(m),
@@ -326,7 +320,7 @@ export default function Historico({ usuario }: Props) {
                     <th>Itens</th>
                     <th>Qtd.</th>
                     {fluxo === 'saida_armazem' && <th>Quem retirou</th>}
-                    {fluxo === 'sac' && <th>Garantia/Venda</th>}
+                    {fluxo === 'sac' && <th>Motivo</th>}
                     <th>Registrado por</th>
                     <th>Situacao</th>
                     {ehGestor && <th className="somente-tela">Acoes</th>}
@@ -353,7 +347,7 @@ export default function Historico({ usuario }: Props) {
                       <td>{itensResumo(m)}</td>
                       <td>{qtdTotal(m)}</td>
                       {fluxo === 'saida_armazem' && <td>{m.quem_retirou || '-'}</td>}
-                      {fluxo === 'sac' && <td>{garantiaVendaTexto(m)}</td>}
+                      {fluxo === 'sac' && <td>{motivoSacTexto(m)}</td>}
                       <td>{m.usuario_nome}</td>
                       <td>
                         <span className={situacaoInfo(m).classe}>{situacaoInfo(m).texto}</span>

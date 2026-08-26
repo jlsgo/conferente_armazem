@@ -11,7 +11,11 @@ const TIPOS_VALIDOS: [&str; 2] = ["entrada", "saida"];
 const TURNOS_VALIDOS: [&str; 2] = ["diurno", "noturno"];
 const MONTAGENS_VALIDAS: [&str; 2] = ["montado", "caixa"];
 const CONDICOES_VALIDAS: [&str; 3] = ["boa", "defeito", "sucata"];
-const MOTIVOS_SAC_VALIDOS: [&str; 2] = ["garantia", "venda"];
+const MOTIVOS_SAC_ENTRADA_VALIDOS: [&str; 2] = ["garantia", "venda"];
+/// Saida do SAC: peca entregue de volta ao cliente (consertada, trocada) ou
+/// descartada por nao ter conserto - nao existe "devolvida ao fabricante"
+/// hoje, confirmado com o cliente.
+const MOTIVOS_SAC_SAIDA_VALIDOS: [&str; 2] = ["entregue", "descarte"];
 const TEXTO_LIVRE_MAX: usize = 500;
 const QUANTIDADE_MAX: i64 = 100_000;
 
@@ -165,8 +169,22 @@ fn validar_novo_movimento(novo: &NovoMovimento) -> AppResult<()> {
     validar_texto_livre("Observacoes", novo.observacoes.as_deref())?;
 
     if novo.fluxo == "sac" {
+        // Entrada = devolucao do cliente (garantia/venda); saida = destino da
+        // peca depois do atendimento (entregue de volta ao cliente ou
+        // descartada) - cada tipo tem seu proprio conjunto de motivos, nao
+        // faz sentido por exemplo uma "entrada" com motivo "descarte".
+        let motivos_validos = if novo.tipo == "saida" {
+            &MOTIVOS_SAC_SAIDA_VALIDOS[..]
+        } else {
+            &MOTIVOS_SAC_ENTRADA_VALIDOS[..]
+        };
         match novo.motivo.as_deref() {
-            Some(motivo) if MOTIVOS_SAC_VALIDOS.contains(&motivo) => {}
+            Some(motivo) if motivos_validos.contains(&motivo) => {}
+            _ if novo.tipo == "saida" => {
+                return Err(AppError::Validation(
+                    "Informe o motivo da saida do SAC: entregue ao cliente ou descarte.".into(),
+                ));
+            }
             _ => {
                 return Err(AppError::Validation(
                     "Informe o motivo do SAC: garantia ou venda.".into(),
@@ -1477,6 +1495,7 @@ mod tests {
         let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
         let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
         novo.fluxo = "sac".into();
+        novo.tipo = "entrada".into();
         novo.motivo = Some("venda".into());
         novo.valor_centavos = Some(15_000);
         assert!(criar_movimento(&mut conn, novo).is_ok());
@@ -1487,9 +1506,50 @@ mod tests {
         let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
         let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
         novo.fluxo = "sac".into();
+        novo.tipo = "entrada".into();
         novo.motivo = Some("garantia".into());
         novo.valor_centavos = None;
         assert!(criar_movimento(&mut conn, novo).is_ok());
+    }
+
+    #[test]
+    fn aceita_sac_saida_entregue_ao_cliente() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.fluxo = "sac".into();
+        novo.tipo = "saida".into();
+        novo.motivo = Some("entregue".into());
+        assert!(criar_movimento(&mut conn, novo).is_ok());
+    }
+
+    #[test]
+    fn aceita_sac_saida_descarte() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.fluxo = "sac".into();
+        novo.tipo = "saida".into();
+        novo.motivo = Some("descarte".into());
+        assert!(criar_movimento(&mut conn, novo).is_ok());
+    }
+
+    #[test]
+    fn rejeita_sac_entrada_com_motivo_de_saida() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.fluxo = "sac".into();
+        novo.tipo = "entrada".into();
+        novo.motivo = Some("descarte".into());
+        assert!(criar_movimento(&mut conn, novo).is_err());
+    }
+
+    #[test]
+    fn rejeita_sac_saida_com_motivo_de_entrada() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.fluxo = "sac".into();
+        novo.tipo = "saida".into();
+        novo.motivo = Some("garantia".into());
+        assert!(criar_movimento(&mut conn, novo).is_err());
     }
 
     // --- Stage 3: hash de auditoria e verificacao de cadeia ---

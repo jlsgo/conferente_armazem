@@ -393,14 +393,16 @@ export default function Lancamentos({ usuario, armazem, armazens }: Props) {
             {!paraOutroArmazemNoForm && (
               <>
                 <label>
-                  Coleta (transportadora / cliente)
+                  {tipo === 'saida' ? 'Coleta (transportadora / cliente)' : 'Fornecedor / origem'}
                   <input value={contraparte} onChange={(e) => setContraparte(e.target.value)} />
                 </label>
 
-                <label>
-                  Quem retirou
-                  <input value={quemRetirou} onChange={(e) => setQuemRetirou(e.target.value)} />
-                </label>
+                {tipo === 'saida' && (
+                  <label>
+                    Quem retirou
+                    <input value={quemRetirou} onChange={(e) => setQuemRetirou(e.target.value)} />
+                  </label>
+                )}
               </>
             )}
           </div>

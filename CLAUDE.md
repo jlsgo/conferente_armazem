@@ -66,11 +66,19 @@ actually build and run for local testing.
   screen: `src/pages/Lancamentos.tsx` (vehicles), `src/pages/Montagem.tsx` (loose parts
   released from warehouse B2 to assembly at A4 — condition boa/defeito/sucata required
   per item, validated in `domain::movimentos::validar_novo_movimento`), and
-  `src/pages/Sac.tsx` (warranty/sale part returns — `motivo` required
-  garantia/venda, `valor_centavos` required only when venda, also validated
-  domain-side, not just in the form). All three share `commands/movimento_commands.rs`
+  `src/pages/Sac.tsx` (warranty/sale part returns, both directions: `tipo=entrada` for
+  the customer's return — `motivo` required garantia/venda, `valor_centavos` required
+  only when venda — and `tipo=saida` for what happens to the part afterward — `motivo`
+  required entregue/descarte, no other fields since there's no "returned to
+  manufacturer" case today). `domain::movimentos::validar_novo_movimento` picks the
+  valid `motivo` set based on `tipo` (`MOTIVOS_SAC_ENTRADA_VALIDOS` vs
+  `MOTIVOS_SAC_SAIDA_VALIDOS`) — a `saida` with a `entrada`-only motivo like `garantia`
+  is rejected, and vice versa. All three screens share `commands/movimento_commands.rs`
   and `commands/fechamento_commands.rs` — the domain layer was already generic per
-  `fluxo` before these screens existed.
+  `fluxo` before these screens existed. All three also support a manual `tipo=entrada`
+  and `tipo=saida` in their form (Montagem's manual entrada was briefly missing after
+  the cross-warehouse transfer work below replaced its old tipo toggle with a
+  destino-only saida form — restored, tipo and destino are independent toggles now).
 - **Cross-warehouse transfer + receipt confirmation (A4 ↔ B2)**: implemented, and generic
   across `fluxo` — a `saida` with `armazem_destino_id` set (either `saida_armazem` for
   vehicles, from `Lancamentos.tsx`, or `peca_montagem` for loose parts, from

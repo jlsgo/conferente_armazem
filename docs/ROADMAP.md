@@ -286,6 +286,41 @@ movimenta entre A4 e B2. 102 testes Rust ao final (101 -> 102).
   tomada com o usuario: **nao** trazer a opcao "outro destino externo" (tecnico) pra
   Saida de Armazem - so a transferencia entre os dois armazens mesmo.
 
+## Auditoria de cenarios de entrada/saida (Feito)
+
+Pedido do usuario: "testa todas as hipoteses de entrada e saida e ve se precisamos de
+mais campos". Mapeada cada combinacao fluxo x tipo contra `validar_novo_movimento` (que
+ja aceita `entrada`/`saida` livremente em qualquer fluxo) e contra o que cada tela
+realmente deixa o conferente fazer. 110 testes Rust ao final (106 -> 110).
+
+- **Bug real encontrado e corrigido**: `Montagem.tsx` tinha perdido a opcao de
+  "Entrada" manual - o commit que adicionou a transferencia entre armazens (`0c4c042`)
+  reescreveu o formulario em torno do seletor de destino (so se aplica a saida) e o
+  `handleSubmit` ficou mandando `tipo: 'saida'` fixo, sem nenhuma decisao documentada
+  dizendo que isso era proposital. Resultado: nao existia forma de registrar peca
+  solta chegando no B2 por compra direta de fornecedor (so via confirmacao de
+  transferencia vinda de A4). Restaurado o alternador Entrada/Saida (independente do
+  seletor de destino, que so aparece quando tipo=saida) - confirmado com o usuario
+  antes de mexer.
+- **SAC ganhou uma segunda etapa (saida)**: antes so registrava a entrada (devolucao
+  do cliente, garantia/venda). Confirmado com o usuario que existe saida real -
+  "entregue/devolvida ao cliente" e "descarte/sucata" (nao existe "devolvida ao
+  fabricante" hoje). Sem coluna nova no banco: `domain::movimentos::validar_novo_movimento`
+  agora escolhe o conjunto de `motivo` valido por `tipo`
+  (`MOTIVOS_SAC_ENTRADA_VALIDOS` = garantia/venda, `MOTIVOS_SAC_SAIDA_VALIDOS` =
+  entregue/descarte) - uma saida com motivo de entrada (ou vice-versa) e rejeitada.
+  `Sac.tsx` ganhou o mesmo alternador Entrada/Saida das outras telas.
+- **Consolidado texto de motivo do SAC**: existiam 3 copias quase identicas da logica
+  "venda -> mostra valor, garantia -> texto fixo" (`Sac.tsx`, `FechamentoImpressao.tsx`,
+  `Historico.tsx`). Unificado em `motivoSacTexto` (`src/lib/situacao.ts`, ao lado de
+  `situacaoInfo`), agora cobrindo os 4 motivos (garantia/venda/entregue/descarte) num
+  lugar so - corrige de quebra uma pequena inconsistencia de formatacao de valor que
+  existia entre a tela e a impressao.
+- **Ajuste menor em Lancamentos**: os campos "Coleta" e "Quem retirou" apareciam
+  igual pra `tipo=entrada`, onde "quem retirou" nao faz sentido (nada foi retirado,
+  algo chegou). "Quem retirou" some pra entrada; "Coleta" muda de rotulo pra
+  "Fornecedor / origem" nesse caso.
+
 ## Depois disso
 
 - Escalar o mesmo instalador para novos armazens, se a empresa abrir mais.

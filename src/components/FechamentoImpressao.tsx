@@ -1,5 +1,5 @@
 import type { Armazem, Fechamento, Movimento } from '../types';
-import { situacaoInfo } from '../lib/situacao';
+import { motivoSacTexto, situacaoInfo } from '../lib/situacao';
 
 type Variante = 'armazem' | 'montagem' | 'sac';
 
@@ -25,10 +25,6 @@ const LARGURAS_COLUNAS: Record<Variante, number[]> = {
   montagem: [4, 7, 10, 38, 5, 10, 14, 12],
   sac: [3, 6, 9, 15, 26, 4, 13, 12, 12],
 };
-
-function formatarReais(centavos: number): string {
-  return (centavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
 
 export default function FechamentoImpressao({
   armazem,
@@ -86,7 +82,7 @@ export default function FechamentoImpressao({
             <th>Qtd.</th>
             {variante === 'armazem' && <th>Quem retirou</th>}
             {variante === 'montagem' && <th>Condicao</th>}
-            {variante === 'sac' && <th>Garantia/Venda</th>}
+            {variante === 'sac' && <th>Motivo</th>}
             {variante === 'armazem' && <th>Observacoes</th>}
             <th>Registrado por</th>
             <th>Situacao</th>
@@ -127,15 +123,7 @@ export default function FechamentoImpressao({
               {variante === 'montagem' && (
                 <td>{m.itens.map((it) => it.condicao).filter(Boolean).join(', ') || '-'}</td>
               )}
-              {variante === 'sac' && (
-                <td>
-                  {m.motivo === 'venda'
-                    ? `Venda (${formatarReais(m.valor_centavos ?? 0)})`
-                    : m.motivo === 'garantia'
-                      ? 'Garantia'
-                      : '-'}
-                </td>
-              )}
+              {variante === 'sac' && <td>{motivoSacTexto(m)}</td>}
               {variante === 'armazem' && <td>{m.observacoes || '-'}</td>}
               <td>{m.usuario_nome}</td>
               <td>
