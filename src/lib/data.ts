@@ -16,3 +16,12 @@ export function formatarDataHora(dataHora: string): string {
   const [data, hora] = dataHora.split(' ');
   return hora ? `${formatarData(data)} ${hora}` : formatarData(data);
 }
+
+/**
+ * Mesma data no padrao brasileiro, mas com `-` no lugar de `/` - pra usar em
+ * nome de arquivo exportado (CSV/XLSX). `/` quebraria o nome (viraria
+ * separador de pasta), entao nao da pra usar `formatarData` direto aqui.
+ */
+export function formatarDataArquivo(data: string): string {
+  return formatarData(data).replace(/\//g, '-');
+}

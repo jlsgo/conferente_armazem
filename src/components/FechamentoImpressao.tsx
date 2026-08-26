@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Armazem, Fechamento, Movimento } from '../types';
 import { motivoSacTexto, situacaoInfo } from '../lib/situacao';
-import { formatarData, formatarDataHora } from '../lib/data';
+import { formatarData, formatarDataArquivo, formatarDataHora } from '../lib/data';
 import { paraCsv, baixarCsv } from '../lib/csv';
 import { baixarXlsx } from '../lib/xlsx';
 import { colunasFechamento, rodapeAuditoria } from '../lib/exportFechamento';
@@ -47,7 +47,7 @@ export default function FechamentoImpressao({
   );
 
   function nomeBase(extensao: string): string {
-    return `fechamento_${variante}_${armazem?.codigo ?? 'armazem'}_${data}.${extensao}`;
+    return `fechamento_${variante}_${armazem?.codigo ?? 'armazem'}_${formatarDataArquivo(data)}.${extensao}`;
   }
 
   function handleExportarCsv() {

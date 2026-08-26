@@ -4,7 +4,7 @@ import { buscarFechamentoDoDia, buscarHistorico, estornarMovimento } from '../li
 import { motivoSacTexto, situacaoInfo } from '../lib/situacao';
 import { baixarCsv, paraCsv } from '../lib/csv';
 import { baixarXlsx } from '../lib/xlsx';
-import { formatarData, formatarDataHora } from '../lib/data';
+import { formatarData, formatarDataArquivo, formatarDataHora } from '../lib/data';
 import Carregando from '../components/Carregando';
 
 interface Props {
@@ -199,7 +199,10 @@ export default function Historico({ usuario }: Props) {
     try {
       const { cabecalhos, linhas } = await construirColunas();
       const csv = paraCsv(cabecalhos, linhas);
-      baixarCsv(`historico_${fluxo}_${dataInicio}_a_${dataFim}.csv`, csv);
+      baixarCsv(
+        `historico_${fluxo}_${formatarDataArquivo(dataInicio)}_a_${formatarDataArquivo(dataFim)}.csv`,
+        csv
+      );
     } catch (err) {
       setErro(typeof err === 'string' ? err : 'Nao foi possivel exportar o CSV.');
     } finally {
@@ -223,10 +226,13 @@ export default function Historico({ usuario }: Props) {
           fechado || 'dia ainda aberto',
         ]),
       ];
-      await baixarXlsx(`historico_${fluxo}_${dataInicio}_a_${dataFim}.xlsx`, [
-        { nome: 'Historico', cabecalhos, linhas },
-        { nome: 'Auditoria', cabecalhos: ['Item', 'Valor'], linhas: auditoria },
-      ]);
+      await baixarXlsx(
+        `historico_${fluxo}_${formatarDataArquivo(dataInicio)}_a_${formatarDataArquivo(dataFim)}.xlsx`,
+        [
+          { nome: 'Historico', cabecalhos, linhas },
+          { nome: 'Auditoria', cabecalhos: ['Item', 'Valor'], linhas: auditoria },
+        ]
+      );
     } catch (err) {
       setErro(typeof err === 'string' ? err : 'Nao foi possivel exportar o XLSX.');
     } finally {
