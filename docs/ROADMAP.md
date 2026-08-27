@@ -374,6 +374,227 @@ ilegivel ("QUEM RETIROOUBSERVACOES"). Virou o pacote de polimento pra fechar a v
 Bump de `0.2.0` pra `0.3.0` junto com o pacote de polimento acima - mesmo motivo do
 bump anterior (nome do instalador no pendrive precisa refletir o que mudou).
 
+## SAC: saida tambem aceita Garantia/Venda (Feito)
+
+Pedido do usuario: a saida do SAC (`Sac.tsx`, "Entregue ou descarte") tambem precisava
+das opcoes Garantia e Venda, alem de Entregue/Descarte. `MOTIVOS_SAC_SAIDA_VALIDOS`
+(`domain/movimentos.rs`) passou de 2 pra 4 valores (`entregue`, `descarte`, `garantia`,
+`venda`) - so a saida ganhou as opcoes novas, a entrada continua so com
+garantia/venda (nao foi pedido o inverso). `valor_centavos` obrigatorio quando
+`motivo = venda` ja nao era condicionado a `tipo` no backend, so precisou soltar a
+mesma trava no frontend (`Sac.tsx`, campo so aparecia se `tipo === 'entrada'`).
+`motivoSacTexto` (`situacao.ts`) ja cobria os 4 motivos independente do tipo, entao
+Historico/exportacao/impressao do fechamento nao precisaram de mudanca. 108 testes
+Rust (106 -> 108).
+
+## Exportacao consolidada do fechamento do dia (Feito)
+
+Pedido do usuario: poder exportar os 3 fluxos (Saida de Armazem/Montagem/SAC) de uma
+vez so, num arquivo so, separados por secao - em vez de precisar abrir cada tela e
+exportar uma de cada vez. Implementado como um botao no cabecalho do `Dashboard.tsx`
+("Exportar fechamento do dia", `src/components/FechamentoConsolidado.tsx`), disponivel
+pra qualquer usuario (mesma visibilidade dos exports individuais ja existentes) - abre
+um mini-painel com campo de data (qualquer dia, nao so hoje) e os botoes Exportar
+CSV/XLSX.
+
+- **Nao virou um 4º "fechar o dia"**: decisao deliberada pra nao duplicar o conceito de
+  fechamento que ja existe por fluxo - o export consolidado so agrega o que ja foi
+  fechado. `buscarSecoesConsolidadas` (`src/lib/exportConsolidado.ts`) busca o
+  fechamento dos 3 fluxos pra data escolhida (`buscar_fechamento_do_dia`) e so inclui no
+  arquivo os que retornaram um fechamento de verdade (fluxo sem lancamento naquele dia,
+  ou ainda em aberto, fica de fora silenciosamente) - se nenhum dos 3 estava fechado,
+  mostra aviso em vez de gerar arquivo vazio.
+- **XLSX**: uma aba por fluxo fechado (reaproveita `baixarXlsx`, que ja suportava
+  multiplas abas desde a v0.3.0), cada uma com seu proprio rodape de auditoria.
+- **CSV**: como CSV nao tem conceito de aba, as secoes ficam uma abaixo da outra no
+  mesmo arquivo, separadas por um subtitulo (`=== SAIDA DE ARMAZEM ===`) e linha em
+  branco. Achado no caminho: `paraCsv` (`src/lib/csv.ts`) prependia um BOM UTF-8 a cada
+  chamada - concatenar blocos direto teria repetido o BOM no meio do arquivo. Extraida
+  `linhasParaCsv` (mesma logica, sem BOM) pra montar cada secao, com o BOM aplicado uma
+  unica vez no arquivo final.
+- Reaproveita 100% as colunas por fluxo ja centralizadas em `colunasFechamento`
+  (`exportFechamento.ts`, da v0.3.0) - nao duplica logica de formatacao de linha.
+
+## Fechamento impresso mais profissional (Feito)
+
+Pedido do usuario com um PDF real anexado (dia com so 3 lancamentos): o CSS de
+impressao (`global.css`) foi calibrado pra caber ~40 lancamentos numa folha - otimo num
+dia cheio, mas num dia com poucos lancamentos sobrava muita folha em branco e o
+cabecalho/tabela ficavam desproporcionalmente pequenos. 4 melhorias implementadas em
+`FechamentoImpressao.tsx`/`global.css`:
+
+- **Rodape fixo no fim da folha**: `.area-impressao` virou flex-column com
+  `min-height: 200mm` (altura util do A4 paisagem, 210mm - 2x5mm de margem do `@page`)
+  em `@media print`; `.rodape-documento` (nome do sistema, hash de auditoria,
+  "Documento impresso em") usa `margin-top: auto` pra ficar sempre ancorado no fim da
+  pagina - em dias cheios o conteudo so cresce alem do minimo, igual ja acontecia
+  antes.
+- **Bloco de resumo** (`.resumo-fechamento`) entre a tabela e a assinatura: contadores
+  "Por situacao" (ENTRADA/BAIXA/ESTORNO) e "Por categoria" (soma de quantidade por
+  categoria de item) - preenche com informacao util o espaco que sobraria em branco.
+- **Moldura + cabecalho em formato de ficha**: borda fina ao redor de toda a folha
+  (`border: 1px solid var(--texto)`) mais um friso colorido no topo na cor do fluxo
+  (`CORES_VARIANTE`, mesma paleta do "friso no topo" ja usado nas abas do menu -
+  Saida de Armazem/Montagem/SAC cada um com sua cor). Cabecalho trocou de texto corrido
+  por uma grade rotulo:valor (`.ficha-campos`: Armazem/Data/Fechado em/Responsavel(is)
+  em campos separados).
+- **Uma linha de assinatura por responsavel**: antes sempre uma linha generica
+  ("Assinatura da conferente responsavel"), mesmo com 2+ conferentes tendo lancado
+  algo no dia. `area-assinaturas` agora renderiza um bloco "Assinatura - {nome}" por
+  conferente distinto que apareceu nos lancamentos do dia (cai pro nome de quem fechou
+  o dia se por algum motivo nao houver lancamento).
+
+**Verificacao**: reproduzido o CSS compilado (`vite build`) num harness estatico com
+3 e com 42 lancamentos sinteticos, impresso via Chrome headless
+(`--print-to-pdf`) - as duas primeiras rodadas de ajuste estouraram 42 linhas pra uma
+2ª pagina (rotulo de assinatura + rodape sobrando ~8mm); reduzido padding da moldura
+(3mm -> 2mm) e a margem/fonte do bloco de assinaturas pra recuperar esse espaco - 42
+lancamentos (acima do "~40" original) voltou a caber numa unica folha, e o dia de 3
+lancamentos ficou com cabecalho/tabela/resumo no topo e o rodape ancorado embaixo, sem
+mais a folha "morrer" em branco no meio.
+
+## Faixa de insights ao vivo pro conferente (Feito)
+
+Pedido do usuario: dar mais insights pros conferentes com os dados do dia, nao so pro
+gestor (que ja tem o painel `painel/index.html`). Decisao tomada com o usuario: manter
+simples - contadores de texto discretos, sem grafico, pra nao competir com o
+formulario de lancamento (o foco real da tela).
+
+- `ResumoDoDia.tsx` - faixa no topo de `Lancamentos.tsx`/`Montagem.tsx`/`Sac.tsx` (antes
+  do fechamento do dia) com "Hoje: N lancamentos · M unidades", contagem por situacao
+  (ENTRADA/BAIXA/ESTORNO) e por categoria - os mesmos numeros que ja apareciam so
+  depois de fechar o dia (`FechamentoImpressao`), agora visiveis ao vivo enquanto o
+  conferente ainda esta lancando. Fica oculta se ainda nao houver lancamento no dia (sem
+  poluir a tela vazia).
+- `resumoMovimentos` extraida pra `src/lib/situacao.ts`, compartilhada entre
+  `ResumoDoDia.tsx` e o resumo do fechamento impresso (`FechamentoImpressao.tsx`) - a
+  mesma conta que antes vivia duplicada inline num dos dois lugares.
+- So aparece na visao "dia aberto"; no dia ja fechado o resumo equivalente ja
+  mostrado por `FechamentoImpressao` cobre o mesmo papel, entao nao duplica.
+
+## Transferencias pendentes mais evidentes + opcao "Outro" nos selects (Feito)
+
+Pedido do usuario a partir de um print do painel do gestor (`painel/index.html`,
+secao "Transferencias pendentes de confirmacao") - queria essa visibilidade tambem
+dentro do app de cada conferente, nao so no painel web separado, e clicavel pra ir
+direto na aba certa. Junto, pediu pra selects em geral ganharem uma opcao "Outro" que
+cai em observacoes quando o caso nao e o normal. 115 testes Rust ao final (108 -> 115).
+
+- **Contador nas abas do menu**: `Dashboard.tsx` busca `buscarTransferenciasPendentes()`
+  uma vez (nao gestor-only - quem recebe fisicamente e confirma e o conferente),
+  agrupa por `fluxo` e mostra um badge amarelo com a contagem direto nos botoes "Saida
+  de Armazem"/"Montagem" (`.badge-notificacao`, `global.css`) - atualiza sozinho a cada
+  60s e logo apos "Sincronizar agora". Clicar na aba ja leva pra tela certa (o
+  componente `TransferenciasChegando.tsx` que ja existia continua sendo onde a
+  confirmacao de fato acontece).
+- **Opcao "Outro"**: decisao tomada com o usuario, campo por campo (alguns exigiram
+  ensinar o backend a aceitar o valor, outros ficaram so no frontend):
+  - `categoria` do item (`scooter`/`triciclo`/`patinete`/`peca`) ganhou `outro` - o
+    usuario confirmou explicitamente que queria isso mesmo sendo uma decisao anterior
+    documentada (evitar catalogo de produto) - `outro` continua uma lista curta fixa,
+    nao virou catalogo aberto, so que agora exige `observacao` preenchida
+    (`domain::movimentos::validar_novo_movimento`).
+  - `condicao` da peca (`peca_montagem`, obrigatoria) e `motivo` do SAC (obrigatorio)
+    tambem ganharam `outro` real, aceito pelo backend, com a mesma exigencia de
+    descricao (`observacao` do item pra condicao, `observacoes` do movimento pra
+    motivo - `Sac.tsx` ganhou um campo Observacoes que nao existia antes, so pra isso).
+  - `montagem` do item (`montado`/`caixa`, sempre opcional) NAO ganhou um valor
+    `outro` no backend - na UI "Outro" so limpa o campo pra `null` e pede a descricao
+    em observacao, ja que o campo em si nunca foi obrigatorio.
+  - `motivoSacTexto` (`situacao.ts`) mostra "Outro - {observacoes}" em vez de so
+    "Outro" nas tabelas/impressao/exportacao, reaproveitando o mesmo texto livre que a
+    validacao exigiu no lancamento.
+
+## Auditoria pre-v1.0: revisao de codigo + correcoes (Feito)
+
+Pedido do usuario: sistema maduro, hora de planejar a v1.0 "definitiva pra producao,
+sem bug nenhum". Rodada `/code-review` (nivel high, multi-agente) sobre o diff
+acumulado da sessao (~750 linhas, 13 arquivos + 4 novos) antes de dar qualquer nota.
+115 testes Rust seguem passando, `clippy`/`fmt`/`tsc` limpos.
+
+**Bugs reais corrigidos**:
+- **`resumoMovimentos` contava estorno em dobro**: `estornar_movimento` copia a
+  quantidade original sem inverter o sinal (so `estornado_de` marca a reversao) - o
+  resumo novo (`ResumoDoDia.tsx` ao vivo e `.resumo-fechamento` na folha impressa)
+  somava as duas linhas positivas, mostrando por ex. "8x scooter" no resumo bem acima
+  de "Total geral: 0 unidades" no mesmo dia/folha. Corrigido com o mesmo sinal
+  `estornado_de ? -1 : 1` que `totalGeral` ja usava.
+- **CSV consolidado** tinha uma linha em branco indevida entre o subtitulo da secao e
+  seu proprio cabecalho (`exportConsolidado.ts`).
+- **3 mensagens de erro desatualizadas** no backend (`domain::movimentos.rs`) -
+  motivo ausente no SAC (entrada e saida) e condicao ausente na Montagem citavam so
+  as opcoes antigas, sem "outro", mesmo ja aceitando o valor.
+- **Badge de transferencias pendentes** nas abas nao atualizava na hora ao confirmar
+  um recebimento de dentro da propria aba (so no proximo poll de 60s) -
+  `Lancamentos.tsx`/`Montagem.tsx` agora avisam o `Dashboard.tsx` via
+  `onTransferenciaConfirmada`.
+- **"Nº 3 - pedido - - 3 un."**: texto com dois tracos seguidos quando o lancamento
+  nao tem numero de pedido (ex.: transferencia). Corrigido pra omitir o trecho
+  "pedido" inteiro nesse caso.
+
+**Polimento de codigo** (sem mudanca de comportamento): `itemPrecisaObservacao`
+(duplicada em `Lancamentos.tsx`/`Montagem.tsx`) e a checagem "outro exige detalhe"
+(duplicada 2x em `domain::movimentos.rs`) foram extraidas pra funcoes compartilhadas
+(`src/lib/outro.ts`, `exigir_detalhe_para_outro`); `.badge-notificacao` passou a
+compor com a classe base `.badge` em vez de reescrever as mesmas propriedades.
+
+**Investigado e descartado**: `usuario.armazem_id as number` (usado em varias telas,
+inclusive a nova `FechamentoConsolidado`) e tecnicamente inseguro pra um "gestor sem
+armazem fixo" (existe e e testado na camada de dominio), mas `Setup.tsx`/`Usuarios.tsx`
+sempre exigem selecionar um armazem real - esse estado nunca e alcancavel pela UI hoje,
+entao nao foi alterado.
+
+## Polimento pre-v1.0 (Feito, 2026-08-27)
+
+Decisao do usuario: horario sempre local (nunca UTC), e um unico gestor por enquanto
+(sem feature de segundo gestor/continuidade).
+
+- **UTC -> horario local em todo timestamp exibido**: `criado_em` (`movimentos` e
+  `fechamentos`) usava o `DEFAULT (datetime('now'))` do SQLite, que e UTC - migration
+  nao editada (regra do projeto), em vez disso as 3 INSERTs afetadas (`criar_movimento`,
+  `estornar_movimento` em `domain/movimentos.rs`, `fechar_dia` em
+  `domain/fechamentos.rs`) passaram a gravar `criado_em` explicitamente via
+  `datetime('now', 'localtime')`. `criado_em` nao faz parte de `CamposHash`/hash de
+  auditoria, entao mudar como e populado nao afeta a cadeia. No frontend, os 3 lugares
+  que geravam "Exportado em"/"Documento impresso em" com `new Date().toISOString()`
+  (UTC) passaram a usar `agoraLocalTexto()` (novo helper em `src/lib/data.ts`, usa
+  getters locais do `Date`). O "Horario" digitado pela conferente ja era local, sem
+  mudanca. `sync_proxima_tentativa`/`enviado_em`/`sincronizado_em` (bookkeeping interno
+  do sync, nunca exibido) ficaram como estavam - so timestamps que aparecem pra
+  conferente/gestor foram tocados.
+- **Segundo gestor**: decisao tomada — fica so o Jhon por enquanto. Item removido da
+  lista de "deixado de fora, revisitar" abaixo; nao e mais uma pendencia em aberto.
+- **Botao "Exportar fechamento do dia" removido**: a exportacao consolidada (3 fluxos
+  juntos, `FechamentoConsolidado.tsx`/`exportConsolidado.ts`) nao estava sendo usada no
+  dia a dia — removida (componente, lib e `IconDownload`, que so ela usava). A
+  exportacao por fluxo individual (Historico) continua.
+
+## Proxima versao (planejado) — v0.4.0
+
+Sessao de "analisa o sistema e planeja melhorias" (2026-08-27): revisado o codigo atual
+contra o roadmap. P0-P2 do plano original ja estao feitos; os itens abaixo foram
+escolhidos pelo usuario como prioridade pra proxima versao, entre uma lista maior de
+candidatos (ver secoes seguintes pros que ficaram de fora por ora).
+
+- **Paginacao no Historico**: `buscar_historico` tem hoje um limite fixo de 500 linhas
+  sem paginacao (`LIMITE_HISTORICO`, `domain/movimentos.rs`) — uma busca ampla corta
+  resultado silenciosamente sem avisar que ha mais dados. Plano: adicionar `offset` a
+  `buscar_historico` (LIMIT+OFFSET), buscar uma linha a mais que o limite pra saber se
+  `tem_mais` sem precisar de COUNT separado, e um botao "Carregar mais" em
+  `Historico.tsx`.
+- **Protecao contra forca bruta no login**: hoje nao ha nenhum lockout/atraso apos
+  tentativas erradas repetidas (`domain/auth.rs::login`). Plano: colunas
+  `tentativas_falhas`/`bloqueado_ate` em `usuarios` (nova migration), bloqueio
+  progressivo por conta (nao por IP, app local) apos N falhas seguidas, reset no login
+  certo — mesmo padrao ja usado pro backoff de sync (`calcular_backoff_minutos`,
+  Sprint 7). Testavel do jeito usual (dominio puro + SQLite em memoria).
+
+**Deixado de fora por ora, revisitar se necessario**:
+- Importacao de historico antigo (XLSX/ODS) — Sprint 5 resto, so relevante se ainda ha
+  valor real nos dados antigos.
+- Testes automatizados de frontend (hoje so `tsc --noEmit` do lado React) — baixo risco
+  dado o tamanho do app.
+
 ## Depois disso
 
 - Escalar o mesmo instalador para novos armazens, se a empresa abrir mais.

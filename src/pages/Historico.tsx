@@ -4,7 +4,7 @@ import { buscarFechamentoDoDia, buscarHistorico, estornarMovimento } from '../li
 import { motivoSacTexto, situacaoInfo } from '../lib/situacao';
 import { baixarCsv, paraCsv } from '../lib/csv';
 import { baixarXlsx } from '../lib/xlsx';
-import { formatarData, formatarDataArquivo, formatarDataHora } from '../lib/data';
+import { agoraLocalTexto, formatarData, formatarDataArquivo, formatarDataHora } from '../lib/data';
 import Carregando from '../components/Carregando';
 
 interface Props {
@@ -218,7 +218,7 @@ export default function Historico({ usuario }: Props) {
       const auditoria: string[][] = [
         ['Sistema', 'Ecoviva - Sistema de Controle de Armazens'],
         ['Periodo', `${formatarData(dataInicio)} a ${formatarData(dataFim)}`],
-        ['Exportado em', formatarDataHora(new Date().toISOString().replace('T', ' ').slice(0, 19))],
+        ['Exportado em', formatarDataHora(agoraLocalTexto())],
         [],
         ['Data', 'Fechado em'],
         ...Array.from(fechamentosPorData.entries()).map(([d, fechado]) => [

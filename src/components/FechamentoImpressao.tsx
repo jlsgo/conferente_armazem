@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Armazem, Fechamento, Movimento } from '../types';
-import { motivoSacTexto, situacaoInfo } from '../lib/situacao';
-import { formatarData, formatarDataArquivo, formatarDataHora } from '../lib/data';
+import { motivoSacTexto, resumoMovimentos, situacaoInfo } from '../lib/situacao';
+import { agoraLocalTexto, formatarData, formatarDataArquivo, formatarDataHora } from '../lib/data';
 import { paraCsv, baixarCsv } from '../lib/csv';
 import { baixarXlsx } from '../lib/xlsx';
 import { colunasFechamento, rodapeAuditoria } from '../lib/exportFechamento';
@@ -23,6 +23,15 @@ const TITULOS: Record<Variante, string> = {
   sac: 'Controle de Saidas do SAC',
 };
 
+// Mesma cor usada no friso de cada aba do menu (ver global.css, "Cor por
+// aba") - repetida aqui como friso no topo da folha impressa, pra identificar
+// de relance de qual fluxo e o documento mesmo fora do sistema.
+const CORES_VARIANTE: Record<Variante, string> = {
+  armazem: 'var(--cor-lancamentos-escuro)',
+  montagem: 'var(--cor-montagem-escuro)',
+  sac: 'var(--cor-sac-escuro)',
+};
+
 // Largura (%) de cada coluna na impressao, na mesma ordem dos <th> abaixo -
 // sem isso o layout automatico espreme Coleta/Itens pra caber Observacoes,
 // forcando quebra de linha em quase toda linha e estourando pra 2-3 paginas.
@@ -40,11 +49,21 @@ export default function FechamentoImpressao({
   variante = 'armazem',
 }: Props) {
   const [exportandoXlsx, setExportandoXlsx] = useState(false);
-  const responsaveis = Array.from(new Set(lancamentos.map((m) => m.usuario_nome))).join(', ');
+  const nomesResponsaveis = Array.from(new Set(lancamentos.map((m) => m.usuario_nome)));
+  const responsaveis = nomesResponsaveis.join(', ');
+  // Quem assina fisicamente a folha: um bloco por conferente que lancou algo
+  // no dia. Se por algum motivo nao houver lancamento (fechamento de um dia
+  // vazio), cai pra quem fechou o dia.
+  const assinantes = nomesResponsaveis.length > 0 ? nomesResponsaveis : [fechamento.usuario_nome];
   const totalGeral = lancamentos.reduce(
     (soma, m) => soma + (m.estornado_de ? -1 : 1) * m.itens.reduce((s, it) => s + it.quantidade, 0),
     0
   );
+
+  // Resumo pra preencher com informacao util o espaco que sobra em dias com
+  // poucos lancamentos, em vez da folha terminar em branco logo apos a
+  // tabela.
+  const { porSituacao, porCategoria } = resumoMovimentos(lancamentos);
 
   function nomeBase(extensao: string): string {
     return `fechamento_${variante}_${armazem?.codigo ?? 'armazem'}_${formatarDataArquivo(data)}.${extensao}`;
@@ -74,19 +93,32 @@ export default function FechamentoImpressao({
   }
 
   return (
-    <section className="cartao area-impressao">
+    <section className="cartao area-impressao" style={{ borderTop: `4px solid ${CORES_VARIANTE[variante]}` }}>
       <div className="cabecalho-impressao">
         <h2>
           <img src={logoEcoviva} alt="Ecoviva" className="logo-impressao" />
-          {TITULOS[variante]} {armazem ? `- ${armazem.codigo}` : ''}
+          {TITULOS[variante]}
         </h2>
-        <p>
-          <strong>Data:</strong> {formatarData(data)} &nbsp; <strong>Responsavel(is):</strong> {responsaveis || '-'}
-          &nbsp; <strong>Fechado em:</strong> {formatarDataHora(fechamento.criado_em)} (por {fechamento.usuario_nome})
-        </p>
-        <p className="rodape-tabela">
-          hash de auditoria: {fechamento.hash_integridade.slice(0, 16)}...
-        </p>
+        <div className="ficha-campos">
+          <div>
+            <span className="ficha-rotulo">Armazem</span>
+            <span className="ficha-valor">{armazem ? `${armazem.nome} (${armazem.codigo})` : '-'}</span>
+          </div>
+          <div>
+            <span className="ficha-rotulo">Data</span>
+            <span className="ficha-valor">{formatarData(data)}</span>
+          </div>
+          <div>
+            <span className="ficha-rotulo">Fechado em</span>
+            <span className="ficha-valor">
+              {formatarDataHora(fechamento.criado_em)} (por {fechamento.usuario_nome})
+            </span>
+          </div>
+          <div>
+            <span className="ficha-rotulo">Responsavel(is)</span>
+            <span className="ficha-valor">{responsaveis || '-'}</span>
+          </div>
+        </div>
       </div>
 
       <div className="tabela-scroll">
@@ -180,9 +212,37 @@ export default function FechamentoImpressao({
         </p>
       )}
 
-      <div className="assinatura">
-        <div className="linha-assinatura" />
-        <p>Assinatura da conferente responsavel</p>
+      <div className="resumo-fechamento">
+        <span>
+          <strong>Por situacao:</strong>{' '}
+          {Object.entries(porSituacao)
+            .map(([s, n]) => `${s}: ${n}`)
+            .join(' · ') || '-'}
+        </span>
+        <span>
+          <strong>Por categoria:</strong>{' '}
+          {Object.entries(porCategoria)
+            .map(([c, n]) => `${n}x ${c}`)
+            .join(' · ') || '-'}
+        </span>
+      </div>
+
+      <div className="area-assinaturas">
+        {assinantes.map((nome) => (
+          <div className="assinatura" key={nome}>
+            <div className="linha-assinatura" />
+            <p>Assinatura - {nome}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="rodape-documento">
+        <span>Ecoviva - Sistema de Controle de Armazens</span>
+        <span>hash de auditoria: {fechamento.hash_integridade.slice(0, 16)}...</span>
+        <span>
+          Documento impresso em:{' '}
+          {formatarDataHora(agoraLocalTexto())}
+        </span>
       </div>
 
       <div className="somente-tela" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

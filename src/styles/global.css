@@ -488,6 +488,25 @@ tbody tr:last-child td {
   color: var(--aviso-escuro);
 }
 
+/* Contador de transferencias pendentes de confirmacao nas abas do menu
+   (Dashboard.tsx) - precisa chamar atencao (mesma cor de "aviso") pra nao
+   passar despercebido, ja que antes so aparecia dentro da propria aba. */
+/* Composta com .badge (base: border-radius/font-weight/letter-spacing ja
+   vem de la) - so o que muda pro contador circular pequeno: layout
+   flex-centralizado, tamanho fixo e cor de aviso. */
+.badge-notificacao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: var(--aviso);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+}
+
 .carregando {
   color: var(--texto-suave);
   padding: 32px 0;
@@ -565,6 +584,25 @@ tbody tr:last-child td {
   border-radius: var(--raio-sm);
   font-size: 14px;
   margin-bottom: 16px;
+}
+
+/* Faixa de insights ao vivo (ResumoDoDia.tsx) - discreta de proposito, pra
+   nao competir com o formulario de lancamento que e o foco real da tela. */
+.resumo-do-dia {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  background: var(--fundo);
+  border: 1px solid var(--borda);
+  color: var(--texto-suave);
+  padding: 8px 14px;
+  border-radius: var(--raio-sm);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.resumo-do-dia strong {
+  color: var(--texto);
 }
 
 /* Notificacoes flutuantes pra falhas de fundo (rede/sync) que nao devem
@@ -660,14 +698,63 @@ tbody tr:last-child td {
   margin-right: 8px;
 }
 
+/* Cabecalho em formato de ficha (rotulo: valor em grade) em vez de texto
+   corrido - le mais como um documento oficial. */
+.ficha-campos {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px 32px;
+  margin-top: 6px;
+}
+
+.ficha-campos > div {
+  display: flex;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.ficha-rotulo {
+  font-weight: 600;
+  color: var(--texto-suave);
+  min-width: 100px;
+}
+
+.ficha-valor {
+  color: var(--texto);
+}
+
 .total-fechamento {
   font-size: 14px;
   margin-top: 10px;
 }
 
-.assinatura {
+/* Resumo (contadores por situacao/categoria) entre a tabela e a assinatura -
+   preenche com informacao util o espaco que sobraria em branco num dia com
+   poucos lancamentos. */
+.resumo-fechamento {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 32px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--borda);
+  font-size: 13px;
+}
+
+.resumo-fechamento strong {
+  color: var(--texto-suave);
+}
+
+.area-assinaturas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
   margin-top: 56px;
-  max-width: 360px;
+}
+
+.assinatura {
+  flex: 1 1 200px;
+  max-width: 240px;
 }
 
 .linha-assinatura {
@@ -680,6 +767,22 @@ tbody tr:last-child td {
   font-size: 13px;
   color: var(--texto-suave);
   text-align: center;
+}
+
+/* Rodape do documento - fixado no fim da folha impressa (ver
+   `.area-impressao` em @media print) pra folha nao "morrer" em branco num dia
+   com poucos lancamentos, e pra deixar claro quando esta copia especifica foi
+   impressa/gerada (diferente de "Fechado em", que e quando o dia foi
+   travado no sistema). */
+.rodape-documento {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  margin-top: 24px;
+  padding-top: 8px;
+  border-top: 1px solid var(--borda);
+  font-size: 11px;
+  color: var(--texto-suave);
 }
 
 /* Impressao do fechamento: so a area-impressao aparece, no tamanho A4. */
@@ -700,12 +803,24 @@ tbody tr:last-child td {
     left: 0;
     width: 100%;
     max-width: none;
-    border: none;
+    /* Moldura do documento - fina e neutra, o friso colorido no topo (inline
+       style por variante, ver FechamentoImpressao.tsx) fica por cima disso. */
+    border: 1px solid var(--texto);
     box-shadow: none;
     /* .cartao tem padding:32px pra tela - em papel a margem do @page ja
-       resolve isso, e manter esse padding aqui sozinho custava ~17mm de
-       altura util, o suficiente pra empurrar a tabela pra outra pagina. */
-    padding: 0;
+       resolve boa parte disso; 2mm da folha um acabamento de moldura sem
+       custar a altura util que os 32px custavam (seriam ~17mm, o suficiente
+       pra empurrar a tabela pra outra pagina). */
+    padding: 2mm;
+    /* Flex coluna com altura minima = altura util da pagina (A4 landscape
+       210mm - 2x5mm de margem do @page abaixo) - permite que
+       `.rodape-documento` (margin-top:auto) fique sempre ancorado no fim da
+       folha em dias com poucos lancamentos, em vez da pagina "morrer" em
+       branco logo apos a assinatura. Em dias cheios (~40 linhas) o conteudo
+       so cresce alem desse minimo, igual ja acontecia antes. */
+    display: flex;
+    flex-direction: column;
+    min-height: 200mm;
   }
   .somente-tela {
     display: none !important;
@@ -750,9 +865,15 @@ tbody tr:last-child td {
   .area-impressao .cabecalho-impressao {
     margin-bottom: 4px;
   }
-  .area-impressao .cabecalho-impressao p {
-    margin: 1px 0;
+  .area-impressao .ficha-campos {
+    margin-top: 2px;
+    gap: 1px 20px;
+  }
+  .area-impressao .ficha-campos > div {
     font-size: 9px;
+  }
+  .area-impressao .ficha-rotulo {
+    min-width: 60px;
   }
   .area-impressao .rodape-tabela {
     font-size: 8px;
@@ -762,8 +883,32 @@ tbody tr:last-child td {
     font-size: 9px;
     margin-top: 2px;
   }
+  .area-impressao .resumo-fechamento {
+    font-size: 8.5px;
+    gap: 2px 20px;
+    margin-top: 3px;
+    padding-top: 2px;
+  }
+  .area-impressao .area-assinaturas {
+    margin-top: 2mm;
+    gap: 14mm;
+  }
   .area-impressao .assinatura {
-    margin-top: 4mm;
+    max-width: 55mm;
+  }
+  .area-impressao .linha-assinatura {
+    margin-bottom: 2px;
+  }
+  .area-impressao .assinatura p {
+    font-size: 9px;
+  }
+  /* margin-top:auto dentro do flex-column de .area-impressao empurra o
+     rodape pro fim da folha (ver comentario em .area-impressao acima). */
+  .area-impressao .rodape-documento {
+    margin-top: auto;
+    padding-top: 2px;
+    font-size: 7.5px;
+    gap: 2px 14px;
   }
   @page {
     /* Paisagem pra caber a tabela (10 colunas em Saida de Armazem, com

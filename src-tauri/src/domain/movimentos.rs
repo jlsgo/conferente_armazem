@@ -5,17 +5,22 @@ use sha2::{Digest, Sha256};
 use super::auth::buscar_usuario_ativo;
 use super::errors::{AppError, AppResult};
 
-const CATEGORIAS_VALIDAS: [&str; 4] = ["scooter", "triciclo", "patinete", "peca"];
+/// "outro" e uma valvula de escape deliberada, nao um catalogo aberto: ainda
+/// e uma lista curta e fixa, so que agora cobre o caso raro que nao se encaixa
+/// nas outras 4 - exige observacao preenchida (ver `validar_novo_movimento`),
+/// entao sempre fica registrado o que era de fato.
+const CATEGORIAS_VALIDAS: [&str; 5] = ["scooter", "triciclo", "patinete", "peca", "outro"];
 const FLUXOS_VALIDOS: [&str; 3] = ["saida_armazem", "peca_montagem", "sac"];
 const TIPOS_VALIDOS: [&str; 2] = ["entrada", "saida"];
 const TURNOS_VALIDOS: [&str; 2] = ["diurno", "noturno"];
 const MONTAGENS_VALIDAS: [&str; 2] = ["montado", "caixa"];
-const CONDICOES_VALIDAS: [&str; 3] = ["boa", "defeito", "sucata"];
-const MOTIVOS_SAC_ENTRADA_VALIDOS: [&str; 2] = ["garantia", "venda"];
-/// Saida do SAC: peca entregue de volta ao cliente (consertada, trocada) ou
-/// descartada por nao ter conserto - nao existe "devolvida ao fabricante"
-/// hoje, confirmado com o cliente.
-const MOTIVOS_SAC_SAIDA_VALIDOS: [&str; 2] = ["entregue", "descarte"];
+const CONDICOES_VALIDAS: [&str; 4] = ["boa", "defeito", "sucata", "outro"];
+const MOTIVOS_SAC_ENTRADA_VALIDOS: [&str; 3] = ["garantia", "venda", "outro"];
+/// Saida do SAC: peca entregue de volta ao cliente (consertada, trocada),
+/// descartada por nao ter conserto, ou resolvida como garantia/venda (troca
+/// por peca nova sob garantia, ou vendida como reposicao) - nao existe
+/// "devolvida ao fabricante" hoje, confirmado com o cliente.
+const MOTIVOS_SAC_SAIDA_VALIDOS: [&str; 5] = ["entregue", "descarte", "garantia", "venda", "outro"];
 const TEXTO_LIVRE_MAX: usize = 500;
 const QUANTIDADE_MAX: i64 = 100_000;
 
@@ -134,6 +139,19 @@ fn validar_texto_livre(campo: &str, valor: Option<&str>) -> AppResult<()> {
     Ok(())
 }
 
+/// "outro" (categoria/condicao/motivo) so e aceito com um texto livre
+/// explicando o que era de fato - senao a palavra sozinha nao diz nada pra
+/// quem le o historico/impressao depois. `campo_erro` e o nome do campo que
+/// deveria ter o detalhe (aparece na mensagem de erro).
+fn exigir_detalhe_para_outro(detalhe: Option<&str>, campo_erro: &str) -> AppResult<()> {
+    match detalhe {
+        Some(d) if !d.trim().is_empty() => Ok(()),
+        _ => Err(AppError::Validation(format!(
+            "Descreva {campo_erro} quando escolher 'Outro'."
+        ))),
+    }
+}
+
 fn validar_novo_movimento(novo: &NovoMovimento) -> AppResult<()> {
     if !FLUXOS_VALIDOS.contains(&novo.fluxo.as_str()) {
         return Err(AppError::Validation(format!(
@@ -182,12 +200,12 @@ fn validar_novo_movimento(novo: &NovoMovimento) -> AppResult<()> {
             Some(motivo) if motivos_validos.contains(&motivo) => {}
             _ if novo.tipo == "saida" => {
                 return Err(AppError::Validation(
-                    "Informe o motivo da saida do SAC: entregue ao cliente ou descarte.".into(),
+                    "Informe o motivo da saida do SAC: entregue ao cliente, descarte, garantia, venda ou outro.".into(),
                 ));
             }
             _ => {
                 return Err(AppError::Validation(
-                    "Informe o motivo do SAC: garantia ou venda.".into(),
+                    "Informe o motivo do SAC: garantia, venda ou outro.".into(),
                 ));
             }
         }
@@ -200,6 +218,9 @@ fn validar_novo_movimento(novo: &NovoMovimento) -> AppResult<()> {
                     ));
                 }
             }
+        }
+        if novo.motivo.as_deref() == Some("outro") {
+            exigir_detalhe_para_outro(novo.observacoes.as_deref(), "o motivo nas observacoes")?;
         }
     }
 
@@ -235,11 +256,14 @@ fn validar_novo_movimento(novo: &NovoMovimento) -> AppResult<()> {
             }
         } else if novo.fluxo == "peca_montagem" {
             return Err(AppError::Validation(
-                "Informe a condicao da peca: boa, defeito ou sucata.".into(),
+                "Informe a condicao da peca: boa, defeito, sucata ou outro.".into(),
             ));
         }
         validar_texto_livre("Descricao do item", item.descricao.as_deref())?;
         validar_texto_livre("Observacao do item", item.observacao.as_deref())?;
+        if item.categoria == "outro" || item.condicao.as_deref() == Some("outro") {
+            exigir_detalhe_para_outro(item.observacao.as_deref(), "o item na observacao")?;
+        }
     }
     Ok(())
 }
@@ -523,8 +547,10 @@ pub fn criar_movimento(conn: &mut Connection, novo: NovoMovimento) -> AppResult<
             armazem_id, armazem_destino_id, fluxo, tipo, data, hora, turno, usuario_id,
             numero_pedido, codigo_rastreio, contraparte, quem_retirou,
             motivo, valor_centavos, observacoes, status,
-            recebido_de_armazem_codigo, recebido_de_id_origem, retirada_completa, hash_integridade
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 'aberto', ?16, ?17, ?18, ?19)",
+            recebido_de_armazem_codigo, recebido_de_id_origem, retirada_completa, hash_integridade,
+            criado_em
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 'aberto', ?16, ?17, ?18, ?19,
+            datetime('now', 'localtime'))",
         params![
             novo.armazem_id,
             novo.armazem_destino_id,
@@ -674,8 +700,10 @@ pub fn estornar_movimento(
         "INSERT INTO movimentos (
             armazem_id, armazem_destino_id, fluxo, tipo, data, hora, turno, usuario_id,
             numero_pedido, codigo_rastreio, contraparte, quem_retirou,
-            motivo, valor_centavos, observacoes, status, estornado_de, retirada_completa, hash_integridade
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 'estorno', ?16, ?17, ?18)",
+            motivo, valor_centavos, observacoes, status, estornado_de, retirada_completa, hash_integridade,
+            criado_em
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 'estorno', ?16, ?17, ?18,
+            datetime('now', 'localtime'))",
         params![
             original.armazem_id,
             None::<i64>,
@@ -1466,6 +1494,49 @@ mod tests {
     }
 
     #[test]
+    fn rejeita_categoria_outro_sem_observacao() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.itens[0].categoria = "outro".into();
+        assert!(matches!(
+            criar_movimento(&mut conn, novo),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn aceita_categoria_outro_com_observacao() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.itens[0].categoria = "outro".into();
+        novo.itens[0].observacao = Some("Kit de ferramentas avulso".into());
+        assert!(criar_movimento(&mut conn, novo).is_ok());
+    }
+
+    #[test]
+    fn rejeita_condicao_outro_sem_observacao() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.fluxo = "peca_montagem".into();
+        novo.itens[0].condicao = Some("outro".into());
+        assert!(matches!(
+            criar_movimento(&mut conn, novo),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn aceita_condicao_outro_com_observacao() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.fluxo = "peca_montagem".into();
+        novo.itens[0].condicao = Some("outro".into());
+        novo.itens[0].observacao =
+            Some("Peca meio amassada, nao se encaixa em nenhuma das 3".into());
+        assert!(criar_movimento(&mut conn, novo).is_ok());
+    }
+
+    #[test]
     fn rejeita_sac_sem_motivo() {
         let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
         let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
@@ -1543,13 +1614,73 @@ mod tests {
     }
 
     #[test]
-    fn rejeita_sac_saida_com_motivo_de_entrada() {
+    fn aceita_sac_saida_garantia() {
         let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
         let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
         novo.fluxo = "sac".into();
         novo.tipo = "saida".into();
         novo.motivo = Some("garantia".into());
-        assert!(criar_movimento(&mut conn, novo).is_err());
+        assert!(criar_movimento(&mut conn, novo).is_ok());
+    }
+
+    #[test]
+    fn aceita_sac_saida_venda_com_valor() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.fluxo = "sac".into();
+        novo.tipo = "saida".into();
+        novo.motivo = Some("venda".into());
+        novo.valor_centavos = Some(15_000);
+        assert!(criar_movimento(&mut conn, novo).is_ok());
+    }
+
+    #[test]
+    fn rejeita_sac_saida_venda_sem_valor() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.fluxo = "sac".into();
+        novo.tipo = "saida".into();
+        novo.motivo = Some("venda".into());
+        novo.valor_centavos = None;
+        assert!(matches!(
+            criar_movimento(&mut conn, novo),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn rejeita_sac_motivo_outro_sem_observacoes() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.fluxo = "sac".into();
+        novo.tipo = "entrada".into();
+        novo.motivo = Some("outro".into());
+        assert!(matches!(
+            criar_movimento(&mut conn, novo),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn aceita_sac_motivo_outro_com_observacoes() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.fluxo = "sac".into();
+        novo.tipo = "entrada".into();
+        novo.motivo = Some("outro".into());
+        novo.observacoes = Some("Cliente trouxe peca sem nota, caso atipico".into());
+        assert!(criar_movimento(&mut conn, novo).is_ok());
+    }
+
+    #[test]
+    fn aceita_sac_saida_motivo_outro_com_observacoes() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.fluxo = "sac".into();
+        novo.tipo = "saida".into();
+        novo.motivo = Some("outro".into());
+        novo.observacoes = Some("Peca ficou retida com o tecnico, fora do fluxo normal".into());
+        assert!(criar_movimento(&mut conn, novo).is_ok());
     }
 
     // --- Stage 3: hash de auditoria e verificacao de cadeia ---

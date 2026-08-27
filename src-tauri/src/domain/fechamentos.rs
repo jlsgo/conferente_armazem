@@ -155,8 +155,8 @@ pub fn fechar_dia(
     let tx = conn.transaction()?;
 
     tx.execute(
-        "INSERT INTO fechamentos (armazem_id, fluxo, data, usuario_id, total_itens, hash_integridade)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        "INSERT INTO fechamentos (armazem_id, fluxo, data, usuario_id, total_itens, hash_integridade, criado_em)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now', 'localtime'))",
         params![armazem_id, fluxo, data, usuario_id, total_itens, hash],
     )?;
 

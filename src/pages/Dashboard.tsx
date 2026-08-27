@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
-import type { Armazem, StatusSincronizacao, Usuario } from '../types';
+import type { Armazem, Fluxo, StatusSincronizacao, Usuario } from '../types';
 import Lancamentos from './Lancamentos';
 import Montagem from './Montagem';
 import Sac from './Sac';
 import Historico from './Historico';
 import Usuarios from './Usuarios';
 import logoEcoviva from '../assets/ecoviva-logo.png';
-import { sincronizarAgora, statusSincronizacao } from '../lib/api';
+import { buscarTransferenciasPendentes, sincronizarAgora, statusSincronizacao } from '../lib/api';
 import { IconAjuste, IconCaixa, IconChat, IconLogout, IconRelogio, IconSpinner, IconUsuarios } from '../components/Icon';
 import { useToast } from '../lib/toast';
 
 const INTERVALO_RETRY_SYNC_MS = 5 * 60 * 1000;
+const INTERVALO_PENDENTES_MS = 60 * 1000;
 
 interface Props {
   usuario: Usuario;
@@ -27,10 +28,25 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
 
   const [sincronizando, setSincronizando] = useState(false);
   const [statusSync, setStatusSync] = useState<StatusSincronizacao | null>(null);
+  const [pendentesPorFluxo, setPendentesPorFluxo] = useState<Partial<Record<Fluxo, number>>>({});
   const { notificar } = useToast();
 
   async function atualizarStatusSync() {
     if (ehGestor) setStatusSync(await statusSincronizacao());
+  }
+
+  async function atualizarPendentes() {
+    try {
+      const todas = await buscarTransferenciasPendentes();
+      const contagem: Partial<Record<Fluxo, number>> = {};
+      for (const t of todas) {
+        contagem[t.fluxo] = (contagem[t.fluxo] ?? 0) + 1;
+      }
+      setPendentesPorFluxo(contagem);
+    } catch {
+      // So um atalho visual (contador nas abas) - a tela de cada fluxo ja
+      // mostra erro de verdade, com retry, se isso falhar de novo por la.
+    }
   }
 
   async function handleSincronizar(manual: boolean) {
@@ -44,6 +60,7 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
       );
     }
     await atualizarStatusSync();
+    await atualizarPendentes();
   }
 
   useEffect(() => {
@@ -55,6 +72,15 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
     return () => clearInterval(intervalo);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ehGestor]);
+
+  // Contador de transferencias pendentes nas abas - pra qualquer usuario (nao
+  // so gestor), ja que quem recebe fisicamente e confirma e o conferente.
+  useEffect(() => {
+    atualizarPendentes();
+    const intervalo = setInterval(atualizarPendentes, INTERVALO_PENDENTES_MS);
+    return () => clearInterval(intervalo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="pagina">
@@ -97,6 +123,11 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
         >
           <IconCaixa size={15} />
           Saida de Armazem
+          {!!pendentesPorFluxo.saida_armazem && (
+            <span className="badge badge-notificacao" title="Transferencias aguardando confirmacao">
+              {pendentesPorFluxo.saida_armazem}
+            </span>
+          )}
         </button>
         <button
           className={`aba-montagem${aba === 'montagem' ? ' ativo' : ''}`}
@@ -104,6 +135,11 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
         >
           <IconAjuste size={15} />
           Montagem
+          {!!pendentesPorFluxo.peca_montagem && (
+            <span className="badge badge-notificacao" title="Transferencias aguardando confirmacao">
+              {pendentesPorFluxo.peca_montagem}
+            </span>
+          )}
         </button>
         <button className={`aba-sac${aba === 'sac' ? ' ativo' : ''}`} onClick={() => setAba('sac')}>
           <IconChat size={15} />
@@ -128,8 +164,22 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
       </nav>
 
       <main className={`conteudo-aba conteudo-aba-${aba}`}>
-        {aba === 'lancamentos' && <Lancamentos usuario={usuario} armazem={armazem} armazens={armazens} />}
-        {aba === 'montagem' && <Montagem usuario={usuario} armazem={armazem} armazens={armazens} />}
+        {aba === 'lancamentos' && (
+          <Lancamentos
+            usuario={usuario}
+            armazem={armazem}
+            armazens={armazens}
+            onTransferenciaConfirmada={atualizarPendentes}
+          />
+        )}
+        {aba === 'montagem' && (
+          <Montagem
+            usuario={usuario}
+            armazem={armazem}
+            armazens={armazens}
+            onTransferenciaConfirmada={atualizarPendentes}
+          />
+        )}
         {aba === 'sac' && <Sac usuario={usuario} armazem={armazem} />}
         {aba === 'historico' && <Historico usuario={usuario} />}
         {aba === 'usuarios' && ehGestor && <Usuarios armazens={armazens} />}

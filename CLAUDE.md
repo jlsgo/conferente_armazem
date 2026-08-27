@@ -54,13 +54,24 @@ actually build and run for local testing.
   `rusqlite_migration`. Never edit an already-committed migration — add a new numbered
   file for schema changes.
 - **No product catalog.** `movimento_itens` has a fixed-set `categoria`
-  (`scooter`/`triciclo`/`patinete`/`peca`) plus a free-text, optional `descricao`.
-  Autocomplete suggestions come from `domain::movimentos::sugestoes_descricao`, which
-  queries distinct past `descricao` values for that category — not a maintained lookup
-  table. This was a deliberate simplification after the client clarified the product
-  variety (scooters/tricycles/patinetes/parts) was too large for a fixed catalog, and
-  that vehicle orders already have full detail in an external tool, referenced here by
-  `numero_pedido`.
+  (`scooter`/`triciclo`/`patinete`/`peca`/`outro`) plus a free-text, optional
+  `descricao`. Autocomplete suggestions come from `domain::movimentos::sugestoes_descricao`,
+  which queries distinct past `descricao` values for that category — not a maintained
+  lookup table. This was a deliberate simplification after the client clarified the
+  product variety (scooters/tricycles/patinetes/parts) was too large for a fixed
+  catalog, and that vehicle orders already have full detail in an external tool,
+  referenced here by `numero_pedido`. `outro` is a deliberate escape hatch (still a
+  short fixed list, not an open catalog) for the rare item that doesn't fit the other
+  4 — `domain::movimentos::validar_novo_movimento` requires the item's `observacao` to
+  be non-empty whenever `categoria` (or, for `peca_montagem`, `condicao`) is `outro`,
+  so what it actually was is always on record. The same `outro` + mandatory-detail
+  pattern applies to `condicao` (`boa`/`defeito`/`sucata`/`outro`, `peca_montagem`
+  items) and to SAC `motivo` (`outro` added to both `MOTIVOS_SAC_ENTRADA_VALIDOS` and
+  `MOTIVOS_SAC_SAIDA_VALIDOS` — the movement-level `observacoes` is required instead of
+  the item's, since motivo is a movement field). The item's `montagem`
+  (`montado`/`caixa`) is the one exception: it's optional to begin with, so its "Outro"
+  in the UI is frontend-only — it just clears the field to `null` and nudges for an
+  observação, never sends a literal `"outro"` value to the backend.
 - **Three `fluxo` values exist in the schema** (`saida_armazem`, `peca_montagem`, `sac`),
   matching the three paper control sheets the client actually uses, each with its own
   screen: `src/pages/Lancamentos.tsx` (vehicles), `src/pages/Montagem.tsx` (loose parts

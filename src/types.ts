@@ -18,11 +18,11 @@ export interface Usuario {
   ativo: boolean;
 }
 
-export type Categoria = 'scooter' | 'triciclo' | 'patinete' | 'peca';
+export type Categoria = 'scooter' | 'triciclo' | 'patinete' | 'peca' | 'outro';
 export type TipoMovimento = 'entrada' | 'saida';
 export type Fluxo = 'saida_armazem' | 'peca_montagem' | 'sac';
 export type Montagem = 'montado' | 'caixa';
-export type Condicao = 'boa' | 'defeito' | 'sucata';
+export type Condicao = 'boa' | 'defeito' | 'sucata' | 'outro';
 
 export interface MovimentoItemInput {
   categoria: Categoria;

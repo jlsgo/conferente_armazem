@@ -21,20 +21,27 @@ import {
 import FechamentoImpressao from '../components/FechamentoImpressao';
 import Carregando from '../components/Carregando';
 import TransferenciasChegando from '../components/TransferenciasChegando';
+import ResumoDoDia from '../components/ResumoDoDia';
 import { situacaoInfo } from '../lib/situacao';
 import { formatarData } from '../lib/data';
+import { algumCampoEhOutro } from '../lib/outro';
 import { useToast } from '../lib/toast';
 
 interface Props {
   usuario: Usuario;
   armazem: Armazem | undefined;
   armazens: Armazem[];
+  /** Avisa o Dashboard pra atualizar o contador de pendentes nas abas na hora, sem esperar o polling de 60s. */
+  onTransferenciaConfirmada?: () => void;
 }
 
 interface ItemForm {
   categoria: Categoria;
   descricao: string;
-  montagem: MontagemVeiculo | '';
+  // 'outro' aqui e so um estado de UI - na hora de enviar vira null (o campo
+  // e opcional, ao contrario de condicao que exige a palavra "outro" de
+  // verdade - ver `itemPrecisaObservacao`).
+  montagem: MontagemVeiculo | '' | 'outro';
   condicao: Condicao | '';
   quantidade: number;
   observacao: string;
@@ -47,9 +54,14 @@ const CATEGORIAS: { valor: Categoria; rotulo: string }[] = [
   { valor: 'scooter', rotulo: 'Scooter' },
   { valor: 'triciclo', rotulo: 'Triciclo' },
   { valor: 'patinete', rotulo: 'Patinete' },
+  { valor: 'outro', rotulo: 'Outro' },
 ];
 
 const CATEGORIAS_VEICULO: Categoria[] = ['scooter', 'triciclo', 'patinete'];
+
+function itemPrecisaObservacao(item: Pick<ItemForm, 'categoria' | 'montagem' | 'condicao'>): boolean {
+  return algumCampoEhOutro(item.categoria, item.montagem, item.condicao);
+}
 
 function dataDeHoje(): string {
   const agora = new Date();
@@ -68,7 +80,7 @@ function novoItemVazio(): ItemForm {
   return { categoria: 'peca', descricao: '', montagem: '', condicao: '', quantidade: 1, observacao: '' };
 }
 
-export default function Montagem({ usuario, armazem, armazens }: Props) {
+export default function Montagem({ usuario, armazem, armazens, onTransferenciaConfirmada }: Props) {
   const armazemId = usuario.armazem_id as number;
   const data = dataDeHoje();
   const outroArmazem = armazens.find((a) => a.id !== armazem?.id);
@@ -149,11 +161,15 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
     setErro('');
 
     if (itens.some((it) => !it.condicao)) {
-      setErro('Informe a condicao (boa, defeito ou sucata) de cada item.');
+      setErro('Informe a condicao (boa, defeito, sucata ou outro) de cada item.');
       return;
     }
     if (tipo === 'saida' && destino === 'externo' && !enviadoPara.trim()) {
       setErro('Informe pra quem foi enviado (ex: nome do tecnico).');
+      return;
+    }
+    if (itens.some((it) => it.quantidade > 0 && itemPrecisaObservacao(it) && !it.observacao.trim())) {
+      setErro('Descreva o item na observacao quando escolher "Outro" na categoria, montagem ou condicao.');
       return;
     }
 
@@ -162,7 +178,7 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
       .map((it) => ({
         categoria: it.categoria,
         descricao: it.descricao.trim() || null,
-        montagem: it.montagem || null,
+        montagem: it.montagem === 'outro' ? null : it.montagem || null,
         condicao: it.condicao || null,
         quantidade: it.quantidade,
         observacao: it.observacao.trim() || null,
@@ -333,7 +349,15 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
 
   return (
     <div>
-      <TransferenciasChegando fluxo="peca_montagem" outroArmazem={outroArmazem} onConfirmado={carregarTudo} />
+      <ResumoDoDia lancamentos={lancamentos} />
+      <TransferenciasChegando
+        fluxo="peca_montagem"
+        outroArmazem={outroArmazem}
+        onConfirmado={async () => {
+          await carregarTudo();
+          onTransferenciaConfirmada?.();
+        }}
+      />
 
       <section className="cartao">
         <h2>Registrar {tipo === 'saida' ? 'saida' : 'entrada'} do galpao</h2>
@@ -415,11 +439,14 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
               {CATEGORIAS_VEICULO.includes(item.categoria) ? (
                 <select
                   value={item.montagem}
-                  onChange={(e) => atualizarItem(indice, { montagem: e.target.value as MontagemVeiculo | '' })}
+                  onChange={(e) =>
+                    atualizarItem(indice, { montagem: e.target.value as MontagemVeiculo | '' | 'outro' })
+                  }
                 >
                   <option value="">Montagem</option>
                   <option value="montado">Montado</option>
                   <option value="caixa">Em caixa</option>
+                  <option value="outro">Outro</option>
                 </select>
               ) : (
                 // Placeholder vazio pra manter o numero de colunas do grid
@@ -437,12 +464,20 @@ export default function Montagem({ usuario, armazem, armazens }: Props) {
                 <option value="boa">Boa</option>
                 <option value="defeito">Defeito</option>
                 <option value="sucata">Sucata</option>
+                <option value="outro">Outro</option>
               </select>
 
               <input
                 value={item.observacao}
                 onChange={(e) => atualizarItem(indice, { observacao: e.target.value })}
-                placeholder={tipo === 'saida' && destino === 'externo' ? 'Codigo/serie da peca' : 'Observacao (opcional)'}
+                placeholder={
+                  itemPrecisaObservacao(item)
+                    ? 'Descreva o item (obrigatorio)'
+                    : tipo === 'saida' && destino === 'externo'
+                      ? 'Codigo/serie da peca'
+                      : 'Observacao (opcional)'
+                }
+                required={itemPrecisaObservacao(item)}
               />
 
               <input

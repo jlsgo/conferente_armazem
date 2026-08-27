@@ -10,6 +10,7 @@ import {
 } from '../lib/api';
 import FechamentoImpressao from '../components/FechamentoImpressao';
 import Carregando from '../components/Carregando';
+import ResumoDoDia from '../components/ResumoDoDia';
 import { motivoSacTexto, situacaoInfo } from '../lib/situacao';
 import { formatarData } from '../lib/data';
 import { useToast } from '../lib/toast';
@@ -19,8 +20,8 @@ interface Props {
   armazem: Armazem | undefined;
 }
 
-type MotivoEntrada = 'garantia' | 'venda';
-type MotivoSaida = 'entregue' | 'descarte';
+type MotivoEntrada = 'garantia' | 'venda' | 'outro';
+type MotivoSaida = 'entregue' | 'descarte' | 'garantia' | 'venda' | 'outro';
 type Motivo = MotivoEntrada | MotivoSaida;
 
 interface ItemForm {
@@ -62,6 +63,7 @@ export default function Sac({ usuario, armazem }: Props) {
   const [coleta, setColeta] = useState('');
   const [motivo, setMotivo] = useState<Motivo | ''>('');
   const [valorReais, setValorReais] = useState('');
+  const [observacoes, setObservacoes] = useState('');
   const [itens, setItens] = useState<ItemForm[]>([novoItemVazio()]);
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -121,17 +123,25 @@ export default function Sac({ usuario, armazem }: Props) {
     setErro('');
 
     if (!motivo) {
-      setErro(tipo === 'entrada' ? 'Informe se e garantia ou venda.' : 'Informe se foi entregue ao cliente ou descarte.');
+      setErro(
+        tipo === 'entrada'
+          ? 'Informe se e garantia, venda ou outro.'
+          : 'Informe o motivo da saida: entregue, descarte, garantia, venda ou outro.'
+      );
       return;
     }
     let valorCentavos: number | null = null;
-    if (tipo === 'entrada' && motivo === 'venda') {
+    if (motivo === 'venda') {
       const valor = Number(valorReais.replace(',', '.'));
       if (!valorReais || Number.isNaN(valor) || valor <= 0) {
         setErro('Informe o valor da venda.');
         return;
       }
       valorCentavos = Math.round(valor * 100);
+    }
+    if (motivo === 'outro' && !observacoes.trim()) {
+      setErro('Descreva o motivo nas observacoes quando escolher "Outro".');
+      return;
     }
 
     const itensValidos: MovimentoItemInput[] = itens
@@ -159,6 +169,7 @@ export default function Sac({ usuario, armazem }: Props) {
       contraparte: coleta || null,
       motivo,
       valor_centavos: valorCentavos,
+      observacoes: observacoes.trim() || null,
       itens: itensValidos,
     });
     setEnviando(false);
@@ -172,6 +183,7 @@ export default function Sac({ usuario, armazem }: Props) {
     setColeta('');
     setMotivo('');
     setValorReais('');
+    setObservacoes('');
     limparFormulario();
     await carregarTudo();
   }
@@ -297,6 +309,7 @@ export default function Sac({ usuario, armazem }: Props) {
 
   return (
     <div>
+      <ResumoDoDia lancamentos={lancamentos} />
       <section className="cartao">
         <h2>Registrar atendimento SAC</h2>
         <p className="subtitulo">
@@ -349,24 +362,28 @@ export default function Sac({ usuario, armazem }: Props) {
             </label>
 
             <label>
-              {tipo === 'entrada' ? 'Garantia ou venda' : 'Entregue ou descarte'}
+              {tipo === 'entrada' ? 'Garantia ou venda' : 'Motivo da saida'}
               <select value={motivo} onChange={(e) => setMotivo(e.target.value as Motivo | '')} required>
                 <option value="">Selecione</option>
                 {tipo === 'entrada' ? (
                   <>
                     <option value="garantia">Garantia</option>
                     <option value="venda">Venda</option>
+                    <option value="outro">Outro</option>
                   </>
                 ) : (
                   <>
                     <option value="entregue">Entregue ao cliente</option>
                     <option value="descarte">Descarte (sucata)</option>
+                    <option value="garantia">Garantia</option>
+                    <option value="venda">Venda</option>
+                    <option value="outro">Outro</option>
                   </>
                 )}
               </select>
             </label>
 
-            {tipo === 'entrada' && motivo === 'venda' && (
+            {motivo === 'venda' && (
               <label>
                 Valor da venda (R$)
                 <input
@@ -381,6 +398,21 @@ export default function Sac({ usuario, armazem }: Props) {
               </label>
             )}
           </div>
+
+          <label>
+            Observacoes {motivo === 'outro' && '(obrigatorio - descreva o motivo)'}
+            <textarea
+              value={observacoes}
+              onChange={(e) => setObservacoes(e.target.value)}
+              rows={2}
+              placeholder={
+                motivo === 'outro'
+                  ? 'Descreva o que aconteceu com esse atendimento'
+                  : 'Opcional - qualquer detalhe que nao caiba nos campos acima'
+              }
+              required={motivo === 'outro'}
+            />
+          </label>
 
           <h3>Pecas deste atendimento</h3>
           {itens.map((item, indice) => (

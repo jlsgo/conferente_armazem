@@ -1,5 +1,5 @@
 import type { Fechamento, Movimento } from '../types';
-import { formatarDataHora } from './data';
+import { agoraLocalTexto, formatarDataHora } from './data';
 import { motivoSacTexto, situacaoInfo } from './situacao';
 
 type Variante = 'armazem' | 'montagem' | 'sac';
@@ -100,6 +100,6 @@ export function rodapeAuditoria(fechamento: Fechamento): { rotulo: string; valor
     { rotulo: 'Sistema', valor: 'Ecoviva - Sistema de Controle de Armazens' },
     { rotulo: 'Hash de auditoria (referencia)', valor: fechamento.hash_integridade.slice(0, 16) + '...' },
     { rotulo: 'Fechado em', valor: formatarDataHora(fechamento.criado_em) },
-    { rotulo: 'Exportado em', valor: formatarDataHora(new Date().toISOString().replace('T', ' ').slice(0, 19)) },
+    { rotulo: 'Exportado em', valor: formatarDataHora(agoraLocalTexto()) },
   ];
 }
