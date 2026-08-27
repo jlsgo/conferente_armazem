@@ -101,7 +101,6 @@ export default function Montagem({ usuario, armazem, armazens, onTransferenciaCo
   const [enviando, setEnviando] = useState(false);
   const [fechando, setFechando] = useState(false);
   const [estornando, setEstornando] = useState<number | null>(null);
-  const ehGestor = usuario.papel === 'gestor';
 
   async function carregarTudo() {
     setCarregandoLista(true);
@@ -299,8 +298,7 @@ export default function Montagem({ usuario, armazem, armazens, onTransferenciaCo
           O dia {formatarData(data)} ja foi fechado por {fechamento.usuario_nome}. Os lancamentos abaixo sao somente leitura.
         </p>
         {erro && <p className="erro">{erro}</p>}
-        {ehGestor && (
-          <section className="cartao somente-tela">
+        <section className="cartao somente-tela">
             <h2>Corrigir um lancamento deste dia</h2>
             <p className="subtitulo">
               O dia esta fechado, mas um erro ainda pode ser corrigido por estorno (o lancamento
@@ -334,8 +332,7 @@ export default function Montagem({ usuario, armazem, armazens, onTransferenciaCo
                 )}
               </tbody>
             </table>
-          </section>
-        )}
+        </section>
         <FechamentoImpressao
           armazem={armazem}
           data={data}
@@ -535,7 +532,7 @@ export default function Montagem({ usuario, armazem, armazens, onTransferenciaCo
               <th>Condicao</th>
               <th>Registrado por</th>
               <th>Situacao</th>
-              {ehGestor && <th className="somente-tela">Acoes</th>}
+              <th className="somente-tela">Acoes</th>
             </tr>
           </thead>
           <tbody>
@@ -559,25 +556,23 @@ export default function Montagem({ usuario, armazem, armazens, onTransferenciaCo
                 <td>
                   <span className={situacaoInfo(m).classe}>{situacaoInfo(m).texto}</span>
                 </td>
-                {ehGestor && (
-                  <td className="somente-tela">
-                    {!m.estornado_de && !idsJaEstornados.has(m.id) && (
-                      <button
-                        type="button"
-                        className="perigo"
-                        onClick={() => handleEstornar(m)}
-                        disabled={estornando === m.id}
-                      >
-                        {estornando === m.id ? 'Estornando...' : 'Estornar'}
-                      </button>
-                    )}
-                  </td>
-                )}
+                <td className="somente-tela">
+                  {!m.estornado_de && !idsJaEstornados.has(m.id) && (
+                    <button
+                      type="button"
+                      className="perigo"
+                      onClick={() => handleEstornar(m)}
+                      disabled={estornando === m.id}
+                    >
+                      {estornando === m.id ? 'Estornando...' : 'Estornar'}
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
             {lancamentos.length === 0 && (
               <tr>
-                <td colSpan={ehGestor ? 9 : 8} className="rodape-tabela">
+                <td colSpan={9} className="rodape-tabela">
                   Nenhum lancamento registrado ainda hoje.
                 </td>
               </tr>

@@ -69,7 +69,6 @@ export default function Sac({ usuario, armazem }: Props) {
   const [enviando, setEnviando] = useState(false);
   const [fechando, setFechando] = useState(false);
   const [estornando, setEstornando] = useState<number | null>(null);
-  const ehGestor = usuario.papel === 'gestor';
 
   async function carregarTudo() {
     setCarregandoLista(true);
@@ -258,8 +257,7 @@ export default function Sac({ usuario, armazem }: Props) {
           O dia {formatarData(data)} ja foi fechado por {fechamento.usuario_nome}. Os lancamentos abaixo sao somente leitura.
         </p>
         {erro && <p className="erro">{erro}</p>}
-        {ehGestor && (
-          <section className="cartao somente-tela">
+        <section className="cartao somente-tela">
             <h2>Corrigir um lancamento deste dia</h2>
             <p className="subtitulo">
               O dia esta fechado, mas um erro ainda pode ser corrigido por estorno (o lancamento
@@ -294,8 +292,7 @@ export default function Sac({ usuario, armazem }: Props) {
                 )}
               </tbody>
             </table>
-          </section>
-        )}
+        </section>
         <FechamentoImpressao
           armazem={armazem}
           data={data}
@@ -477,7 +474,7 @@ export default function Sac({ usuario, armazem }: Props) {
               <th>Motivo</th>
               <th>Registrado por</th>
               <th>Situacao</th>
-              {ehGestor && <th className="somente-tela">Acoes</th>}
+              <th className="somente-tela">Acoes</th>
             </tr>
           </thead>
           <tbody>
@@ -498,25 +495,23 @@ export default function Sac({ usuario, armazem }: Props) {
                 <td>
                   <span className={situacaoInfo(m).classe}>{situacaoInfo(m).texto}</span>
                 </td>
-                {ehGestor && (
-                  <td className="somente-tela">
-                    {!m.estornado_de && !idsJaEstornados.has(m.id) && (
-                      <button
-                        type="button"
-                        className="perigo"
-                        onClick={() => handleEstornar(m)}
-                        disabled={estornando === m.id}
-                      >
-                        {estornando === m.id ? 'Estornando...' : 'Estornar'}
-                      </button>
-                    )}
-                  </td>
-                )}
+                <td className="somente-tela">
+                  {!m.estornado_de && !idsJaEstornados.has(m.id) && (
+                    <button
+                      type="button"
+                      className="perigo"
+                      onClick={() => handleEstornar(m)}
+                      disabled={estornando === m.id}
+                    >
+                      {estornando === m.id ? 'Estornando...' : 'Estornar'}
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
             {lancamentos.length === 0 && (
               <tr>
-                <td colSpan={ehGestor ? 10 : 9} className="rodape-tabela">
+                <td colSpan={10} className="rodape-tabela">
                   Nenhum lancamento registrado ainda hoje.
                 </td>
               </tr>

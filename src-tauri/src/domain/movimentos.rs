@@ -624,19 +624,7 @@ pub fn estornar_movimento(
 
     let original = buscar_movimento(conn, movimento_id)?;
 
-    let usuario = buscar_usuario_ativo(conn, usuario_id)?;
-    if usuario.papel != "gestor" {
-        return Err(AppError::Validation(
-            "Somente um gestor pode estornar um lancamento.".into(),
-        ));
-    }
-    if let Some(armazem_do_usuario) = usuario.armazem_id {
-        if armazem_do_usuario != original.armazem_id {
-            return Err(AppError::Validation(
-                "Voce nao pode estornar um lancamento de outro armazem.".into(),
-            ));
-        }
-    }
+    autorizar_movimento(conn, usuario_id, original.armazem_id)?;
 
     if original.estornado_de.is_some() {
         return Err(AppError::Validation(
@@ -1776,7 +1764,7 @@ mod tests {
     }
 
     #[test]
-    fn conferente_nao_pode_estornar() {
+    fn conferente_pode_estornar_um_lancamento_do_proprio_armazem() {
         let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
         let original = criar_movimento(
             &mut conn,
@@ -1786,6 +1774,35 @@ mod tests {
 
         // usuario_id (Alice) e conferente, nao gestor.
         let resultado = estornar_movimento(&mut conn, original.id, usuario_id, "engano");
+        assert!(resultado.is_ok());
+    }
+
+    #[test]
+    fn conferente_nao_pode_estornar_lancamento_de_outro_armazem() {
+        let (mut conn, armazem_b2, usuario_id) = conexao_de_teste();
+        let armazem_a4: i64 = conn
+            .query_row("SELECT id FROM armazens WHERE codigo = 'A4'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        let original = criar_movimento(
+            &mut conn,
+            movimento_base(armazem_b2, usuario_id, item_simples()),
+        )
+        .unwrap();
+        let conferente_a4 = criar_usuario(
+            &conn,
+            NovoUsuario {
+                nome: "Marcelo",
+                login: "marcelo_a4",
+                senha: "senha123",
+                armazem_id: Some(armazem_a4),
+                papel: "conferente",
+            },
+        )
+        .unwrap();
+
+        let resultado = estornar_movimento(&mut conn, original.id, conferente_a4, "engano");
         assert!(matches!(resultado, Err(AppError::Validation(_))));
     }
 

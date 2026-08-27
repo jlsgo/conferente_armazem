@@ -568,6 +568,17 @@ Decisao do usuario: horario sempre local (nunca UTC), e um unico gestor por enqu
   juntos, `FechamentoConsolidado.tsx`/`exportConsolidado.ts`) nao estava sendo usada no
   dia a dia — removida (componente, lib e `IconDownload`, que so ela usava). A
   exportacao por fluxo individual (Historico) continua.
+- **Estorno liberado pro conferente**: mesma mudanca que `fechar_dia` (acima), aplicada
+  a `estornar_movimento` — usa `autorizar_movimento` em vez de checar `papel`. Qualquer
+  conferente ativo pode corrigir (estornar) um lancamento do proprio armazem, antes ou
+  depois do dia fechado. A coluna "Acoes"/botao "Estornar" (tabela do dia aberto e o
+  painel "Corrigir um lancamento deste dia" apos o fechamento) deixou de ser
+  `{ehGestor && ...}` nas 3 telas — `ehGestor` ficou sem uso e foi removido delas.
+  `papel = 'gestor'` agora so gate `criar_usuario`.
+- **Cores fixas saida/entrada**: o alternador saida/entrada nas 3 telas usava a mesma
+  cor generica de "aba ativa" (dependia da posicao pra saber qual estava selecionado).
+  Agora saida e sempre vermelha e entrada sempre verde (convencao de extrato bancario),
+  reconhecivel sem ler o texto (`--cor-saida`/`--cor-entrada` em `global.css`).
 
 ## Proxima versao (planejado) — v0.4.0
 

@@ -122,18 +122,20 @@ actually build and run for local testing.
   them accept a `usuario_id`/`solicitante_id` from the JS payload anymore. Every
   write also re-fetches the user from the DB (`auth::buscar_usuario_ativo`) and
   checks `ativo` plus (when the user has a fixed `armazem_id`) that it matches the
-  armazem being written to. `fechar_dia` uses that same check
-  (`domain::movimentos::autorizar_movimento`, `pub(crate)` so `fechamentos.rs` can
-  reuse it) instead of a `papel`-based one — any active conferente can close the day
-  of their own armazem, not just a gestor; the gestor's role is to correct mistakes
-  afterward via estorno, not to gatekeep closing.
+  armazem being written to. `fechar_dia` and `estornar_movimento` both reuse that same
+  check (`domain::movimentos::autorizar_movimento`, `pub(crate)` so `fechamentos.rs`
+  can call it too) instead of a `papel`-based one — any active conferente can close
+  the day and correct a mistake (via estorno) for their own armazem, not just a
+  gestor. `papel = 'gestor'` today only gates `criar_usuario` — a single gestor
+  (Jhon) manages accounts; day-to-day movement/closing/correction is fully
+  self-serve per armazem.
 - **Correction after closing**: `domain::movimentos::estornar_movimento` appends a
   new row (`status = 'estorno'`, `estornado_de` pointing at the original) instead of
   editing anything — it deliberately bypasses the "day is closed" guard, since that's
-  the only way to correct a mistake found after closing. Requires `papel = 'gestor'`
-  and a non-empty justification. `fechamentos::buscar_fechamento` computes
-  `total_estornado`/`total_liquido` live from current data — the stored `fechamentos`
-  row itself is never rewritten.
+  the only way to correct a mistake found after closing. Requires a non-empty
+  justification (any active conferente of the armazem, not gestor-only — see above).
+  `fechamentos::buscar_fechamento` computes `total_estornado`/`total_liquido` live
+  from current data — the stored `fechamentos` row itself is never rewritten.
 - **Errors**: `domain::errors::AppError` (thiserror) has a custom `Serialize` impl that
   turns every variant into the plain Portuguese string shown directly in the UI. Keep
   error messages user-safe — never let raw `rusqlite::Error`/SQL text reach a variant's

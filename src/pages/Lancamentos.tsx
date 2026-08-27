@@ -94,7 +94,6 @@ export default function Lancamentos({ usuario, armazem, armazens, onTransferenci
   const [enviando, setEnviando] = useState(false);
   const [fechando, setFechando] = useState(false);
   const [estornando, setEstornando] = useState<number | null>(null);
-  const ehGestor = usuario.papel === 'gestor';
 
   async function carregarTudo() {
     setCarregandoLista(true);
@@ -311,45 +310,43 @@ export default function Lancamentos({ usuario, armazem, armazens, onTransferenci
           O dia {formatarData(data)} ja foi fechado por {fechamento.usuario_nome}. Os lancamentos abaixo sao somente leitura.
         </p>
         {erro && <p className="erro">{erro}</p>}
-        {ehGestor && (
-          <section className="cartao somente-tela">
-            <h2>Corrigir um lancamento deste dia</h2>
-            <p className="subtitulo">
-              O dia esta fechado, mas um erro ainda pode ser corrigido por estorno (o lancamento
-              original nunca e editado ou apagado).
-            </p>
-            <table>
-              <tbody>
-                {lancamentos
-                  .filter((m) => !m.estornado_de && !idsJaEstornados.has(m.id))
-                  .map((m) => (
-                    <tr key={m.id}>
-                      <td>
-                        Nº {m.numero}
-                        {m.numero_pedido ? ` - pedido ${m.numero_pedido}` : ''} -{' '}
-                        {m.itens.reduce((s, it) => s + it.quantidade, 0)} un.
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="perigo"
-                          onClick={() => handleEstornar(m)}
-                          disabled={estornando === m.id}
-                        >
-                          {estornando === m.id ? 'Estornando...' : 'Estornar'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                {lancamentos.every((m) => m.estornado_de || idsJaEstornados.has(m.id)) && (
-                  <tr>
-                    <td className="rodape-tabela">Nenhum lancamento disponivel para estorno.</td>
+        <section className="cartao somente-tela">
+          <h2>Corrigir um lancamento deste dia</h2>
+          <p className="subtitulo">
+            O dia esta fechado, mas um erro ainda pode ser corrigido por estorno (o lancamento
+            original nunca e editado ou apagado).
+          </p>
+          <table>
+            <tbody>
+              {lancamentos
+                .filter((m) => !m.estornado_de && !idsJaEstornados.has(m.id))
+                .map((m) => (
+                  <tr key={m.id}>
+                    <td>
+                      Nº {m.numero}
+                      {m.numero_pedido ? ` - pedido ${m.numero_pedido}` : ''} -{' '}
+                      {m.itens.reduce((s, it) => s + it.quantidade, 0)} un.
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="perigo"
+                        onClick={() => handleEstornar(m)}
+                        disabled={estornando === m.id}
+                      >
+                        {estornando === m.id ? 'Estornando...' : 'Estornar'}
+                      </button>
+                    </td>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </section>
-        )}
+                ))}
+              {lancamentos.every((m) => m.estornado_de || idsJaEstornados.has(m.id)) && (
+                <tr>
+                  <td className="rodape-tabela">Nenhum lancamento disponivel para estorno.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </section>
         <FechamentoImpressao armazem={armazem} data={data} fechamento={fechamento} lancamentos={lancamentos} />
       </div>
     );
@@ -562,7 +559,7 @@ export default function Lancamentos({ usuario, armazem, armazens, onTransferenci
               <th>Observacoes</th>
               <th>Registrado por</th>
               <th>Situacao</th>
-              {ehGestor && <th className="somente-tela">Acoes</th>}
+              <th className="somente-tela">Acoes</th>
             </tr>
           </thead>
           <tbody>
@@ -590,25 +587,23 @@ export default function Lancamentos({ usuario, armazem, armazens, onTransferenci
                 <td>
                   <span className={situacaoInfo(m).classe}>{situacaoInfo(m).texto}</span>
                 </td>
-                {ehGestor && (
-                  <td className="somente-tela">
-                    {!m.estornado_de && !idsJaEstornados.has(m.id) && (
-                      <button
-                        type="button"
-                        className="perigo"
-                        onClick={() => handleEstornar(m)}
-                        disabled={estornando === m.id}
-                      >
-                        {estornando === m.id ? 'Estornando...' : 'Estornar'}
-                      </button>
-                    )}
-                  </td>
-                )}
+                <td className="somente-tela">
+                  {!m.estornado_de && !idsJaEstornados.has(m.id) && (
+                    <button
+                      type="button"
+                      className="perigo"
+                      onClick={() => handleEstornar(m)}
+                      disabled={estornando === m.id}
+                    >
+                      {estornando === m.id ? 'Estornando...' : 'Estornar'}
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
             {lancamentos.length === 0 && (
               <tr>
-                <td colSpan={ehGestor ? 11 : 10} className="rodape-tabela">
+                <td colSpan={11} className="rodape-tabela">
                   Nenhum lancamento registrado ainda hoje.
                 </td>
               </tr>
