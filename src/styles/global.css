@@ -18,6 +18,16 @@
   --info-escuro: #1d4ed8;
   --anel-foco: rgba(26, 147, 80, 0.22);
 
+  /* Saida x entrada usa a mesma convencao de extrato bancario (saida =
+     vermelho, entrada = verde) em vez de depender so da posicao do botao -
+     evita a conferente confirmar o lado errado por engano. */
+  --cor-saida: var(--erro);
+  --cor-saida-escuro: var(--perigo-escuro);
+  --cor-saida-claro: var(--erro-claro);
+  --cor-entrada: var(--verde);
+  --cor-entrada-escuro: var(--verde-escuro);
+  --cor-entrada-claro: var(--verde-claro);
+
   /* Uma cor por aba/fluxo, pra reduzir o risco de a conferente lancar no
      lugar errado - a cor do menu se repete como friso no topo do cartao. */
   --cor-lancamentos: var(--verde);
@@ -393,6 +403,34 @@ button.info:hover:not(:disabled) {
 }
 .abas button.aba-usuarios.ativo:hover:not(:disabled) {
   background: var(--cor-usuarios-escuro);
+}
+
+/* Alternador de saida/entrada dentro do formulario (Lancamentos, Montagem,
+   SAC) - cores fixas por tipo (nao so "qual esta ativo agora"), pra dar pra
+   reconhecer de relance qual lado esta selecionado sem precisar ler o
+   texto do botao. */
+.abas button.tipo-saida:hover:not(:disabled) {
+  background: var(--cor-saida-claro);
+  color: var(--cor-saida-escuro);
+}
+.abas button.tipo-saida.ativo {
+  background: var(--cor-saida);
+  border-color: var(--cor-saida);
+}
+.abas button.tipo-saida.ativo:hover:not(:disabled) {
+  background: var(--cor-saida-escuro);
+}
+
+.abas button.tipo-entrada:hover:not(:disabled) {
+  background: var(--cor-entrada-claro);
+  color: var(--cor-entrada-escuro);
+}
+.abas button.tipo-entrada.ativo {
+  background: var(--cor-entrada);
+  border-color: var(--cor-entrada);
+}
+.abas button.tipo-entrada.ativo:hover:not(:disabled) {
+  background: var(--cor-entrada-escuro);
 }
 
 /* Friso no topo do primeiro cartao da pagina, na cor da aba ativa - fica

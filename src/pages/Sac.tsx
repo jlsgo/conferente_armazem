@@ -320,7 +320,7 @@ export default function Sac({ usuario, armazem }: Props) {
           <div className="abas" style={{ marginBottom: 20 }}>
             <button
               type="button"
-              className={tipo === 'entrada' ? 'ativo' : ''}
+              className={`tipo-entrada ${tipo === 'entrada' ? 'ativo' : ''}`}
               onClick={() => {
                 setTipo('entrada');
                 setMotivo('');
@@ -330,7 +330,7 @@ export default function Sac({ usuario, armazem }: Props) {
             </button>
             <button
               type="button"
-              className={tipo === 'saida' ? 'ativo' : ''}
+              className={`tipo-saida ${tipo === 'saida' ? 'ativo' : ''}`}
               onClick={() => {
                 setTipo('saida');
                 setMotivo('');

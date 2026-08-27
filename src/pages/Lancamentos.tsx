@@ -376,12 +376,16 @@ export default function Lancamentos({ usuario, armazem, armazens, onTransferenci
 
         <form onSubmit={handleSubmit}>
           <div className="abas" style={{ marginBottom: 20 }}>
-            <button type="button" className={tipo === 'saida' ? 'ativo' : ''} onClick={() => setTipo('saida')}>
+            <button
+              type="button"
+              className={`tipo-saida ${tipo === 'saida' ? 'ativo' : ''}`}
+              onClick={() => setTipo('saida')}
+            >
               Saida
             </button>
             <button
               type="button"
-              className={tipo === 'entrada' ? 'ativo' : ''}
+              className={`tipo-entrada ${tipo === 'entrada' ? 'ativo' : ''}`}
               onClick={() => {
                 setTipo('entrada');
                 setDestino('cliente');
