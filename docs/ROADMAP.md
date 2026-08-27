@@ -609,17 +609,36 @@ secoes seguintes pros que ficaram de fora por ora). Implementados numa sessao se
 - Testes automatizados de frontend (hoje so `tsc --noEmit` do lado React) — baixo risco
   dado o tamanho do app.
 
-## Proxima sprint: capricho de UX/UI (planejado, 2026-08-27)
+## Capricho de UX/UI (Feito o essencial, 2026-08-27)
 
-Pedido do usuario: dedicar a proxima sprint a polimento visual/de usabilidade — tanto do
-app (Tauri) quanto do painel web somente-leitura (`painel/index.html`,
-jlsgo.github.io/conferente_armazem). Ainda nao escopado em telas/itens especificos;
-levantar com o usuario antes de comecar quais telas doem mais no dia a dia (candidatos
-obvios pra revisar quando essa sprint comecar: consistencia visual entre as 3 telas de
-lancamento agora que tem insights + campo Outro + "Fechar o dia" liberado pra
-conferente: densidade da tabela de Historico, feedback de erro/loading, o painel web
-que hoje e HTML/CSS bem cru). Nao inclui mudanca de comportamento/dominio, so
-UX/UI — features pendentes (paginacao, forca bruta) continuam na lista acima.
+Pedido do usuario: dedicar uma sprint a polimento visual/de usabilidade — tanto do app
+(Tauri) quanto do painel web somente-leitura (`painel/index.html`,
+jlsgo.github.io/conferente_armazem). O painel era o item mais cru (paleta improvisada,
+sem dark mode de verdade apesar de declarar `color-scheme: light dark`, badge de
+situacao so no estorno) - foi o foco desta passada:
+
+- **Paleta harmonizada com o app**: `painel/index.html` passou a usar os mesmos tons
+  (`--verde`/`--erro`/`--azul` etc.) de `src/styles/global.css`, em vez de uma paleta
+  proxima mas ligeiramente diferente.
+- **Dark mode de verdade**: `@media (prefers-color-scheme: dark)` redefinindo os tokens
+  - antes so o `color-scheme: light dark` no `:root` (que so afeta scrollbar/form
+  controls nativos do browser, nao a pagina em si) estava la, sem nenhum override real.
+  Verificado visualmente (headless Chrome, claro e escuro) antes de commitar.
+  Cabecalho com gradiente + icone, cards com sombra, tabela com hover/zebra sutil,
+  campos de filtro com foco visivel.
+- **Badge de situacao consistente**: `situacaoBadge()` so envolvia ESTORNO num
+  `<span class="badge">`; ENTRADA/BAIXA eram texto puro. Agora as 3 usam as mesmas
+  classes `.badge-entrada`/`.badge-baixa`/`.badge-estorno` que o app usa em
+  `src/lib/situacao.ts` (mesmas cores tambem) - quem olha os dois reconhece o mesmo
+  vocabulario visual.
+- **Favicon**: emoji de caixa via data URI (sem asset novo, mantendo o arquivo unico
+  sem build step).
+
+No app (Tauri) em si, o trabalho de consistencia ja avancou nas sessoes anteriores
+(insights por tela, campo Outro, "Fechar o dia"/estorno liberados pro conferente,
+cores fixas saida/entrada) - nao foi identificado nenhum ponto especifico adicional
+que doesse o suficiente pra justificar mexer mais agora. Revisitar se o usuario
+apontar uma tela especifica que incomoda no dia a dia.
 
 ## Depois disso
 
