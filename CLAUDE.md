@@ -136,6 +136,18 @@ actually build and run for local testing.
   justification (any active conferente of the armazem, not gestor-only — see above).
   `fechamentos::buscar_fechamento` computes `total_estornado`/`total_liquido` live
   from current data — the stored `fechamentos` row itself is never rewritten.
+- **Login lockout**: `domain::auth::login` allows `TENTATIVAS_LIVRES` (3) wrong
+  passwords in a row with no penalty (a single mistyped password shouldn't lock
+  anyone out), then progressively locks the *account* (`usuarios.tentativas_falhas`/
+  `bloqueado_ate`, migration `0008_lockout_login.sql`) for 1/5/15/30 minutes and 60
+  from the 5th failure on — `calcular_bloqueio_minutos`, deliberately re-implemented
+  rather than reusing `db::sync::calcular_backoff_minutos` (same shape) since `domain`
+  must not depend on `db`. Locked out returns `AppError::ContaBloqueada`, a distinct
+  variant from `CredenciaisInvalidas` (an unknown login or a wrong password while
+  unlocked still return the same generic message either way, so a bad guess can't
+  distinguish "no such user" from "wrong password"). A correct login resets the
+  counter. This is per-account, not per-IP/machine — the app is local, so there's no
+  meaningful "IP" to key on.
 - **Errors**: `domain::errors::AppError` (thiserror) has a custom `Serialize` impl that
   turns every variant into the plain Portuguese string shown directly in the UI. Keep
   error messages user-safe — never let raw `rusqlite::Error`/SQL text reach a variant's

@@ -17,8 +17,6 @@ const ABAS: { valor: Fluxo; rotulo: string }[] = [
   { valor: 'sac', rotulo: 'SAC' },
 ];
 
-const LIMITE_RESULTADOS = 500;
-
 function dataDeHoje(): string {
   const agora = new Date();
   const ano = agora.getFullYear();
@@ -61,7 +59,6 @@ function direcaoTexto(m: Movimento): string {
 
 export default function Historico({ usuario }: Props) {
   const armazemId = usuario.armazem_id as number;
-  const ehGestor = usuario.papel === 'gestor';
 
   const [fluxo, setFluxo] = useState<Fluxo>('saida_armazem');
   const [dataInicio, setDataInicio] = useState(dataHaDias(30));
@@ -70,7 +67,9 @@ export default function Historico({ usuario }: Props) {
   const [numeroPedido, setNumeroPedido] = useState('');
 
   const [resultados, setResultados] = useState<Movimento[]>([]);
+  const [temMais, setTemMais] = useState(false);
   const [carregando, setCarregando] = useState(true);
+  const [carregandoMais, setCarregandoMais] = useState(false);
   const [erro, setErro] = useState('');
   const [estornando, setEstornando] = useState<number | null>(null);
   const [exportando, setExportando] = useState(false);
@@ -78,23 +77,43 @@ export default function Historico({ usuario }: Props) {
 
   const mostraFiltrosDePedido = fluxo !== 'peca_montagem';
 
+  async function buscarPagina(offset: number) {
+    return buscarHistorico({
+      armazem_id: armazemId,
+      fluxo,
+      data_inicio: dataInicio || null,
+      data_fim: dataFim || null,
+      cliente: mostraFiltrosDePedido && cliente ? cliente : null,
+      numero_pedido: mostraFiltrosDePedido && numeroPedido ? numeroPedido : null,
+      offset,
+    });
+  }
+
   async function buscar() {
     setCarregando(true);
     setErro('');
     try {
-      const lista = await buscarHistorico({
-        armazem_id: armazemId,
-        fluxo,
-        data_inicio: dataInicio || null,
-        data_fim: dataFim || null,
-        cliente: mostraFiltrosDePedido && cliente ? cliente : null,
-        numero_pedido: mostraFiltrosDePedido && numeroPedido ? numeroPedido : null,
-      });
-      setResultados(lista);
+      const resultado = await buscarPagina(0);
+      setResultados(resultado.movimentos);
+      setTemMais(resultado.tem_mais);
     } catch (err) {
       setErro(typeof err === 'string' ? err : 'Nao foi possivel buscar o historico.');
     } finally {
       setCarregando(false);
+    }
+  }
+
+  async function carregarMais() {
+    setCarregandoMais(true);
+    setErro('');
+    try {
+      const resultado = await buscarPagina(resultados.length);
+      setResultados((atual) => [...atual, ...resultado.movimentos]);
+      setTemMais(resultado.tem_mais);
+    } catch (err) {
+      setErro(typeof err === 'string' ? err : 'Nao foi possivel carregar mais resultados.');
+    } finally {
+      setCarregandoMais(false);
     }
   }
 
@@ -371,7 +390,7 @@ export default function Historico({ usuario }: Props) {
                     {fluxo === 'sac' && <th>Motivo</th>}
                     <th>Registrado por</th>
                     <th>Situacao</th>
-                    {ehGestor && <th className="somente-tela">Acoes</th>}
+                    <th className="somente-tela">Acoes</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -400,25 +419,23 @@ export default function Historico({ usuario }: Props) {
                       <td>
                         <span className={situacaoInfo(m).classe}>{situacaoInfo(m).texto}</span>
                       </td>
-                      {ehGestor && (
-                        <td className="somente-tela">
-                          {!m.estornado_de && !idsJaEstornados.has(m.id) && (
-                            <button
-                              type="button"
-                              className="perigo"
-                              onClick={() => handleEstornar(m)}
-                              disabled={estornando === m.id}
-                            >
-                              {estornando === m.id ? 'Estornando...' : 'Estornar'}
-                            </button>
-                          )}
-                        </td>
-                      )}
+                      <td className="somente-tela">
+                        {!m.estornado_de && !idsJaEstornados.has(m.id) && (
+                          <button
+                            type="button"
+                            className="perigo"
+                            onClick={() => handleEstornar(m)}
+                            disabled={estornando === m.id}
+                          >
+                            {estornando === m.id ? 'Estornando...' : 'Estornar'}
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {resultados.length === 0 && (
                     <tr>
-                      <td colSpan={ehGestor ? 10 : 9} className="rodape-tabela">
+                      <td colSpan={10} className="rodape-tabela">
                         Nenhum lancamento encontrado para esses filtros.
                       </td>
                     </tr>
@@ -429,10 +446,10 @@ export default function Historico({ usuario }: Props) {
             <p className="rodape-tabela">
               <strong>{totalGeral}</strong> unidades no total ({resultados.length} lancamentos)
             </p>
-            {resultados.length >= LIMITE_RESULTADOS && (
-              <p className="rodape-tabela">
-                Mostrando os {LIMITE_RESULTADOS} resultados mais recentes - refine os filtros para ver mais.
-              </p>
+            {temMais && (
+              <button type="button" className="secundario" onClick={carregarMais} disabled={carregandoMais}>
+                {carregandoMais ? 'Carregando...' : 'Carregar mais'}
+              </button>
             )}
           </>
         )}

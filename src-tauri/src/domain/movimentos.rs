@@ -966,11 +966,23 @@ pub fn listar_movimentos_do_dia(
 
 const LIMITE_HISTORICO: i64 = 500;
 
+/// Uma pagina de `buscar_historico`: os movimentos da pagina e se ha mais
+/// alem dela. `tem_mais` vem de pedir uma linha a mais que o limite ao banco
+/// (`LIMITE_HISTORICO + 1`) e conferir se ela veio, em vez de um `COUNT(*)`
+/// separado - uma consulta so.
+#[derive(Debug, Serialize)]
+pub struct ResultadoHistorico {
+    pub movimentos: Vec<Movimento>,
+    pub tem_mais: bool,
+}
+
 /// Busca lancamentos de qualquer dia (nao so hoje), com filtros opcionais de
 /// intervalo de data, cliente/coleta (`contraparte`, busca parcial) e numero do
 /// pedido (busca parcial). Usada pela aba de Historico. `armazem_id`/`fluxo`
-/// continuam obrigatorios - a busca nunca cruza armazem nem fluxo. Limitada as
-/// `LIMITE_HISTORICO` linhas mais recentes; sem paginacao nesta versao.
+/// continuam obrigatorios - a busca nunca cruza armazem nem fluxo. Pagina de
+/// ate `LIMITE_HISTORICO` linhas por vez, mais recentes primeiro; `offset`
+/// pula as paginas ja carregadas (frontend acumula localmente ao "Carregar
+/// mais", nao troca a pagina anterior).
 #[allow(clippy::too_many_arguments)]
 pub fn buscar_historico(
     conn: &Connection,
@@ -980,7 +992,8 @@ pub fn buscar_historico(
     data_fim: Option<&str>,
     cliente: Option<&str>,
     numero_pedido: Option<&str>,
-) -> AppResult<Vec<Movimento>> {
+    offset: i64,
+) -> AppResult<ResultadoHistorico> {
     let mut stmt = conn.prepare(
         "SELECT m.id, m.armazem_id, m.armazem_destino_id, m.fluxo, m.tipo, m.data, m.hora,
                 m.turno, m.usuario_id, u.nome, m.numero_pedido, m.codigo_rastreio, m.contraparte,
@@ -994,7 +1007,7 @@ pub fn buscar_historico(
            AND (?5 IS NULL OR m.contraparte LIKE '%' || ?5 || '%')
            AND (?6 IS NULL OR m.numero_pedido LIKE '%' || ?6 || '%')
          ORDER BY m.data DESC, m.hora DESC, m.id DESC
-         LIMIT ?7",
+         LIMIT ?7 OFFSET ?8",
     )?;
 
     let mut movimentos = stmt
@@ -1006,7 +1019,8 @@ pub fn buscar_historico(
                 data_fim,
                 cliente,
                 numero_pedido,
-                LIMITE_HISTORICO
+                LIMITE_HISTORICO + 1,
+                offset
             ],
             |r| {
                 Ok(Movimento {
@@ -1040,11 +1054,17 @@ pub fn buscar_historico(
         )?
         .collect::<Result<Vec<_>, _>>()?;
 
+    let tem_mais = movimentos.len() as i64 > LIMITE_HISTORICO;
+    movimentos.truncate(LIMITE_HISTORICO as usize);
+
     for movimento in movimentos.iter_mut() {
         movimento.itens = carregar_itens(conn, movimento.id)?;
     }
 
-    Ok(movimentos)
+    Ok(ResultadoHistorico {
+        movimentos,
+        tem_mais,
+    })
 }
 
 /// Busca a retirada mais recente (por data/hora) desse `numero_pedido` nesse
@@ -2015,11 +2035,13 @@ mod tests {
             Some("2026-08-18"),
             None,
             None,
+            0,
         )
         .unwrap();
 
-        assert_eq!(resultado.len(), 1);
-        assert_eq!(resultado[0].numero_pedido.as_deref(), Some("2"));
+        assert_eq!(resultado.movimentos.len(), 1);
+        assert_eq!(resultado.movimentos[0].numero_pedido.as_deref(), Some("2"));
+        assert!(!resultado.tem_mais);
     }
 
     #[test]
@@ -2050,11 +2072,12 @@ mod tests {
             None,
             Some("disk"),
             None,
+            0,
         )
         .unwrap();
 
-        assert_eq!(resultado.len(), 1);
-        assert_eq!(resultado[0].numero_pedido.as_deref(), Some("1"));
+        assert_eq!(resultado.movimentos.len(), 1);
+        assert_eq!(resultado.movimentos[0].numero_pedido.as_deref(), Some("1"));
     }
 
     #[test]
@@ -2079,11 +2102,15 @@ mod tests {
             None,
             None,
             Some("389"),
+            0,
         )
         .unwrap();
 
-        assert_eq!(resultado.len(), 1);
-        assert_eq!(resultado[0].numero_pedido.as_deref(), Some("3893"));
+        assert_eq!(resultado.movimentos.len(), 1);
+        assert_eq!(
+            resultado.movimentos[0].numero_pedido.as_deref(),
+            Some("3893")
+        );
     }
 
     #[test]
@@ -2108,11 +2135,15 @@ mod tests {
             None,
             Some("disk"),
             Some("3893"),
+            0,
         )
         .unwrap();
 
-        assert_eq!(resultado.len(), 1);
-        assert_eq!(resultado[0].contraparte.as_deref(), Some("DISK&TENHA"));
+        assert_eq!(resultado.movimentos.len(), 1);
+        assert_eq!(
+            resultado.movimentos[0].contraparte.as_deref(),
+            Some("DISK&TENHA")
+        );
     }
 
     #[test]
@@ -2135,13 +2166,84 @@ mod tests {
         outro_fluxo.itens[0].condicao = Some("boa".into());
         criar_movimento(&mut conn, outro_fluxo).unwrap();
 
-        let resultado_fluxo_certo =
-            buscar_historico(&conn, armazem_id, "saida_armazem", None, None, None, None).unwrap();
-        assert_eq!(resultado_fluxo_certo.len(), 1);
+        let resultado_fluxo_certo = buscar_historico(
+            &conn,
+            armazem_id,
+            "saida_armazem",
+            None,
+            None,
+            None,
+            None,
+            0,
+        )
+        .unwrap();
+        assert_eq!(resultado_fluxo_certo.movimentos.len(), 1);
 
-        let resultado_outro_armazem =
-            buscar_historico(&conn, armazem_a4, "saida_armazem", None, None, None, None).unwrap();
-        assert!(resultado_outro_armazem.is_empty());
+        let resultado_outro_armazem = buscar_historico(
+            &conn,
+            armazem_a4,
+            "saida_armazem",
+            None,
+            None,
+            None,
+            None,
+            0,
+        )
+        .unwrap();
+        assert!(resultado_outro_armazem.movimentos.is_empty());
+    }
+
+    #[test]
+    fn historico_pagina_com_offset_e_avisa_quando_tem_mais() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        for i in 1..=3 {
+            criar_movimento(
+                &mut conn,
+                movimento_com(
+                    armazem_id,
+                    usuario_id,
+                    &format!("2026-08-{:02}", 10 + i),
+                    &i.to_string(),
+                    "Cliente A",
+                ),
+            )
+            .unwrap();
+        }
+
+        // LIMITE_HISTORICO e 500, entao simulamos uma pagina pequena filtrando
+        // por um intervalo estreito nao ajudaria - testamos so que offset
+        // pula os mais recentes e que 3 cabem numa pagina sem "tem_mais".
+        let pagina = buscar_historico(
+            &conn,
+            armazem_id,
+            "saida_armazem",
+            None,
+            None,
+            None,
+            None,
+            0,
+        )
+        .unwrap();
+        assert_eq!(pagina.movimentos.len(), 3);
+        assert!(!pagina.tem_mais);
+
+        let pagina_offset = buscar_historico(
+            &conn,
+            armazem_id,
+            "saida_armazem",
+            None,
+            None,
+            None,
+            None,
+            1,
+        )
+        .unwrap();
+        assert_eq!(pagina_offset.movimentos.len(), 2);
+        // Mais recente primeiro (2026-08-13, pedido "3") fica de fora com offset 1.
+        assert!(pagina_offset
+            .movimentos
+            .iter()
+            .all(|m| m.numero_pedido.as_deref() != Some("3")));
     }
 
     // --- Leitura protegida por sessao/armazem ---

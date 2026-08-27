@@ -7,6 +7,7 @@ import type {
   Movimento,
   NovoMovimento,
   NovoUsuarioInput,
+  ResultadoHistorico,
   StatusSincronizacao,
   TransferenciaPendente,
   Usuario,
@@ -121,8 +122,9 @@ export function buscarHistorico(params: {
   data_fim?: string | null;
   cliente?: string | null;
   numero_pedido?: string | null;
-}): Promise<Movimento[]> {
-  return invoke<Movimento[]>('buscar_historico', params);
+  offset: number;
+}): Promise<ResultadoHistorico> {
+  return invoke<ResultadoHistorico>('buscar_historico', params);
 }
 
 export function buscarFechamentoDoDia(params: {

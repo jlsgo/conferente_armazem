@@ -580,25 +580,28 @@ Decisao do usuario: horario sempre local (nunca UTC), e um unico gestor por enqu
   Agora saida e sempre vermelha e entrada sempre verde (convencao de extrato bancario),
   reconhecivel sem ler o texto (`--cor-saida`/`--cor-entrada` em `global.css`).
 
-## Proxima versao (planejado) — v0.4.0
+## v0.4.0 (Feito)
 
 Sessao de "analisa o sistema e planeja melhorias" (2026-08-27): revisado o codigo atual
-contra o roadmap. P0-P2 do plano original ja estao feitos; os itens abaixo foram
-escolhidos pelo usuario como prioridade pra proxima versao, entre uma lista maior de
-candidatos (ver secoes seguintes pros que ficaram de fora por ora).
+contra o roadmap. P0-P2 do plano original ja estavam feitos; os itens abaixo foram
+escolhidos pelo usuario como prioridade, entre uma lista maior de candidatos (ver
+secoes seguintes pros que ficaram de fora por ora). Implementados numa sessao seguinte
+("continue as proximas sprints ate terminar todas", 2026-08-27).
 
-- **Paginacao no Historico**: `buscar_historico` tem hoje um limite fixo de 500 linhas
-  sem paginacao (`LIMITE_HISTORICO`, `domain/movimentos.rs`) — uma busca ampla corta
-  resultado silenciosamente sem avisar que ha mais dados. Plano: adicionar `offset` a
-  `buscar_historico` (LIMIT+OFFSET), buscar uma linha a mais que o limite pra saber se
-  `tem_mais` sem precisar de COUNT separado, e um botao "Carregar mais" em
-  `Historico.tsx`.
-- **Protecao contra forca bruta no login**: hoje nao ha nenhum lockout/atraso apos
-  tentativas erradas repetidas (`domain/auth.rs::login`). Plano: colunas
-  `tentativas_falhas`/`bloqueado_ate` em `usuarios` (nova migration), bloqueio
-  progressivo por conta (nao por IP, app local) apos N falhas seguidas, reset no login
-  certo — mesmo padrao ja usado pro backoff de sync (`calcular_backoff_minutos`,
-  Sprint 7). Testavel do jeito usual (dominio puro + SQLite em memoria).
+- **Paginacao no Historico**: `buscar_historico` tinha um limite fixo de 500 linhas
+  sem paginacao — uma busca ampla cortava resultado silenciosamente sem avisar que
+  havia mais dados. Agora `buscar_historico` recebe `offset`, busca
+  `LIMITE_HISTORICO + 1` linhas (LIMIT+OFFSET) e devolve `ResultadoHistorico { movimentos,
+  tem_mais }` — `tem_mais` vem de ter recebido a linha extra, sem COUNT separado.
+  `Historico.tsx` acumula localmente ao clicar "Carregar mais" (offset =
+  `resultados.length`); uma nova busca (troca de fluxo/filtro) reseta pra offset 0.
+- **Protecao contra forca bruta no login**: `domain::auth::login` agora libera 3
+  tentativas erradas sem penalidade, depois bloqueia a conta progressivamente
+  (1/5/15/30min, 60min da 5a em diante — `calcular_bloqueio_minutos`, mesmo formato do
+  backoff de sync mas reescrito em `domain` pra nao criar uma dependencia de `domain`
+  em `db`). Colunas `tentativas_falhas`/`bloqueado_ate` em `usuarios` (migration
+  `0008_lockout_login.sql`), novo `AppError::ContaBloqueada` distinto de
+  `CredenciaisInvalidas`. Login certo zera o contador.
 
 **Deixado de fora por ora, revisitar se necessario**:
 - Importacao de historico antigo (XLSX/ODS) — Sprint 5 resto, so relevante se ainda ha

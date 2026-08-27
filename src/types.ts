@@ -92,6 +92,11 @@ export interface Movimento {
   itens: MovimentoItem[];
 }
 
+export interface ResultadoHistorico {
+  movimentos: Movimento[];
+  tem_mais: boolean;
+}
+
 export interface TransferenciaPendente {
   armazem_origem_codigo: string;
   id_origem: number;

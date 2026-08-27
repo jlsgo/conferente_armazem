@@ -19,6 +19,7 @@ fn migrations() -> Migrations<'static> {
             "../../migrations/0006_divergencia_recebimento.sql"
         )),
         M::up(include_str!("../../migrations/0007_retirada_parcial.sql")),
+        M::up(include_str!("../../migrations/0008_lockout_login.sql")),
     ])
 }
 

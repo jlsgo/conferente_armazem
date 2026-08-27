@@ -11,6 +11,9 @@ pub enum AppError {
     #[error("Usuario ou senha invalidos.")]
     CredenciaisInvalidas,
 
+    #[error("Muitas tentativas erradas. Conta bloqueada temporariamente - tente novamente em alguns minutos.")]
+    ContaBloqueada,
+
     #[error("Sessao nao encontrada. Faca login novamente.")]
     NaoAutenticado,
 

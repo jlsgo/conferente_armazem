@@ -130,7 +130,8 @@ pub fn buscar_historico(
     data_fim: Option<String>,
     cliente: Option<String>,
     numero_pedido: Option<String>,
-) -> AppResult<Vec<Movimento>> {
+    offset: i64,
+) -> AppResult<movimentos::ResultadoHistorico> {
     let usuario_id = state.usuario_logado()?;
     let conn = state.conn()?;
     movimentos::autorizar_leitura(&conn, usuario_id, armazem_id)?;
@@ -142,5 +143,6 @@ pub fn buscar_historico(
         data_fim.as_deref(),
         cliente.as_deref(),
         numero_pedido.as_deref(),
+        offset,
     )
 }
