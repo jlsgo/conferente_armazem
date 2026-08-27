@@ -122,7 +122,11 @@ actually build and run for local testing.
   them accept a `usuario_id`/`solicitante_id` from the JS payload anymore. Every
   write also re-fetches the user from the DB (`auth::buscar_usuario_ativo`) and
   checks `ativo` plus (when the user has a fixed `armazem_id`) that it matches the
-  armazem being written to; `fechar_dia` additionally requires `papel = 'gestor'`.
+  armazem being written to. `fechar_dia` uses that same check
+  (`domain::movimentos::autorizar_movimento`, `pub(crate)` so `fechamentos.rs` can
+  reuse it) instead of a `papel`-based one — any active conferente can close the day
+  of their own armazem, not just a gestor; the gestor's role is to correct mistakes
+  afterward via estorno, not to gatekeep closing.
 - **Correction after closing**: `domain::movimentos::estornar_movimento` appends a
   new row (`status = 'estorno'`, `estornado_de` pointing at the original) instead of
   editing anything — it deliberately bypasses the "day is closed" guard, since that's

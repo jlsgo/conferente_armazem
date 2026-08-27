@@ -2,9 +2,8 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use super::auth::buscar_usuario_ativo;
 use super::errors::{AppError, AppResult};
-use super::movimentos::{listar_movimentos_do_dia, Movimento};
+use super::movimentos::{autorizar_movimento, listar_movimentos_do_dia, Movimento};
 
 #[derive(Debug, Serialize)]
 pub struct Fechamento {
@@ -107,7 +106,10 @@ pub fn buscar_fechamento(
 /// Fecha o dia: trava (`status = 'fechado'`) todos os lancamentos abertos do
 /// armazem/fluxo/data e grava um resumo auditavel. Depois disso,
 /// `movimentos::criar_movimento` passa a rejeitar novos lancamentos para o
-/// mesmo armazem/fluxo/data.
+/// mesmo armazem/fluxo/data. Qualquer conferente do proprio armazem pode
+/// fechar o dia (mesma autorizacao de `criar_movimento` - `autorizar_movimento`,
+/// nao e mais exclusivo do gestor): quem faz a baixa dos itens tambem fecha o
+/// dia, o gestor so entra pra estornar/corrigir depois.
 pub fn fechar_dia(
     conn: &mut Connection,
     armazem_id: i64,
@@ -115,19 +117,7 @@ pub fn fechar_dia(
     data: &str,
     usuario_id: i64,
 ) -> AppResult<Fechamento> {
-    let usuario = buscar_usuario_ativo(conn, usuario_id)?;
-    if usuario.papel != "gestor" {
-        return Err(AppError::Validation(
-            "Somente um gestor pode fechar o dia.".into(),
-        ));
-    }
-    if let Some(armazem_do_usuario) = usuario.armazem_id {
-        if armazem_do_usuario != armazem_id {
-            return Err(AppError::Validation(
-                "Voce nao pode fechar o dia de outro armazem.".into(),
-            ));
-        }
-    }
+    autorizar_movimento(conn, usuario_id, armazem_id)?;
 
     if buscar_fechamento(conn, armazem_id, fluxo, data)?.is_some() {
         return Err(AppError::Validation("Este dia ja foi fechado.".into()));
@@ -352,7 +342,7 @@ mod tests {
     }
 
     #[test]
-    fn conferente_nao_pode_fechar_o_dia() {
+    fn conferente_pode_fechar_o_dia_do_proprio_armazem() {
         let (mut conn, armazem_id, _gestor_id) = conexao_de_teste();
         let conferente_id = criar_usuario(
             &conn,
@@ -373,6 +363,38 @@ mod tests {
             "saida_armazem",
             "2026-08-25",
             conferente_id,
+        );
+        assert!(resultado.is_ok());
+    }
+
+    #[test]
+    fn conferente_nao_pode_fechar_o_dia_de_outro_armazem() {
+        let (mut conn, armazem_a4, usuario_id) = conexao_de_teste();
+        registrar_um_pedido(&mut conn, armazem_a4, usuario_id, "2026-08-25");
+
+        let armazem_b2: i64 = conn
+            .query_row("SELECT id FROM armazens WHERE codigo = 'B2'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        let conferente_b2 = criar_usuario(
+            &conn,
+            NovoUsuario {
+                nome: "Marcelo",
+                login: "marcelo",
+                senha: "senha123",
+                armazem_id: Some(armazem_b2),
+                papel: "conferente",
+            },
+        )
+        .unwrap();
+
+        let resultado = fechar_dia(
+            &mut conn,
+            armazem_a4,
+            "saida_armazem",
+            "2026-08-25",
+            conferente_b2,
         );
         assert!(matches!(resultado, Err(AppError::Validation(_))));
     }

@@ -528,11 +528,9 @@ export default function Sac({ usuario, armazem }: Props) {
           <strong>{totalGeralDoDia}</strong> pecas no total ({lancamentos.length} atendimentos)
         </p>
 
-        {ehGestor && (
-          <button className="aviso" onClick={handleFecharDia} disabled={fechando || lancamentos.length === 0}>
-            {fechando ? 'Fechando...' : 'Fechar o dia'}
-          </button>
-        )}
+        <button className="aviso" onClick={handleFecharDia} disabled={fechando || lancamentos.length === 0}>
+          {fechando ? 'Fechando...' : 'Fechar o dia'}
+        </button>
       </section>
     </div>
   );

@@ -581,11 +581,9 @@ export default function Montagem({ usuario, armazem, armazens, onTransferenciaCo
           <strong>{totalGeralDoDia}</strong> unidades no total ({lancamentos.length} lancamentos)
         </p>
 
-        {ehGestor && (
-          <button className="aviso" onClick={handleFecharDia} disabled={fechando || lancamentos.length === 0}>
-            {fechando ? 'Fechando...' : 'Fechar o dia'}
-          </button>
-        )}
+        <button className="aviso" onClick={handleFecharDia} disabled={fechando || lancamentos.length === 0}>
+          {fechando ? 'Fechando...' : 'Fechar o dia'}
+        </button>
       </section>
     </div>
   );

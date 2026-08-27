@@ -616,11 +616,9 @@ export default function Lancamentos({ usuario, armazem, armazens, onTransferenci
           <strong>{totalGeralDoDia}</strong> unidades no total ({lancamentos.length} pedidos)
         </p>
 
-        {ehGestor && (
-          <button className="aviso" onClick={handleFecharDia} disabled={fechando || lancamentos.length === 0}>
-            {fechando ? 'Fechando...' : 'Fechar o dia'}
-          </button>
-        )}
+        <button className="aviso" onClick={handleFecharDia} disabled={fechando || lancamentos.length === 0}>
+          {fechando ? 'Fechando...' : 'Fechar o dia'}
+        </button>
       </section>
     </div>
   );

@@ -332,7 +332,11 @@ fn buscar_armazem_ativo(conn: &Connection, armazem_id: i64) -> AppResult<()> {
 /// tiver um armazem fixo) so pode registrar para o proprio armazem. Tambem
 /// confere que o(s) armazem(ns) envolvidos existem e estao ativos. Chamada em
 /// todo ponto de escrita (`criar_movimento`, `estornar_movimento`).
-fn autorizar_movimento(conn: &Connection, usuario_id: i64, armazem_id: i64) -> AppResult<()> {
+pub(crate) fn autorizar_movimento(
+    conn: &Connection,
+    usuario_id: i64,
+    armazem_id: i64,
+) -> AppResult<()> {
     let usuario = buscar_usuario_ativo(conn, usuario_id)?;
     if let Some(armazem_do_usuario) = usuario.armazem_id {
         if armazem_do_usuario != armazem_id {
