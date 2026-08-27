@@ -640,6 +640,16 @@ cores fixas saida/entrada) - nao foi identificado nenhum ponto especifico adicio
 que doesse o suficiente pra justificar mexer mais agora. Revisitar se o usuario
 apontar uma tela especifica que incomoda no dia a dia.
 
+## v1.0.0 - primeira versao de producao (2026-08-27)
+
+Todos os itens planejados pra essa rodada final (v0.4.0 + capricho de UX/UI + estorno
+liberado pro conferente) fechados nessa mesma sessao ("continue as proximas sprints ate
+terminar todas"). Instalador Windows gerado (`build-installer.yml`) e copiado pra
+`~/Downloads/PARA-O-PENDRIVE-ECOVIVA` (fora do repo - pasta de staging local, nao
+versionada), pronto pra instalar em A4 e B2. Dados de teste (local desta maquina +
+Turso compartilhado) resetados antes do build - `usuarios`/`armazens` preservados,
+zero movimentos/fechamentos no dia 1 de producao de verdade.
+
 ## Depois disso
 
 - Escalar o mesmo instalador para novos armazens, se a empresa abrir mais.
