@@ -595,6 +595,18 @@ candidatos (ver secoes seguintes pros que ficaram de fora por ora).
 - Testes automatizados de frontend (hoje so `tsc --noEmit` do lado React) — baixo risco
   dado o tamanho do app.
 
+## Proxima sprint: capricho de UX/UI (planejado, 2026-08-27)
+
+Pedido do usuario: dedicar a proxima sprint a polimento visual/de usabilidade — tanto do
+app (Tauri) quanto do painel web somente-leitura (`painel/index.html`,
+jlsgo.github.io/conferente_armazem). Ainda nao escopado em telas/itens especificos;
+levantar com o usuario antes de comecar quais telas doem mais no dia a dia (candidatos
+obvios pra revisar quando essa sprint comecar: consistencia visual entre as 3 telas de
+lancamento agora que tem insights + campo Outro + "Fechar o dia" liberado pra
+conferente: densidade da tabela de Historico, feedback de erro/loading, o painel web
+que hoje e HTML/CSS bem cru). Nao inclui mudanca de comportamento/dominio, so
+UX/UI — features pendentes (paginacao, forca bruta) continuam na lista acima.
+
 ## Depois disso
 
 - Escalar o mesmo instalador para novos armazens, se a empresa abrir mais.
