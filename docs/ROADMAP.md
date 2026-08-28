@@ -654,6 +654,73 @@ zero movimentos/fechamentos no dia 1 de producao de verdade.
 
 - Escalar o mesmo instalador para novos armazens, se a empresa abrir mais.
 
+## Sprints do painel web (planejadas com o usuario, 2026-08-28)
+
+Pedido do usuario apos ver o v1.0.0 rodando: melhor visibilidade/filtros/insights no
+painel, horario de Brasilia, mais destaque pro numero do pedido, "pagina moderna,
+segura e com dados extremamente confiaveis". Plano dividido em sprints, aprovado pelo
+usuario ("sim, de maneira profissional, separando por sprints") - cada uma vira um
+commit proprio.
+
+### Sprint 1: confiabilidade dos dados (Feito)
+
+Prioridade 1 porque sem isso nenhum insight novo seria confiavel.
+
+- **Horario de Brasilia de verdade em `enviado_em`**: a coluna "Sincronizado" do
+  painel usava um timestamp gerado com `datetime('now')` rodando *no proprio servidor
+  do Turso* (nuvem - sempre UTC, nunca o fuso de quem esta operando), nao dava pra
+  corrigir so trocando pra `'localtime'` la porque seria o fuso do servidor, nao de
+  Brasilia. Corrigido calculando o horario local **no PC de origem**
+  (`db::sync::agora_local`, mesma ideia do `criado_em`) e mandando pronto pro Turso
+  como parametro (`enviado_em` saiu de `SQL_UPSERT` como literal `datetime('now')` pra
+  virar `?23` bind) - `enviar_para_turso` ganhou um parametro `enviado_em_local`, os 3
+  pontos que chamam (`lib.rs` no startup, `sincronizar_agora`, `confirmar_recebimento`)
+  atualizados. Verificado contra o Turso real: linha nova mostrou horario batendo com
+  o relogio do SO, nao mais ~3h adiantado.
+- **Filtros aplicados na consulta SQL, nao so no que ja tinha sido baixado**: antes o
+  painel buscava sempre as ultimas 300 linhas e filtrava tudo (tabela E os cards de
+  "insights") em cima desse recorte fixo - um filtro de 60 dias podia mostrar um
+  resumo incompleto sem avisar direito. Agora armazem/fluxo/data/tipo/situacao viram
+  `WHERE` de verdade na consulta ao Turso (sempre com bind de parametro, nunca
+  concatenando o valor no SQL, embora os campos ja venham restritos por `<select>`/
+  `<input type=date>` no HTML), com o teto subindo pra 2000 linhas e um aviso visivel
+  no proprio cartao de resumo (nao so no rodape da tabela) quando o filtro tem mais
+  linhas que isso. So a busca por texto livre (pedido/nome/item) continua client-side
+  (rapida, sem round-trip a cada tecla).
+- **Bug de verdade encontrado ao portar a logica**: `calcularPendentes` do painel so
+  considerava `fluxo === "peca_montagem"`, nunca `saida_armazem` - transferencias de
+  veiculo pendentes nunca apareciam no painel (apareciam certo no app). Corrigido
+  reescrevendo a deteccao de pendentes inteira em SQL, portada de
+  `db::sync::SQL_PENDENTES_RECEBIMENTO` (a mesma logica de 2 `NOT EXISTS` - nao
+  confirmada, nao estornada do lado de quem enviou - ja usada e testada no app real),
+  em vez de reimplementar em JS. Passou a rodar independente do filtro da tabela (uma
+  transferencia B2->A4 pendente tem que aparecer mesmo filtrando "so A4" ou "so B2").
+- **Bug de hoisting pego testando contra o Turso real antes de commitar**: as novas
+  `var LIMITE_LINHAS`/`COLUNAS_MOVIMENTO`/`ultimosFiltrados` foram declaradas depois do
+  bloco de autenticacao - numa visita repetida na mesma sessao (`jaAutenticado` ja
+  `true`), o carregamento chama `atualizar()` de forma sincrona antes do motor de JS
+  chegar nessas linhas, entao vinham `undefined` (virava `LIMIT NaN`/`SELECT
+  undefined` na consulta). Movidas pra antes do bloco de autenticacao. So foi pego
+  porque o teste rodou contra o Turso de verdade (via servidor HTTP local + Chrome
+  headless) em vez de so ler o codigo - viraria um bug em producao pra qualquer
+  usuario que reabrisse a aba na mesma sessao.
+- Bonus pequeno (calculo ja estava ali): cards de resumo ganharam "Entrada"/"Saida"
+  separados, nao so "Unidades" total.
+
+### Sprints seguintes (planejadas, ainda nao feitas)
+
+- **Sprint 2**: indicador de ultima sincronizacao por armazem (hoje so existe um
+  "atualizado as HH:MM" global - se o B2 ficar dias sem internet, o painel mostra o
+  dado velho dele como se fosse atual, sem avisar).
+- **Sprint 3**: destaque visual + busca dedicada pro numero do pedido (hoje e so mais
+  uma coluna no meio da tabela, a busca atual mistura pedido/nome/item).
+- **Sprint 4**: mais insights - comparativo A4 x B2 lado a lado, participacao por
+  fluxo (Saida de Armazem/Montagem/SAC), filtro por responsavel, atalhos de periodo
+  (hoje/7d/30d).
+- **Sprint 5**: confiabilidade visivel - comunicar na propria tela que e um espelho
+  somente-leitura (token read-only ja e verdade, so nao aparece pro usuario), talvez
+  um indicativo de integridade reaproveitando a cadeia de hash que o app ja calcula.
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um

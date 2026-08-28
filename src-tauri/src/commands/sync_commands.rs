@@ -42,7 +42,7 @@ pub async fn sincronizar_agora(
 ) -> AppResult<String> {
     let usuario_id = state.usuario_logado()?;
 
-    let pendentes = {
+    let (pendentes, agora_local) = {
         let conn = state.conn()?;
         let usuario = buscar_usuario_ativo(&conn, usuario_id)?;
         if usuario.papel != "gestor" {
@@ -50,7 +50,10 @@ pub async fn sincronizar_agora(
                 "Somente um gestor pode sincronizar com a nuvem.".into(),
             ));
         }
-        sync::movimentos_pendentes(&conn)?
+        (
+            sync::movimentos_pendentes(&conn)?,
+            sync::agora_local(&conn)?,
+        )
     };
 
     let diretorio_dados = app.path().app_data_dir().map_err(|e| {
@@ -63,7 +66,7 @@ pub async fn sincronizar_agora(
         ));
     };
 
-    let resultado = sync::enviar_para_turso(&url, &token, &pendentes).await?;
+    let resultado = sync::enviar_para_turso(&url, &token, &pendentes, &agora_local).await?;
 
     {
         let conn = state.conn()?;
@@ -225,11 +228,14 @@ pub async fn confirmar_recebimento(
     // ciclo sem esperar o proximo sync automatico - nao trata falha aqui
     // como erro da confirmacao em si, que ja aconteceu localmente com
     // sucesso: so avisa no log e o proximo sync tenta de novo.
-    let pendentes = {
+    let (pendentes, agora_local) = {
         let conn = state.conn()?;
-        sync::movimentos_pendentes(&conn)?
+        (
+            sync::movimentos_pendentes(&conn)?,
+            sync::agora_local(&conn)?,
+        )
     };
-    match sync::enviar_para_turso(&url, &token, &pendentes).await {
+    match sync::enviar_para_turso(&url, &token, &pendentes, &agora_local).await {
         Ok(resultado) => {
             let conn = state.conn()?;
             sync::marcar_sincronizado(&conn, &resultado.enviados)?;

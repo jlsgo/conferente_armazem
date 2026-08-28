@@ -120,6 +120,16 @@ pub fn movimentos_pendentes(conn: &Connection) -> AppResult<Vec<LinhaPendente>> 
     Ok(resultado)
 }
 
+/// Horario local (fuso do PC que esta enviando, ex.: Brasilia) formatado
+/// como o SQLite formata (`AAAA-MM-DD HH:MM:SS`). Usado por quem chama
+/// `enviar_para_turso` pra fornecer `enviado_em` - o Turso roda na nuvem
+/// (fuso do servidor, nao o do armazem), entao carimbar isso no lado
+/// remoto daria hora errada; melhor calcular aqui, no PC de origem, com a
+/// mesma conexao que ja busca os pendentes, e mandar pronto.
+pub fn agora_local(conn: &Connection) -> AppResult<String> {
+    Ok(conn.query_row("SELECT datetime('now', 'localtime')", [], |r| r.get(0))?)
+}
+
 /// Marca os movimentos como enviados com sucesso (`sincronizado_em =
 /// datetime('now')`). Chamada so com os ids que o Turso realmente confirmou.
 pub fn marcar_sincronizado(conn: &Connection, ids: &[i64]) -> AppResult<()> {
@@ -246,7 +256,7 @@ const SQL_UPSERT: &str = "
          itens_json, armazem_destino_codigo, recebido_de_armazem_codigo,
          recebido_de_id_origem, enviado_em)
     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-            ?19, ?20, ?21, ?22, datetime('now'))
+            ?19, ?20, ?21, ?22, ?23)
 ";
 
 /// Conecta no banco Turso configurado, garante que a tabela consolidada
@@ -275,6 +285,7 @@ pub async fn enviar_para_turso(
     url: &str,
     token: &str,
     pendentes: &[LinhaPendente],
+    enviado_em_local: &str,
 ) -> AppResult<ResultadoSincronizacao> {
     let banco = libsql::Builder::new_remote(url.to_string(), token.to_string())
         .build()
@@ -328,6 +339,7 @@ pub async fn enviar_para_turso(
                     linha.armazem_destino_codigo.clone(),
                     linha.movimento.recebido_de_armazem_codigo.clone(),
                     linha.movimento.recebido_de_id_origem,
+                    enviado_em_local,
                 ],
             )
             .await;

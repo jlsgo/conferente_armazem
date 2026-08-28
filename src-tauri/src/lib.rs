@@ -47,17 +47,22 @@ pub fn run() {
                 let app_handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     let state = app_handle.state::<AppState>();
-                    let pendentes = {
+                    let (pendentes, agora_local) = {
                         let Ok(conn) = state.conn() else { return };
-                        match db::sync::movimentos_pendentes(&conn) {
+                        let pendentes = match db::sync::movimentos_pendentes(&conn) {
                             Ok(p) => p,
                             Err(e) => {
                                 log::warn!("Falha ao preparar sincronizacao com o Turso: {e}");
                                 return;
                             }
-                        }
+                        };
+                        let Ok(agora_local) = db::sync::agora_local(&conn) else {
+                            return;
+                        };
+                        (pendentes, agora_local)
                     };
-                    match db::sync::enviar_para_turso(&url, &token, &pendentes).await {
+                    match db::sync::enviar_para_turso(&url, &token, &pendentes, &agora_local).await
+                    {
                         Ok(resultado) => {
                             if let Ok(conn) = state.conn() {
                                 if let Err(e) =

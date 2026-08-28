@@ -146,6 +146,16 @@
   .badge-pendente { background: var(--aviso-claro); color: var(--aviso); }
   .badge-divergencia { background: var(--divergencia-claro); color: var(--divergencia); }
   .badge-estorno { background: var(--erro-claro); color: var(--erro); }
+  .aviso-truncado {
+    background: var(--aviso-claro);
+    color: var(--aviso);
+    border: 1px solid var(--aviso);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin: 0 0 14px;
+  }
   .rodape { font-size: 0.75rem; color: var(--texto-suave); margin-top: 10px; }
   .escondido { display: none; }
   .grade-stats { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
@@ -228,6 +238,9 @@
 
     <div class="cartao" id="cartao-insights">
       <h3>Resumo do periodo filtrado</h3>
+      <p id="aviso-truncado" class="aviso-truncado escondido">
+        ⚠ Este filtro tem mais movimentos do que o carregado - os numeros abaixo estao incompletos. Reduza o periodo ou refine o filtro pra ver o total real.
+      </p>
       <div id="grade-stats" class="grade-stats"></div>
       <div class="grafico-bloco">
         <h4>Volume por dia</h4>
@@ -289,6 +302,21 @@
   var SENHA_HASH = "3030678937569bf5f7e8130183ad7873f4426c7a67faf2ec88907ba343e18107";
   var CHAVE_SESSAO = "ecoviva-painel-autenticado";
 
+  // Declarados aqui (antes do bloco de autenticacao logo abaixo) de
+  // proposito: numa visita repetida na mesma sessao, `jaAutenticado` ja
+  // vem true e chama `liberarAcesso() -> iniciar() -> atualizar()` de
+  // forma sincrona, antes do motor de JS chegar nas linhas mais abaixo -
+  // `var` so tem o nome hoisted, nao o valor, entao declarar isso la
+  // embaixo faria essas variaveis chegarem `undefined` nessa primeira
+  // chamada (virava `LIMIT NaN`/`SELECT undefined` na consulta - bug real,
+  // pego testando contra o Turso de verdade antes de commitar).
+  var LIMITE_LINHAS = 2000;
+  var COLUNAS_MOVIMENTO = "armazem_codigo, id_origem, fluxo, tipo, data, hora, usuario_nome, " +
+    "numero_pedido, status, estornado_de, itens_json, armazem_destino_codigo, " +
+    "recebido_de_armazem_codigo, recebido_de_id_origem, enviado_em";
+  var ultimosFiltrados = [];
+  var intervaloAtualizacao = null;
+
   var elGate = document.getElementById("gate");
   var elConteudo = document.getElementById("conteudo");
   var elCampoSenha = document.getElementById("campo-senha");
@@ -330,10 +358,7 @@
 
   // ---- Dados ----
 
-  var todosOsMovimentos = [];
-  var intervaloAtualizacao = null;
-
-  async function buscarMovimentos() {
+  async function executarSql(sql, args) {
     var resposta = await fetch(TURSO_URL + "/v2/pipeline", {
       method: "POST",
       headers: {
@@ -345,14 +370,16 @@
           {
             type: "execute",
             stmt: {
-              sql: "SELECT armazem_codigo, id_origem, fluxo, tipo, data, hora, usuario_nome, numero_pedido, status, estornado_de, itens_json, armazem_destino_codigo, recebido_de_armazem_codigo, recebido_de_id_origem, enviado_em FROM movimentos_consolidados ORDER BY data DESC, hora DESC LIMIT 300"
+              sql: sql,
+              args: (args || []).map(function (valor) {
+                return { type: "text", value: String(valor) };
+              })
             }
           },
           { type: "close" }
         ]
       })
     });
-
     if (!resposta.ok) {
       throw new Error("Turso respondeu " + resposta.status);
     }
@@ -361,50 +388,101 @@
     if (!execucao || execucao.type !== "ok") {
       throw new Error("Resposta inesperada do Turso.");
     }
-    var linhas = execucao.response.result.rows;
-    return linhas.map(function (linha) {
-      function v(i) { return linha[i] && linha[i].value !== undefined ? linha[i].value : null; }
-      var itens = [];
-      try { itens = JSON.parse(v(10) || "[]"); } catch (e) { itens = []; }
-      return {
-        armazem_codigo: v(0),
-        id_origem: Number(v(1)),
-        fluxo: v(2),
-        tipo: v(3),
-        data: v(4),
-        hora: v(5),
-        usuario_nome: v(6),
-        numero_pedido: v(7),
-        status: v(8),
-        estornado_de: v(9) != null ? Number(v(9)) : null,
-        itens: itens,
-        armazem_destino_codigo: v(11),
-        recebido_de_armazem_codigo: v(12),
-        recebido_de_id_origem: v(13) != null ? Number(v(13)) : null,
-        enviado_em: v(14)
-      };
-    });
+    return execucao.response.result.rows;
   }
 
-  function chave(armazem, id) { return armazem + ":" + id; }
+  function linhaParaMovimento(linha) {
+    function v(i) { return linha[i] && linha[i].value !== undefined ? linha[i].value : null; }
+    var itens = [];
+    try { itens = JSON.parse(v(10) || "[]"); } catch (e) { itens = []; }
+    return {
+      armazem_codigo: v(0),
+      id_origem: Number(v(1)),
+      fluxo: v(2),
+      tipo: v(3),
+      data: v(4),
+      hora: v(5),
+      usuario_nome: v(6),
+      numero_pedido: v(7),
+      status: v(8),
+      estornado_de: v(9) != null ? Number(v(9)) : null,
+      itens: itens,
+      armazem_destino_codigo: v(11),
+      recebido_de_armazem_codigo: v(12),
+      recebido_de_id_origem: v(13) != null ? Number(v(13)) : null,
+      enviado_em: v(14)
+    };
+  }
 
-  function calcularPendentes(movimentos) {
-    var confirmados = new Set();
-    var estornados = new Set();
-    movimentos.forEach(function (m) {
-      if (m.recebido_de_armazem_codigo && m.recebido_de_id_origem != null) {
-        confirmados.add(chave(m.recebido_de_armazem_codigo, m.recebido_de_id_origem));
-      }
-      if (m.estornado_de != null) {
-        estornados.add(chave(m.armazem_codigo, m.estornado_de));
-      }
-    });
-    return movimentos.filter(function (m) {
-      return m.fluxo === "peca_montagem" && m.tipo === "saida" && m.armazem_destino_codigo &&
-        m.estornado_de == null &&
-        !confirmados.has(chave(m.armazem_codigo, m.id_origem)) &&
-        !estornados.has(chave(m.armazem_codigo, m.id_origem));
-    });
+  function lerFiltrosDaTela() {
+    return {
+      armazem: document.getElementById("filtro-armazem").value,
+      fluxo: document.getElementById("filtro-fluxo").value,
+      dataInicio: document.getElementById("filtro-data-inicio").value,
+      dataFim: document.getElementById("filtro-data-fim").value,
+      tipo: document.getElementById("filtro-tipo").value,
+      situacao: document.getElementById("filtro-situacao").value
+    };
+  }
+
+  // So os filtros estruturados (armazem/fluxo/data/tipo/situacao) viram
+  // WHERE no SQL - todos vem de <select>/<input type=date>, nunca de texto
+  // livre digitado, entao o valor em si ja e restrito pelo proprio HTML.
+  // Ainda assim usa `args` com bind (nunca concatena o valor na string do
+  // SQL) - o token do Turso aqui e somente-leitura (reforcado pelo
+  // servidor, ver docs/ARQUITETURA.md), mas nao ha motivo pra depender so
+  // disso podendo simplesmente nao concatenar.
+  function montarFiltroSql(filtros) {
+    var condicoes = [];
+    var args = [];
+    if (filtros.armazem) { condicoes.push("armazem_codigo = ?"); args.push(filtros.armazem); }
+    if (filtros.fluxo) { condicoes.push("fluxo = ?"); args.push(filtros.fluxo); }
+    if (filtros.dataInicio) { condicoes.push("data >= ?"); args.push(filtros.dataInicio); }
+    if (filtros.dataFim) { condicoes.push("data <= ?"); args.push(filtros.dataFim); }
+    if (filtros.tipo) { condicoes.push("tipo = ?"); args.push(filtros.tipo); }
+    if (filtros.situacao === "estorno") {
+      condicoes.push("estornado_de IS NOT NULL");
+    } else if (filtros.situacao === "baixa") {
+      condicoes.push("tipo = 'saida' AND estornado_de IS NULL");
+    } else if (filtros.situacao === "entrada") {
+      condicoes.push("tipo = 'entrada' AND estornado_de IS NULL");
+    }
+    return { where: condicoes.length ? " WHERE " + condicoes.join(" AND ") : "", args: args };
+  }
+
+  // Movimentos pro periodo/filtro selecionado (tabela + insights). Pede uma
+  // linha a mais que o limite pra saber se foi cortado, sem precisar de um
+  // COUNT(*) separado - mesma ideia ja usada em `buscar_historico` no app.
+  async function buscarMovimentosFiltrados(filtros) {
+    var f = montarFiltroSql(filtros);
+    var sql = "SELECT " + COLUNAS_MOVIMENTO + " FROM movimentos_consolidados" + f.where +
+      " ORDER BY data DESC, hora DESC LIMIT " + (LIMITE_LINHAS + 1);
+    var linhas = await executarSql(sql, f.args);
+    var truncado = linhas.length > LIMITE_LINHAS;
+    return { movimentos: linhas.slice(0, LIMITE_LINHAS).map(linhaParaMovimento), truncado: truncado };
+  }
+
+  // Transferencias pendentes de confirmacao: SEMPRE olha a tabela toda,
+  // nunca so o filtro ativo (uma transferencia B2->A4 pendente tem que
+  // aparecer mesmo filtrando so por "A4", que so bateria com o destino, ou
+  // so por "B2", que so bateria com a origem). Mesma logica de
+  // `db::sync::SQL_PENDENTES_RECEBIMENTO` no app (2 NOT EXISTS: nao
+  // confirmada, nao estornada do lado de quem enviou) - replicada aqui em
+  // SQL, nao em JS, pra nao arriscar divergir da fonte da verdade real nem
+  // depender do recorte de outra consulta pra estar completa.
+  async function buscarPendentesGlobal() {
+    var sql = "SELECT " + COLUNAS_MOVIMENTO + " FROM movimentos_consolidados m " +
+      "WHERE fluxo IN ('peca_montagem', 'saida_armazem') " +
+      "AND tipo = 'saida' " +
+      "AND estornado_de IS NULL " +
+      "AND armazem_destino_codigo IS NOT NULL " +
+      "AND NOT EXISTS (SELECT 1 FROM movimentos_consolidados x " +
+      "  WHERE x.armazem_codigo = m.armazem_codigo AND x.estornado_de = m.id_origem) " +
+      "AND NOT EXISTS (SELECT 1 FROM movimentos_consolidados c " +
+      "  WHERE c.recebido_de_armazem_codigo = m.armazem_codigo AND c.recebido_de_id_origem = m.id_origem) " +
+      "ORDER BY data ASC, hora ASC LIMIT 200";
+    var linhas = await executarSql(sql, []);
+    return linhas.map(linhaParaMovimento);
   }
 
   function totalItens(itens) {
@@ -459,9 +537,8 @@
     return '<span class="badge badge-entrada">ENTRADA</span>';
   }
 
-  function renderizarPendentes(movimentos) {
+  function renderizarPendentes(pendentes) {
     var el = document.getElementById("lista-pendentes");
-    var pendentes = calcularPendentes(movimentos);
     if (pendentes.length === 0) {
       el.innerHTML = "<p>Nenhuma.</p>";
       return;
@@ -473,34 +550,23 @@
     }).join("");
   }
 
-  function aplicarFiltros(movimentos) {
-    var armazem = document.getElementById("filtro-armazem").value;
-    var fluxo = document.getElementById("filtro-fluxo").value;
-    var dataInicio = document.getElementById("filtro-data-inicio").value;
-    var dataFim = document.getElementById("filtro-data-fim").value;
-    var tipo = document.getElementById("filtro-tipo").value;
-    var situacao = document.getElementById("filtro-situacao").value;
+  // Os filtros estruturados ja foram aplicados na consulta SQL - aqui so
+  // sobra a busca livre (pedido/nome/item), que roda em cima do resultado
+  // ja filtrado, sem precisar de nova consulta a cada tecla digitada.
+  function aplicarBusca(movimentos) {
     var busca = document.getElementById("filtro-busca").value.trim().toLowerCase();
+    if (!busca) return movimentos;
     return movimentos.filter(function (m) {
-      if (armazem && m.armazem_codigo !== armazem) return false;
-      if (fluxo && m.fluxo !== fluxo) return false;
-      if (dataInicio && m.data < dataInicio) return false;
-      if (dataFim && m.data > dataFim) return false;
-      if (tipo && m.tipo !== tipo) return false;
-      if (situacao && situacaoValor(m) !== situacao) return false;
-      if (busca) {
-        var noPedido = (m.numero_pedido || "").toLowerCase().indexOf(busca) >= 0;
-        var noNome = (m.usuario_nome || "").toLowerCase().indexOf(busca) >= 0;
-        var noItem = m.itens.some(function (it) {
-          return (it.descricao || "").toLowerCase().indexOf(busca) >= 0;
-        });
-        if (!noPedido && !noNome && !noItem) return false;
-      }
-      return true;
+      var noPedido = (m.numero_pedido || "").toLowerCase().indexOf(busca) >= 0;
+      var noNome = (m.usuario_nome || "").toLowerCase().indexOf(busca) >= 0;
+      var noItem = m.itens.some(function (it) {
+        return (it.descricao || "").toLowerCase().indexOf(busca) >= 0;
+      });
+      return noPedido || noNome || noItem;
     });
   }
 
-  function renderizarTabela(filtrados) {
+  function renderizarTabela(filtrados, totalSemBusca, truncado) {
     var corpo = document.getElementById("corpo-tabela");
     corpo.innerHTML = filtrados.map(function (m) {
       var divergencia = temDivergencia(m.itens)
@@ -520,19 +586,28 @@
         "<td>" + (m.enviado_em ? formatarDataHora(m.enviado_em) : "-") + "</td>" +
         "</tr>";
     }).join("");
-    document.getElementById("rodape-tabela").textContent =
-      filtrados.length + " de " + todosOsMovimentos.length + " movimentos (ultimos 300 sincronizados). " +
-      "Se o periodo filtrado tiver mais de 300 movimentos, os mais antigos podem nao aparecer - refine os filtros.";
+    var rodape = filtrados.length + " de " + totalSemBusca + " movimentos no filtro atual.";
+    if (truncado) {
+      rodape += " O filtro selecionado tem mais de " + LIMITE_LINHAS +
+        " movimentos - alguns dos mais antigos nao estao sendo mostrados. Reduza o periodo pra ver tudo.";
+    }
+    document.getElementById("rodape-tabela").textContent = rodape;
   }
 
-  function calcularInsights(filtrados) {
+  function calcularInsights(filtrados, pendentesCount) {
     var porDia = {}, porCategoria = {};
-    var totalEstorno = 0, totalUnidades = 0;
+    var totalEstorno = 0, totalUnidades = 0, totalEntrada = 0, totalSaida = 0;
     filtrados.forEach(function (m) {
       var qtd = totalItens(m.itens);
       totalUnidades += qtd;
       porDia[m.data] = (porDia[m.data] || 0) + qtd;
-      if (m.estornado_de != null) totalEstorno += 1;
+      if (m.estornado_de != null) {
+        totalEstorno += 1;
+      } else if (m.tipo === "saida") {
+        totalSaida += qtd;
+      } else {
+        totalEntrada += qtd;
+      }
       m.itens.forEach(function (it) {
         porCategoria[it.categoria] = (porCategoria[it.categoria] || 0) + (it.quantidade || 0);
       });
@@ -542,8 +617,10 @@
       porCategoria: porCategoria,
       totalMovimentos: filtrados.length,
       totalUnidades: totalUnidades,
+      totalEntrada: totalEntrada,
+      totalSaida: totalSaida,
       taxaEstorno: filtrados.length ? (totalEstorno / filtrados.length) : 0,
-      pendentesCount: calcularPendentes(filtrados).length
+      pendentesCount: pendentesCount
     };
   }
 
@@ -555,11 +632,13 @@
       '</svg>';
   }
 
-  function renderizarInsights(filtrados) {
-    var dados = calcularInsights(filtrados);
+  function renderizarInsights(filtrados, pendentesCount) {
+    var dados = calcularInsights(filtrados, pendentesCount);
     document.getElementById("grade-stats").innerHTML = [
       ["Movimentos", dados.totalMovimentos],
       ["Unidades", dados.totalUnidades],
+      ["Entrada", dados.totalEntrada],
+      ["Saida", dados.totalSaida],
       ["Transferencias pendentes", dados.pendentesCount],
       ["Taxa de estorno", (dados.taxaEstorno * 100).toFixed(1) + "%"]
     ].map(function (t) {
@@ -585,18 +664,33 @@
     }).join("") || "<p>Sem dados no periodo.</p>";
   }
 
-  function renderizarFiltrados() {
-    var filtrados = aplicarFiltros(todosOsMovimentos);
-    renderizarTabela(filtrados);
-    renderizarInsights(filtrados);
+  // So reaplica a busca (client-side) em cima do ultimo resultado buscado -
+  // nao dispara consulta nova. Usado no "input" do campo de busca.
+  function reaplicarBusca() {
+    var comBusca = aplicarBusca(ultimosFiltrados.movimentos);
+    renderizarTabela(comBusca, ultimosFiltrados.movimentos.length, ultimosFiltrados.truncado);
+    renderizarInsights(comBusca, ultimosFiltrados.pendentesCount);
+    document.getElementById("aviso-truncado").classList.toggle("escondido", !ultimosFiltrados.truncado);
   }
 
   async function atualizar() {
     var elStatus = document.getElementById("status-topo");
     try {
-      todosOsMovimentos = await buscarMovimentos();
-      renderizarPendentes(todosOsMovimentos);
-      renderizarFiltrados();
+      var filtros = lerFiltrosDaTela();
+      var resultados = await Promise.all([
+        buscarMovimentosFiltrados(filtros),
+        buscarPendentesGlobal()
+      ]);
+      var dadosFiltrados = resultados[0];
+      var pendentes = resultados[1];
+
+      ultimosFiltrados = {
+        movimentos: dadosFiltrados.movimentos,
+        truncado: dadosFiltrados.truncado,
+        pendentesCount: pendentes.length
+      };
+      renderizarPendentes(pendentes);
+      reaplicarBusca();
       elStatus.textContent = "Atualizado as " + new Date().toLocaleTimeString("pt-BR") +
         " - atualiza sozinho a cada 30s.";
     } catch (e) {
@@ -607,9 +701,9 @@
   function iniciar() {
     document.getElementById("botao-atualizar").addEventListener("click", atualizar);
     ["filtro-armazem", "filtro-fluxo", "filtro-data-inicio", "filtro-data-fim", "filtro-tipo", "filtro-situacao"].forEach(function (id) {
-      document.getElementById(id).addEventListener("change", renderizarFiltrados);
+      document.getElementById(id).addEventListener("change", atualizar);
     });
-    document.getElementById("filtro-busca").addEventListener("input", renderizarFiltrados);
+    document.getElementById("filtro-busca").addEventListener("input", reaplicarBusca);
     atualizar();
     if (intervaloAtualizacao) clearInterval(intervaloAtualizacao);
     intervaloAtualizacao = setInterval(atualizar, 30000);

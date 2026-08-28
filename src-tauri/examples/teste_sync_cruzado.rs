@@ -176,7 +176,8 @@ async fn main() {
         3,
         "esperava 3 linhas pendentes em B2 (envio1, envio2, estorno)"
     );
-    let resultado_envio = sync::enviar_para_turso(&url, &token, &pendentes_b2)
+    let agora_local_b2 = sync::agora_local(&conn_b2).unwrap();
+    let resultado_envio = sync::enviar_para_turso(&url, &token, &pendentes_b2, &agora_local_b2)
         .await
         .unwrap();
     assert!(
@@ -248,9 +249,11 @@ async fn main() {
     );
 
     let pendentes_confirmacao = sync::movimentos_pendentes(&conn_a4).unwrap();
-    let resultado_confirmacao = sync::enviar_para_turso(&url, &token, &pendentes_confirmacao)
-        .await
-        .unwrap();
+    let agora_local_a4 = sync::agora_local(&conn_a4).unwrap();
+    let resultado_confirmacao =
+        sync::enviar_para_turso(&url, &token, &pendentes_confirmacao, &agora_local_a4)
+            .await
+            .unwrap();
     assert!(
         resultado_confirmacao.falhas.is_empty(),
         "falhas ao enviar confirmacao A4->Turso: {:?}",
