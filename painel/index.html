@@ -49,11 +49,28 @@
   * { box-sizing: border-box; }
   body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      "PingFang SC", "Microsoft YaHei", sans-serif;
     background: var(--bg);
     color: var(--texto);
     -webkit-font-smoothing: antialiased;
   }
+  .idioma-toggle { display: flex; gap: 4px; }
+  .idioma-btn {
+    background: rgba(255, 255, 255, 0.12);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .idioma-btn.ativo { background: white; color: var(--verde-escuro); border-color: white; }
+  .gate .idioma-toggle { justify-content: center; margin-bottom: 14px; }
+  .gate .idioma-btn { background: var(--bg); color: var(--texto-suave); border-color: var(--borda); }
+  .gate .idioma-btn.ativo { background: var(--verde); color: white; border-color: var(--verde); }
+  header .idioma-toggle { margin-left: auto; align-self: flex-start; }
   header {
     background: linear-gradient(135deg, var(--verde), var(--verde-escuro));
     color: white;
@@ -221,136 +238,144 @@
 <body>
 
 <div id="gate" class="gate cartao">
-  <h2>Painel Ecoviva</h2>
-  <p>Acesso restrito - digite a senha combinada com a gestao.</p>
-  <input id="campo-senha" type="password" placeholder="Senha" autofocus />
-  <button id="botao-entrar">Entrar</button>
-  <p id="erro-senha" class="erro escondido">Senha incorreta.</p>
+  <div class="idioma-toggle">
+    <button type="button" class="idioma-btn" data-idioma="pt">PT</button>
+    <button type="button" class="idioma-btn" data-idioma="zh">中文</button>
+  </div>
+  <h2 data-i18n="gateTitulo">Painel Ecoviva</h2>
+  <p data-i18n="gateDescricao">Acesso restrito - digite a senha combinada com a gestao.</p>
+  <input id="campo-senha" type="password" placeholder="Senha" data-i18n-placeholder="senhaPlaceholder" autofocus />
+  <button id="botao-entrar" data-i18n="botaoEntrar">Entrar</button>
+  <p id="erro-senha" class="erro escondido" data-i18n="senhaIncorreta">Senha incorreta.</p>
 </div>
 
 <div id="conteudo" class="escondido">
   <header>
     <span class="icone-cabecalho" aria-hidden="true">📦</span>
     <div>
-      <h1>Painel Ecoviva - Armazens A4 / B2
-        <span class="badge-somente-leitura" title="Este painel so consegue LER os dados - o acesso usado aqui e um token do banco configurado para nunca aceitar escrita, reforcado pelo proprio servidor do banco (nao e so uma trava no codigo desta pagina). Os dados vem do app oficial de cada armazem, que registra cada lancamento com um hash de auditoria encadeado.">🔒 somente leitura</span>
+      <h1><span data-i18n="headerTitulo">Painel Ecoviva - Armazens A4 / B2</span>
+        <span class="badge-somente-leitura" data-i18n="badgeSomenteLeitura" data-i18n-title="badgeSomenteLeituraTitulo" title="Este painel so consegue LER os dados - o acesso usado aqui e um token do banco configurado para nunca aceitar escrita, reforcado pelo proprio servidor do banco (nao e so uma trava no codigo desta pagina). Os dados vem do app oficial de cada armazem, que registra cada lancamento com um hash de auditoria encadeado.">🔒 somente leitura</span>
       </h1>
       <p id="status-topo">Carregando...</p>
+    </div>
+    <div class="idioma-toggle">
+      <button type="button" class="idioma-btn" data-idioma="pt">PT</button>
+      <button type="button" class="idioma-btn" data-idioma="zh">中文</button>
     </div>
   </header>
   <main>
     <div class="cartao filtros">
-      <label class="campo-destaque">Numero do pedido
-        <input id="filtro-pedido" type="search" placeholder="Ex: 3893" />
+      <label class="campo-destaque"><span data-i18n="filtroPedidoLabel">Numero do pedido</span>
+        <input id="filtro-pedido" type="search" placeholder="Ex: 3893" data-i18n-placeholder="filtroPedidoPlaceholder" />
       </label>
-      <label>Armazem
+      <label><span data-i18n="filtroArmazemLabel">Armazem</span>
         <select id="filtro-armazem">
-          <option value="">Todos</option>
+          <option value="" data-i18n="opcaoTodos">Todos</option>
           <option value="A4">A4</option>
           <option value="B2">B2</option>
         </select>
       </label>
-      <label>Fluxo
+      <label><span data-i18n="filtroFluxoLabel">Fluxo</span>
         <select id="filtro-fluxo">
-          <option value="">Todos</option>
-          <option value="saida_armazem">Saida de Armazem</option>
-          <option value="peca_montagem">Montagem</option>
-          <option value="sac">SAC</option>
+          <option value="" data-i18n="opcaoTodos">Todos</option>
+          <option value="saida_armazem" data-i18n="fluxoSaidaArmazem">Saida de Armazem</option>
+          <option value="peca_montagem" data-i18n="fluxoMontagem">Montagem</option>
+          <option value="sac" data-i18n="fluxoSac">SAC</option>
         </select>
       </label>
-      <label>De
+      <label><span data-i18n="filtroDeLabel">De</span>
         <input id="filtro-data-inicio" type="date" />
       </label>
-      <label>Ate
+      <label><span data-i18n="filtroAteLabel">Ate</span>
         <input id="filtro-data-fim" type="date" />
       </label>
       <label>&nbsp;
         <div class="atalhos-periodo">
-          <button type="button" class="atalho" data-dias="0">Hoje</button>
-          <button type="button" class="atalho" data-dias="7">7 dias</button>
-          <button type="button" class="atalho" data-dias="30">30 dias</button>
+          <button type="button" class="atalho" data-dias="0" data-i18n="atalhoHoje">Hoje</button>
+          <button type="button" class="atalho" data-dias="7" data-i18n="atalho7dias">7 dias</button>
+          <button type="button" class="atalho" data-dias="30" data-i18n="atalho30dias">30 dias</button>
         </div>
       </label>
-      <label>Responsavel
+      <label><span data-i18n="filtroResponsavelLabel">Responsavel</span>
         <select id="filtro-responsavel">
-          <option value="">Todos</option>
+          <option value="" data-i18n="opcaoTodos">Todos</option>
         </select>
       </label>
-      <label>Tipo
+      <label><span data-i18n="filtroTipoLabel">Tipo</span>
         <select id="filtro-tipo">
-          <option value="">Todos</option>
-          <option value="entrada">Entrada</option>
-          <option value="saida">Saida</option>
+          <option value="" data-i18n="opcaoTodos">Todos</option>
+          <option value="entrada" data-i18n="tipoEntrada">Entrada</option>
+          <option value="saida" data-i18n="tipoSaida">Saida</option>
         </select>
       </label>
-      <label>Situacao
+      <label><span data-i18n="filtroSituacaoLabel">Situacao</span>
         <select id="filtro-situacao">
-          <option value="">Todas</option>
-          <option value="entrada">Entrada</option>
-          <option value="baixa">Baixa</option>
-          <option value="estorno">Estorno</option>
+          <option value="" data-i18n="opcaoTodas">Todas</option>
+          <option value="entrada" data-i18n="tipoEntrada">Entrada</option>
+          <option value="baixa" data-i18n="situacaoBaixa">Baixa</option>
+          <option value="estorno" data-i18n="situacaoEstorno">Estorno</option>
         </select>
       </label>
-      <label>Busca
-        <input id="filtro-busca" type="search" placeholder="Nome ou item" />
+      <label><span data-i18n="filtroBuscaLabel">Busca</span>
+        <input id="filtro-busca" type="search" placeholder="Nome ou item" data-i18n-placeholder="filtroBuscaPlaceholder" />
       </label>
       <label>&nbsp;
-        <button id="botao-atualizar">Atualizar agora</button>
+        <button id="botao-atualizar" data-i18n="botaoAtualizar">Atualizar agora</button>
       </label>
     </div>
 
     <div class="cartao">
-      <h3>Sincronizacao por armazem</h3>
-      <p class="subtitulo-cartao">Quando cada armazem mandou dado pela ultima vez - se um ficar muito tempo sem sincronizar, o que aparece dele aqui pode estar desatualizado.</p>
+      <h3 data-i18n="cartaoSyncTitulo">Sincronizacao por armazem</h3>
+      <p class="subtitulo-cartao" data-i18n="cartaoSyncSubtitulo">Quando cada armazem mandou dado pela ultima vez - se um ficar muito tempo sem sincronizar, o que aparece dele aqui pode estar desatualizado.</p>
       <div id="status-armazens" class="status-armazens"></div>
     </div>
 
     <div class="cartao" id="cartao-insights">
-      <h3>Resumo do periodo filtrado</h3>
-      <p id="aviso-truncado" class="aviso-truncado escondido">
+      <h3 data-i18n="cartaoInsightsTitulo">Resumo do periodo filtrado</h3>
+      <p id="aviso-truncado" class="aviso-truncado escondido" data-i18n="avisoTruncadoTexto">
         ⚠ Este filtro tem mais movimentos do que o carregado - os numeros abaixo estao incompletos. Reduza o periodo ou refine o filtro pra ver o total real.
       </p>
       <div id="grade-stats" class="grade-stats"></div>
       <div class="grafico-bloco">
-        <h4>Volume por dia</h4>
+        <h4 data-i18n="graficoVolumeTitulo">Volume por dia</h4>
         <div id="grafico-volume"></div>
       </div>
       <div class="grafico-bloco">
-        <h4>Top categorias de item</h4>
+        <h4 data-i18n="graficoCategoriasTitulo">Top categorias de item</h4>
         <div id="grafico-categorias"></div>
       </div>
       <div class="grafico-bloco escondido" id="bloco-por-armazem">
-        <h4>Por armazem</h4>
+        <h4 data-i18n="graficoArmazemTitulo">Por armazem</h4>
         <div id="grafico-armazem"></div>
       </div>
       <div class="grafico-bloco escondido" id="bloco-por-fluxo">
-        <h4>Por fluxo</h4>
+        <h4 data-i18n="graficoFluxoTitulo">Por fluxo</h4>
         <div id="grafico-fluxo"></div>
       </div>
     </div>
 
     <div class="cartao">
-      <h3>Transferencias pendentes de confirmacao</h3>
-      <div id="lista-pendentes" class="lista-pendentes"><p>Nenhuma.</p></div>
+      <h3 data-i18n="cartaoPendentesTitulo">Transferencias pendentes de confirmacao</h3>
+      <div id="lista-pendentes" class="lista-pendentes"><p data-i18n="nenhuma">Nenhuma.</p></div>
     </div>
 
     <div class="cartao">
-      <h3>Movimentos recentes</h3>
+      <h3 data-i18n="cartaoMovimentosTitulo">Movimentos recentes</h3>
       <div class="tabela-scroll">
         <table>
           <thead>
             <tr>
-              <th>Armazem</th>
-              <th>Fluxo</th>
-              <th>Tipo</th>
-              <th>Data</th>
-              <th>Hora</th>
-              <th>Pedido</th>
-              <th>Itens</th>
-              <th>Qtd.</th>
-              <th>Registrado por</th>
-              <th>Situacao</th>
-              <th>Sincronizado</th>
+              <th data-i18n="colArmazem">Armazem</th>
+              <th data-i18n="colFluxo">Fluxo</th>
+              <th data-i18n="colTipo">Tipo</th>
+              <th data-i18n="colData">Data</th>
+              <th data-i18n="colHora">Hora</th>
+              <th data-i18n="colPedido">Pedido</th>
+              <th data-i18n="colItens">Itens</th>
+              <th data-i18n="colQtd">Qtd.</th>
+              <th data-i18n="colRegistradoPor">Registrado por</th>
+              <th data-i18n="colSituacao">Situacao</th>
+              <th data-i18n="colSincronizado">Sincronizado</th>
             </tr>
           </thead>
           <tbody id="corpo-tabela"></tbody>
@@ -358,7 +383,7 @@
       </div>
       <p class="rodape" id="rodape-tabela"></p>
     </div>
-    <p class="rodape-pagina">
+    <p class="rodape-pagina" data-i18n="rodapePagina">
       Este painel espelha os dados do app oficial de A4/B2 em tempo quase real - nao e a fonte oficial nem o lugar
       pra conferir a integridade de um lancamento especifico (cada lancamento tem um hash de auditoria encadeado
       que fica no app, nao reproduzido aqui).
@@ -383,6 +408,244 @@
   // (escopo reforcado pelo servidor): mesmo que a senha vaze, da so pra ler.
   var SENHA_HASH = "3030678937569bf5f7e8130183ad7873f4426c7a67faf2ec88907ba343e18107";
   var CHAVE_SESSAO = "ecoviva-painel-autenticado";
+
+  // ---- Idioma (PT / chines simplificado) ----
+  // So traduz este painel (dashboard de leitura) - o app desktop dos
+  // conferentes continua so em portugues. Traducao de textos fixos via
+  // atributo data-i18n (aplicarTraducoesEstaticas) + funcoes auxiliares
+  // (t/rotulo*) usadas dentro dos renderizadores dinamicos abaixo, ja que
+  // aqueles remontam o HTML a cada atualizacao e nao passam pelo
+  // data-i18n. Preferencia de idioma fica so no localStorage deste
+  // navegador (nao afeta outros visitantes nem o banco).
+  var CHAVE_IDIOMA = "ecoviva-painel-idioma";
+  var idiomaAtual = "pt";
+  try {
+    var idiomaSalvo = localStorage.getItem(CHAVE_IDIOMA);
+    if (idiomaSalvo === "pt" || idiomaSalvo === "zh") idiomaAtual = idiomaSalvo;
+  } catch (e) {}
+
+  var TRADUCOES = {
+    pt: {
+      gateTitulo: "Painel Ecoviva",
+      gateDescricao: "Acesso restrito - digite a senha combinada com a gestao.",
+      senhaPlaceholder: "Senha",
+      botaoEntrar: "Entrar",
+      senhaIncorreta: "Senha incorreta.",
+      headerTitulo: "Painel Ecoviva - Armazens A4 / B2",
+      badgeSomenteLeitura: "🔒 somente leitura",
+      badgeSomenteLeituraTitulo: "Este painel so consegue LER os dados - o acesso usado aqui e um token do banco configurado para nunca aceitar escrita, reforcado pelo proprio servidor do banco (nao e so uma trava no codigo desta pagina). Os dados vem do app oficial de cada armazem, que registra cada lancamento com um hash de auditoria encadeado.",
+      filtroPedidoLabel: "Numero do pedido",
+      filtroPedidoPlaceholder: "Ex: 3893",
+      filtroArmazemLabel: "Armazem",
+      opcaoTodos: "Todos",
+      opcaoTodas: "Todas",
+      filtroFluxoLabel: "Fluxo",
+      fluxoSaidaArmazem: "Saida de Armazem",
+      fluxoMontagem: "Montagem",
+      fluxoSac: "SAC",
+      filtroDeLabel: "De",
+      filtroAteLabel: "Ate",
+      atalhoHoje: "Hoje",
+      atalho7dias: "7 dias",
+      atalho30dias: "30 dias",
+      filtroResponsavelLabel: "Responsavel",
+      filtroTipoLabel: "Tipo",
+      tipoEntrada: "Entrada",
+      tipoSaida: "Saida",
+      filtroSituacaoLabel: "Situacao",
+      situacaoBaixa: "Baixa",
+      situacaoEstorno: "Estorno",
+      filtroBuscaLabel: "Busca",
+      filtroBuscaPlaceholder: "Nome ou item",
+      botaoAtualizar: "Atualizar agora",
+      cartaoSyncTitulo: "Sincronizacao por armazem",
+      cartaoSyncSubtitulo: "Quando cada armazem mandou dado pela ultima vez - se um ficar muito tempo sem sincronizar, o que aparece dele aqui pode estar desatualizado.",
+      cartaoInsightsTitulo: "Resumo do periodo filtrado",
+      avisoTruncadoTexto: "⚠ Este filtro tem mais movimentos do que o carregado - os numeros abaixo estao incompletos. Reduza o periodo ou refine o filtro pra ver o total real.",
+      graficoVolumeTitulo: "Volume por dia",
+      graficoCategoriasTitulo: "Top categorias de item",
+      graficoArmazemTitulo: "Por armazem",
+      graficoFluxoTitulo: "Por fluxo",
+      cartaoPendentesTitulo: "Transferencias pendentes de confirmacao",
+      nenhuma: "Nenhuma.",
+      cartaoMovimentosTitulo: "Movimentos recentes",
+      colArmazem: "Armazem",
+      colFluxo: "Fluxo",
+      colTipo: "Tipo",
+      colData: "Data",
+      colHora: "Hora",
+      colPedido: "Pedido",
+      colItens: "Itens",
+      colQtd: "Qtd.",
+      colRegistradoPor: "Registrado por",
+      colSituacao: "Situacao",
+      colSincronizado: "Sincronizado",
+      rodapePagina: "Este painel espelha os dados do app oficial de A4/B2 em tempo quase real - nao e a fonte oficial nem o lugar pra conferir a integridade de um lancamento especifico (cada lancamento tem um hash de auditoria encadeado que fica no app, nao reproduzido aqui).",
+      statusCarregando: "Carregando...",
+      nuncaSincronizou: "nunca sincronizou",
+      tempoAgoraMesmo: "agora mesmo",
+      badgePendente: "pendente",
+      statTileMovimentos: "Movimentos",
+      statTileUnidades: "Unidades",
+      statTilePendentes: "Transferencias pendentes",
+      statTileTaxaEstorno: "Taxa de estorno",
+      semDadosPeriodo: "Sem dados no periodo.",
+      situacaoEstornoBadge: "ESTORNO",
+      situacaoBaixaBadge: "BAIXA",
+      situacaoEntradaBadge: "ENTRADA",
+      divergenciaBadge: "divergencia"
+    },
+    zh: {
+      gateTitulo: "Ecoviva 面板",
+      gateDescricao: "受限访问 - 请输入与管理层约定的密码。",
+      senhaPlaceholder: "密码",
+      botaoEntrar: "进入",
+      senhaIncorreta: "密码错误。",
+      headerTitulo: "Ecoviva 面板 - A4 / B2 仓库",
+      badgeSomenteLeitura: "🔒 只读",
+      badgeSomenteLeituraTitulo: "此面板只能读取数据 - 所用的访问令牌被配置为永不接受写入，并由数据库服务器本身强制执行（不仅仅是本页代码里的限制）。数据来自各仓库的官方应用，每条记录都带有链式审计哈希。",
+      filtroPedidoLabel: "订单号",
+      filtroPedidoPlaceholder: "例如：3893",
+      filtroArmazemLabel: "仓库",
+      opcaoTodos: "全部",
+      opcaoTodas: "全部",
+      filtroFluxoLabel: "流程",
+      fluxoSaidaArmazem: "仓库出库",
+      fluxoMontagem: "组装",
+      fluxoSac: "客服(SAC)",
+      filtroDeLabel: "从",
+      filtroAteLabel: "至",
+      atalhoHoje: "今天",
+      atalho7dias: "7天",
+      atalho30dias: "30天",
+      filtroResponsavelLabel: "负责人",
+      filtroTipoLabel: "类型",
+      tipoEntrada: "入库",
+      tipoSaida: "出库",
+      filtroSituacaoLabel: "状态",
+      situacaoBaixa: "出库",
+      situacaoEstorno: "冲销",
+      filtroBuscaLabel: "搜索",
+      filtroBuscaPlaceholder: "姓名或物品",
+      botaoAtualizar: "立即刷新",
+      cartaoSyncTitulo: "各仓库同步状态",
+      cartaoSyncSubtitulo: "每个仓库最后一次发送数据的时间 - 如果某个仓库长时间未同步，这里显示的数据可能已过时。",
+      cartaoInsightsTitulo: "所选时段汇总",
+      avisoTruncadoTexto: "⚠ 此筛选条件下的记录数超过已加载的数量 - 以下数字不完整。请缩小时间范围或调整筛选条件以查看真实总数。",
+      graficoVolumeTitulo: "每日数量",
+      graficoCategoriasTitulo: "物品类别排行",
+      graficoArmazemTitulo: "按仓库",
+      graficoFluxoTitulo: "按流程",
+      cartaoPendentesTitulo: "待确认的转运",
+      nenhuma: "无。",
+      cartaoMovimentosTitulo: "最近的记录",
+      colArmazem: "仓库",
+      colFluxo: "流程",
+      colTipo: "类型",
+      colData: "日期",
+      colHora: "时间",
+      colPedido: "订单",
+      colItens: "物品",
+      colQtd: "数量",
+      colRegistradoPor: "登记人",
+      colSituacao: "状态",
+      colSincronizado: "同步时间",
+      rodapePagina: "此面板近实时镜像 A4/B2 官方应用的数据 - 它不是官方数据源，也不是核实某条记录完整性的地方（每条记录在官方应用中都有一个链式审计哈希，此处不会重现）。",
+      statusCarregando: "加载中...",
+      nuncaSincronizou: "从未同步",
+      tempoAgoraMesmo: "刚刚",
+      badgePendente: "待处理",
+      statTileMovimentos: "记录数",
+      statTileUnidades: "件数",
+      statTilePendentes: "待确认转运",
+      statTileTaxaEstorno: "冲销率",
+      semDadosPeriodo: "该时段无数据。",
+      situacaoEstornoBadge: "冲销",
+      situacaoBaixaBadge: "出库",
+      situacaoEntradaBadge: "入库",
+      divergenciaBadge: "差异"
+    }
+  };
+
+  var ROTULO_FLUXO_IDIOMA = {
+    pt: { saida_armazem: "Saida de Armazem", peca_montagem: "Montagem", sac: "SAC" },
+    zh: { saida_armazem: "仓库出库", peca_montagem: "组装", sac: "客服(SAC)" }
+  };
+  var ROTULO_TIPO_IDIOMA = {
+    pt: { entrada: "Entrada", saida: "Saida" },
+    zh: { entrada: "入库", saida: "出库" }
+  };
+  // Categorias fixas de item (ver domain::movimentos no app - scooter/
+  // triciclo/patinete/peca/outro, sem catalogo aberto).
+  var ROTULO_CATEGORIA_IDIOMA = {
+    pt: { scooter: "scooter", triciclo: "triciclo", patinete: "patinete", peca: "peca", outro: "outro" },
+    zh: { scooter: "电动踏板车", triciclo: "三轮车", patinete: "滑板车", peca: "零件", outro: "其他" }
+  };
+
+  function t(chave) {
+    var doIdioma = TRADUCOES[idiomaAtual] && TRADUCOES[idiomaAtual][chave];
+    if (doIdioma != null) return doIdioma;
+    var doPt = TRADUCOES.pt[chave];
+    return doPt != null ? doPt : chave;
+  }
+
+  function rotuloFluxo(fluxo) {
+    var mapa = ROTULO_FLUXO_IDIOMA[idiomaAtual] || ROTULO_FLUXO_IDIOMA.pt;
+    return mapa[fluxo] || fluxo;
+  }
+
+  function rotuloTipo(tipo) {
+    var mapa = ROTULO_TIPO_IDIOMA[idiomaAtual] || ROTULO_TIPO_IDIOMA.pt;
+    return mapa[tipo] || tipo;
+  }
+
+  function rotuloCategoria(categoria) {
+    var mapa = ROTULO_CATEGORIA_IDIOMA[idiomaAtual] || ROTULO_CATEGORIA_IDIOMA.pt;
+    return mapa[categoria] || categoria;
+  }
+
+  // Ultimos dados buscados, guardados so pra poder re-renderizar na hora ao
+  // trocar de idioma sem precisar de uma nova consulta ao Turso.
+  var ultimosNomesResponsavelCache = [];
+  var ultimaSincPorArmazemCache = {};
+  var ultimosPendentesCache = [];
+
+  function aplicarTraducoesEstaticas() {
+    document.querySelectorAll("[data-i18n]").forEach(function (el) {
+      el.textContent = t(el.getAttribute("data-i18n"));
+    });
+    document.querySelectorAll("[data-i18n-placeholder]").forEach(function (el) {
+      el.placeholder = t(el.getAttribute("data-i18n-placeholder"));
+    });
+    document.querySelectorAll("[data-i18n-title]").forEach(function (el) {
+      el.title = t(el.getAttribute("data-i18n-title"));
+    });
+    document.documentElement.lang = idiomaAtual === "zh" ? "zh-Hans" : "pt-BR";
+    document.querySelectorAll(".idioma-btn").forEach(function (btn) {
+      btn.classList.toggle("ativo", btn.getAttribute("data-idioma") === idiomaAtual);
+    });
+  }
+
+  function definirIdioma(idioma) {
+    if (idioma !== "pt" && idioma !== "zh") return;
+    idiomaAtual = idioma;
+    try { localStorage.setItem(CHAVE_IDIOMA, idioma); } catch (e) {}
+    aplicarTraducoesEstaticas();
+    // Re-renderiza os blocos dinamicos (nao passam por data-i18n) com o que
+    // ja tinha sido buscado - so dispara consulta nova se ainda nao tinha
+    // carregado nada (elConteudo escondido, usuario ainda no gate).
+    if (elConteudo && !elConteudo.classList.contains("escondido")) {
+      renderizarOpcoesResponsavel(ultimosNomesResponsavelCache);
+      renderizarStatusArmazens(ultimaSincPorArmazemCache);
+      renderizarPendentes(ultimosPendentesCache);
+      if (ultimosFiltrados && ultimosFiltrados.movimentos) reaplicarBusca();
+    }
+  }
+
+  document.querySelectorAll(".idioma-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () { definirIdioma(btn.getAttribute("data-idioma")); });
+  });
+  aplicarTraducoesEstaticas();
 
   // Declarados aqui (antes do bloco de autenticacao logo abaixo) de
   // proposito: numa visita repetida na mesma sessao, `jaAutenticado` ja
@@ -600,12 +863,12 @@
     var partes = dataHora.split(/[- :]/);
     var data = new Date(partes[0], partes[1] - 1, partes[2], partes[3], partes[4], partes[5]);
     var diffMin = Math.round((Date.now() - data.getTime()) / 60000);
-    if (diffMin < 1) return "agora mesmo";
-    if (diffMin < 60) return "ha " + diffMin + " min";
+    if (diffMin < 1) return t("tempoAgoraMesmo");
+    if (diffMin < 60) return idiomaAtual === "zh" ? diffMin + " 分钟前" : "ha " + diffMin + " min";
     var diffHoras = Math.round(diffMin / 60);
-    if (diffHoras < 24) return "ha " + diffHoras + "h";
+    if (diffHoras < 24) return idiomaAtual === "zh" ? diffHoras + " 小时前" : "ha " + diffHoras + "h";
     var diffDias = Math.round(diffHoras / 24);
-    return "ha " + diffDias + " dia" + (diffDias > 1 ? "s" : "");
+    return idiomaAtual === "zh" ? diffDias + " 天前" : "ha " + diffDias + " dia" + (diffDias > 1 ? "s" : "");
   }
 
   function frescor(dataHora) {
@@ -619,10 +882,13 @@
   }
 
   function renderizarStatusArmazens(porArmazem) {
+    ultimaSincPorArmazemCache = porArmazem;
     var el = document.getElementById("status-armazens");
     el.innerHTML = CODIGOS_ARMAZENS.map(function (codigo) {
       var ultimo = porArmazem[codigo];
-      var texto = ultimo ? "sincronizado " + tempoRelativo(ultimo) : "nunca sincronizou";
+      var texto = ultimo
+        ? (idiomaAtual === "zh" ? "同步于 " + tempoRelativo(ultimo) : "sincronizado " + tempoRelativo(ultimo))
+        : t("nuncaSincronizou");
       return '<div class="status-armazem"><span class="ponto ' + frescor(ultimo) + '"></span>' +
         '<span><strong>' + codigo + '</strong>' + texto + '</span></div>';
     }).join("");
@@ -640,9 +906,10 @@
   }
 
   function renderizarOpcoesResponsavel(nomes) {
+    ultimosNomesResponsavelCache = nomes;
     var el = document.getElementById("filtro-responsavel");
     var selecionado = el.value;
-    el.innerHTML = '<option value="">Todos</option>' + nomes.map(function (nome) {
+    el.innerHTML = '<option value="">' + t("opcaoTodos") + '</option>' + nomes.map(function (nome) {
       return '<option value="' + nome.replace(/"/g, "&quot;") + '">' + nome + "</option>";
     }).join("");
     if (nomes.indexOf(selecionado) >= 0) el.value = selecionado;
@@ -656,6 +923,9 @@
   // convertido pro formato brasileiro DD/MM/AAAA por manipulacao de string
   // (sem `Date`), pra nao arriscar desvio de fuso horario.
   function formatarData(data) {
+    // pt-BR usa DD/MM/AAAA; zh usa AAAA-MM-DD (o formato ISO que ja vem do
+    // banco), entao nesse caso e so devolver o valor como veio.
+    if (idiomaAtual === "zh") return data;
     var partes = data.split("-");
     return partes[2] + "/" + partes[1] + "/" + partes[0];
   }
@@ -667,9 +937,11 @@
 
   function resumoItens(itens) {
     return itens.map(function (it) {
-      var base = it.quantidade + "x " + it.categoria + (it.descricao ? " (" + it.descricao + ")" : "");
+      var base = it.quantidade + "x " + rotuloCategoria(it.categoria) + (it.descricao ? " (" + it.descricao + ")" : "");
       if (it.quantidade_enviada != null && it.quantidade_enviada !== it.quantidade) {
-        base += " [divergencia: enviado " + it.quantidade_enviada + "]";
+        base += idiomaAtual === "zh"
+          ? " [差异：发送了 " + it.quantidade_enviada + "]"
+          : " [divergencia: enviado " + it.quantidade_enviada + "]";
       }
       return base;
     }).join(" + ");
@@ -695,19 +967,20 @@
   // entao usa o mesmo vocabulario visual pra quem olha os dois.
   function situacaoBadge(m) {
     var valor = situacaoValor(m);
-    if (valor === "estorno") return '<span class="badge badge-estorno">ESTORNO</span>';
-    if (valor === "baixa") return '<span class="badge badge-baixa">BAIXA</span>';
-    return '<span class="badge badge-entrada">ENTRADA</span>';
+    if (valor === "estorno") return '<span class="badge badge-estorno">' + t("situacaoEstornoBadge") + '</span>';
+    if (valor === "baixa") return '<span class="badge badge-baixa">' + t("situacaoBaixaBadge") + '</span>';
+    return '<span class="badge badge-entrada">' + t("situacaoEntradaBadge") + '</span>';
   }
 
   function renderizarPendentes(pendentes) {
+    ultimosPendentesCache = pendentes;
     var el = document.getElementById("lista-pendentes");
     if (pendentes.length === 0) {
-      el.innerHTML = "<p>Nenhuma.</p>";
+      el.innerHTML = "<p>" + t("nenhuma") + "</p>";
       return;
     }
     el.innerHTML = pendentes.map(function (m) {
-      return '<p><span class="badge badge-pendente">pendente</span> ' +
+      return '<p><span class="badge badge-pendente">' + t("badgePendente") + '</span> ' +
         m.armazem_codigo + " &rarr; " + (m.armazem_destino_codigo || "?") + " - " +
         formatarData(m.data) + " " + m.hora + " - " + resumoItens(m.itens) + "</p>";
     }).join("");
@@ -734,12 +1007,12 @@
     var corpo = document.getElementById("corpo-tabela");
     corpo.innerHTML = filtrados.map(function (m) {
       var divergencia = temDivergencia(m.itens)
-        ? ' <span class="badge badge-divergencia">divergencia</span>'
+        ? ' <span class="badge badge-divergencia">' + t("divergenciaBadge") + '</span>'
         : "";
       return "<tr>" +
         "<td>" + m.armazem_codigo + "</td>" +
-        "<td>" + m.fluxo + "</td>" +
-        "<td>" + m.tipo + "</td>" +
+        "<td>" + rotuloFluxo(m.fluxo) + "</td>" +
+        "<td>" + rotuloTipo(m.tipo) + "</td>" +
         "<td>" + formatarData(m.data) + "</td>" +
         "<td>" + m.hora + "</td>" +
         '<td class="col-pedido">' + (m.numero_pedido || "-") + "</td>" +
@@ -750,19 +1023,17 @@
         "<td>" + (m.enviado_em ? formatarDataHora(m.enviado_em) : "-") + "</td>" +
         "</tr>";
     }).join("");
-    var rodape = filtrados.length + " de " + totalSemBusca + " movimentos no filtro atual.";
+    var rodape = idiomaAtual === "zh"
+      ? "当前筛选条件下：" + totalSemBusca + " 条中显示 " + filtrados.length + " 条。"
+      : filtrados.length + " de " + totalSemBusca + " movimentos no filtro atual.";
     if (truncado) {
-      rodape += " O filtro selecionado tem mais de " + LIMITE_LINHAS +
-        " movimentos - alguns dos mais antigos nao estao sendo mostrados. Reduza o periodo pra ver tudo.";
+      rodape += idiomaAtual === "zh"
+        ? " 所选筛选条件下的记录超过 " + LIMITE_LINHAS + " 条 - 部分较早的记录未显示。请缩小时间范围以查看全部。"
+        : " O filtro selecionado tem mais de " + LIMITE_LINHAS +
+          " movimentos - alguns dos mais antigos nao estao sendo mostrados. Reduza o periodo pra ver tudo.";
     }
     document.getElementById("rodape-tabela").textContent = rodape;
   }
-
-  var ROTULO_FLUXO = {
-    saida_armazem: "Saida de Armazem",
-    peca_montagem: "Montagem",
-    sac: "SAC"
-  };
 
   function calcularInsights(filtrados, pendentesCount) {
     var porDia = {}, porCategoria = {}, porArmazem = {}, porFluxo = {};
@@ -809,21 +1080,21 @@
   function renderizarInsights(filtrados, pendentesCount) {
     var dados = calcularInsights(filtrados, pendentesCount);
     document.getElementById("grade-stats").innerHTML = [
-      ["Movimentos", dados.totalMovimentos],
-      ["Unidades", dados.totalUnidades],
-      ["Entrada", dados.totalEntrada],
-      ["Saida", dados.totalSaida],
-      ["Transferencias pendentes", dados.pendentesCount],
-      ["Taxa de estorno", (dados.taxaEstorno * 100).toFixed(1) + "%"]
-    ].map(function (t) {
-      return '<div class="stat-tile"><div class="valor">' + t[1] + '</div><div class="rotulo">' + t[0] + '</div></div>';
+      [t("statTileMovimentos"), dados.totalMovimentos],
+      [t("statTileUnidades"), dados.totalUnidades],
+      [t("tipoEntrada"), dados.totalEntrada],
+      [t("tipoSaida"), dados.totalSaida],
+      [t("statTilePendentes"), dados.pendentesCount],
+      [t("statTileTaxaEstorno"), (dados.taxaEstorno * 100).toFixed(1) + "%"]
+    ].map(function (item) {
+      return '<div class="stat-tile"><div class="valor">' + item[1] + '</div><div class="rotulo">' + item[0] + '</div></div>';
     }).join("");
 
     renderizarBarras("grafico-volume", dados.porDia, Object.keys(dados.porDia).sort(), formatarData);
     var categorias = Object.keys(dados.porCategoria).sort(function (a, b) {
       return dados.porCategoria[b] - dados.porCategoria[a];
     });
-    renderizarBarras("grafico-categorias", dados.porCategoria, categorias, function (c) { return c; });
+    renderizarBarras("grafico-categorias", dados.porCategoria, categorias, rotuloCategoria);
 
     // So faz sentido comparar armazem/fluxo quando o filtro ativo nao ja
     // restringiu a um so - com um so armazem/fluxo no resultado a
@@ -841,7 +1112,7 @@
     var chavesFluxo = Object.keys(dados.porFluxo);
     if (chavesFluxo.length > 1) {
       blocoFluxo.classList.remove("escondido");
-      renderizarBarras("grafico-fluxo", dados.porFluxo, chavesFluxo.sort(), function (f) { return ROTULO_FLUXO[f] || f; });
+      renderizarBarras("grafico-fluxo", dados.porFluxo, chavesFluxo.sort(), rotuloFluxo);
     } else {
       blocoFluxo.classList.add("escondido");
     }
@@ -853,7 +1124,7 @@
       return '<div class="barra-linha"><span class="rotulo-barra">' + rotular(c) + '</span>' +
         svgBarraHorizontal(valores[c], max) +
         '<span class="valor-barra">' + valores[c] + '</span></div>';
-    }).join("") || "<p>Sem dados no periodo.</p>";
+    }).join("") || "<p>" + t("semDadosPeriodo") + "</p>";
   }
 
   // So reaplica a busca (client-side) em cima do ultimo resultado buscado -
@@ -886,10 +1157,12 @@
       renderizarPendentes(pendentes);
       renderizarStatusArmazens(ultimaSincPorArmazem);
       reaplicarBusca();
-      elStatus.textContent = "Atualizado as " + new Date().toLocaleTimeString("pt-BR") +
-        " - atualiza sozinho a cada 30s.";
+      var hora = new Date().toLocaleTimeString(idiomaAtual === "zh" ? "zh-CN" : "pt-BR");
+      elStatus.textContent = idiomaAtual === "zh"
+        ? "更新于 " + hora + " - 每30秒自动刷新。"
+        : "Atualizado as " + hora + " - atualiza sozinho a cada 30s.";
     } catch (e) {
-      elStatus.textContent = "Falha ao buscar dados: " + e.message;
+      elStatus.textContent = (idiomaAtual === "zh" ? "获取数据失败：" : "Falha ao buscar dados: ") + e.message;
     }
   }
 
@@ -899,6 +1172,7 @@
   }
 
   function iniciar() {
+    document.getElementById("status-topo").textContent = t("statusCarregando");
     document.getElementById("botao-atualizar").addEventListener("click", atualizar);
     [
       "filtro-armazem", "filtro-fluxo", "filtro-data-inicio", "filtro-data-fim",

@@ -767,6 +767,42 @@ Prioridade 1 porque sem isso nenhum insight novo seria confiavel.
   garantir daqui (dado vem de um sistema com trilha de auditoria) do que fingir uma
   verificacao que nao e real.
 
+### Traducao para chines simplificado (Feito, 2026-08-28)
+
+- Seletor de idioma PT / 中文 (botoes no canto do cabecalho e tambem na tela de
+  senha, ja que o gate precisa ser legivel antes do login) - so no painel web
+  (dashboard de leitura), nao no app desktop dos conferentes, que continua
+  100% em portugues por decisao explicita (escopo bem maior: telas de
+  lancamento, mensagens de erro do backend Rust, validacao - o painel e um
+  arquivo unico e contido, o app nao).
+- Mecanismo: dicionario `TRADUCOES` (chave -> texto pt/zh) + atributo
+  `data-i18n`/`data-i18n-placeholder`/`data-i18n-title` no HTML estatico,
+  aplicado por `aplicarTraducoesEstaticas()`. Conteudo gerado dinamicamente
+  (tabela, cards de insight, badges, lista de pendentes) nao passa por
+  `data-i18n` porque e remontado via `innerHTML` a cada atualizacao - passa
+  por `t()`/`rotuloFluxo()`/`rotuloTipo()`/`rotuloCategoria()` dentro dos
+  proprios renderizadores. Categoria/fluxo/tipo/situacao (valores crus vindos
+  do banco, ex. `saida_armazem`, `peca`) sao traduzidos na tabela tambem, nao
+  so nos graficos - sem isso o toggle de idioma seria inutil pro conteudo
+  principal da pagina.
+- Preferencia de idioma fica em `localStorage` (por navegador, nunca no
+  banco) - trocar de idioma re-renderiza os blocos dinamicos com os dados ja
+  buscados (cache local: `ultimosNomesResponsavelCache`,
+  `ultimaSincPorArmazemCache`, `ultimosPendentesCache`, `ultimosFiltrados`),
+  sem round-trip novo ao Turso.
+- Formato de data e condicional: `DD/MM/AAAA` pra pt (convencao BR), `AAAA-MM-DD`
+  pra zh (ja e o formato que vem do banco, sem conversao). Mesmo cuidado do
+  Sprint 1 com a ordem de declaracao de variaveis (`idiomaAtual` lido do
+  localStorage e `aplicarTraducoesEstaticas()` chamados antes do bloco de
+  autenticacao) pra nao repetir o bug de hoisting ja documentado ali.
+- Verificado contra o Turso real (dado de producao, so leitura) nas duas
+  variantes de idioma, gate e conteudo pos-login, headless + screenshot: sem
+  erro de console, textos e formatos corretos nas duas linguas.
+- Qualquer texto novo adicionado ao painel daqui pra frente (HTML estatico
+  ou gerado em JS) precisa ganhar uma chave em `TRADUCOES.pt`/`TRADUCOES.zh`
+  (ou entrar num dos mapas `ROTULO_*_IDIOMA`) - senao aparece em portugues
+  mesmo com 中文 selecionado, sem erro nenhum pra avisar.
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um
