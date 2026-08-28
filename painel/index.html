@@ -158,6 +158,25 @@
   }
   .rodape { font-size: 0.75rem; color: var(--texto-suave); margin-top: 10px; }
   .escondido { display: none; }
+  .subtitulo-cartao { margin: 0 0 12px; font-size: 0.82rem; color: var(--texto-suave); }
+  .status-armazens { display: flex; flex-wrap: wrap; gap: 10px; }
+  .status-armazem {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg);
+    border: 1px solid var(--borda);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    flex: 1;
+    min-width: 220px;
+  }
+  .status-armazem .ponto { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .status-armazem .ponto.fresco { background: var(--verde); }
+  .status-armazem .ponto.morno { background: var(--aviso); }
+  .status-armazem .ponto.frio { background: var(--erro); }
+  .status-armazem strong { margin-right: 4px; }
   .grade-stats { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
   .stat-tile { background: var(--bg); border: 1px solid var(--borda); border-radius: 8px; padding: 12px 16px; min-width: 140px; flex: 1; }
   .stat-tile .valor { font-size: 1.5rem; font-weight: 700; color: var(--verde); }
@@ -234,6 +253,12 @@
       <label>&nbsp;
         <button id="botao-atualizar">Atualizar agora</button>
       </label>
+    </div>
+
+    <div class="cartao">
+      <h3>Sincronizacao por armazem</h3>
+      <p class="subtitulo-cartao">Quando cada armazem mandou dado pela ultima vez - se um ficar muito tempo sem sincronizar, o que aparece dele aqui pode estar desatualizado.</p>
+      <div id="status-armazens" class="status-armazens"></div>
     </div>
 
     <div class="cartao" id="cartao-insights">
@@ -485,6 +510,63 @@
     return linhas.map(linhaParaMovimento);
   }
 
+  // Armazens fixos do sistema (A4/B2, ver domain::db::mod.rs no app) - lista
+  // curta e conhecida, entao nao precisa de uma consulta separada so pra
+  // descobrir quais existem.
+  var CODIGOS_ARMAZENS = ["A4", "B2"];
+
+  // Ultima vez que cada armazem mandou algo pro Turso, direto da coluna
+  // enviado_em (ja em horario local desde o Sprint 1) - usado pra deixar
+  // visivel quando um armazem esta com sincronizacao atrasada, em vez de so
+  // mostrar o dado antigo dele como se fosse atual.
+  async function buscarUltimaSincronizacaoPorArmazem() {
+    var sql = "SELECT armazem_codigo, MAX(enviado_em) FROM movimentos_consolidados GROUP BY armazem_codigo";
+    var linhas = await executarSql(sql, []);
+    var porArmazem = {};
+    linhas.forEach(function (linha) {
+      var codigo = linha[0] && linha[0].value;
+      var ultimo = linha[1] && linha[1].value;
+      if (codigo) porArmazem[codigo] = ultimo || null;
+    });
+    return porArmazem;
+  }
+
+  function tempoRelativo(dataHora) {
+    if (!dataHora) return null;
+    // "AAAA-MM-DD HH:MM:SS" tratado como horario local (mesmo fuso do
+    // navegador de quem esta vendo o painel - ja e Brasilia dos dois lados
+    // desde o Sprint 1), entao da pra montar um Date diretamente.
+    var partes = dataHora.split(/[- :]/);
+    var data = new Date(partes[0], partes[1] - 1, partes[2], partes[3], partes[4], partes[5]);
+    var diffMin = Math.round((Date.now() - data.getTime()) / 60000);
+    if (diffMin < 1) return "agora mesmo";
+    if (diffMin < 60) return "ha " + diffMin + " min";
+    var diffHoras = Math.round(diffMin / 60);
+    if (diffHoras < 24) return "ha " + diffHoras + "h";
+    var diffDias = Math.round(diffHoras / 24);
+    return "ha " + diffDias + " dia" + (diffDias > 1 ? "s" : "");
+  }
+
+  function frescor(dataHora) {
+    if (!dataHora) return "frio";
+    var partes = dataHora.split(/[- :]/);
+    var data = new Date(partes[0], partes[1] - 1, partes[2], partes[3], partes[4], partes[5]);
+    var diffMin = (Date.now() - data.getTime()) / 60000;
+    if (diffMin < 15) return "fresco";
+    if (diffMin < 120) return "morno";
+    return "frio";
+  }
+
+  function renderizarStatusArmazens(porArmazem) {
+    var el = document.getElementById("status-armazens");
+    el.innerHTML = CODIGOS_ARMAZENS.map(function (codigo) {
+      var ultimo = porArmazem[codigo];
+      var texto = ultimo ? "sincronizado " + tempoRelativo(ultimo) : "nunca sincronizou";
+      return '<div class="status-armazem"><span class="ponto ' + frescor(ultimo) + '"></span>' +
+        '<span><strong>' + codigo + '</strong>' + texto + '</span></div>';
+    }).join("");
+  }
+
   function totalItens(itens) {
     return itens.reduce(function (s, it) { return s + (it.quantidade || 0); }, 0);
   }
@@ -679,10 +761,12 @@
       var filtros = lerFiltrosDaTela();
       var resultados = await Promise.all([
         buscarMovimentosFiltrados(filtros),
-        buscarPendentesGlobal()
+        buscarPendentesGlobal(),
+        buscarUltimaSincronizacaoPorArmazem()
       ]);
       var dadosFiltrados = resultados[0];
       var pendentes = resultados[1];
+      var ultimaSincPorArmazem = resultados[2];
 
       ultimosFiltrados = {
         movimentos: dadosFiltrados.movimentos,
@@ -690,6 +774,7 @@
         pendentesCount: pendentes.length
       };
       renderizarPendentes(pendentes);
+      renderizarStatusArmazens(ultimaSincPorArmazem);
       reaplicarBusca();
       elStatus.textContent = "Atualizado as " + new Date().toLocaleTimeString("pt-BR") +
         " - atualiza sozinho a cada 30s.";

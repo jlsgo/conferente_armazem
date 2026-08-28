@@ -707,11 +707,20 @@ Prioridade 1 porque sem isso nenhum insight novo seria confiavel.
 - Bonus pequeno (calculo ja estava ali): cards de resumo ganharam "Entrada"/"Saida"
   separados, nao so "Unidades" total.
 
+### Sprint 2: sincronizacao por armazem (Feito)
+
+- Novo cartao "Sincronizacao por armazem" logo abaixo dos filtros: um pill por
+  armazem (`A4`/`B2`, lista fixa) mostrando ha quanto tempo cada um mandou dado pro
+  Turso pela ultima vez (`MAX(enviado_em) GROUP BY armazem_codigo`), com um ponto
+  colorido de frescor (verde <15min, amarelo <2h, vermelho acima disso ou nunca
+  sincronizou). Antes so existia um "atualizado as HH:MM" global no cabecalho, que
+  nao dizia nada sobre um armazem especifico estar desatualizado - se o B2 ficasse
+  dias sem internet, o painel mostrava o dado velho dele como se fosse atual, sem
+  avisar. Verificado contra o Turso real (um armazem com dado fresco, outro que nunca
+  sincronizou) antes de commitar.
+
 ### Sprints seguintes (planejadas, ainda nao feitas)
 
-- **Sprint 2**: indicador de ultima sincronizacao por armazem (hoje so existe um
-  "atualizado as HH:MM" global - se o B2 ficar dias sem internet, o painel mostra o
-  dado velho dele como se fosse atual, sem avisar).
 - **Sprint 3**: destaque visual + busca dedicada pro numero do pedido (hoje e so mais
   uma coluna no meio da tabela, a busca atual mistura pedido/nome/item).
 - **Sprint 4**: mais insights - comparativo A4 x B2 lado a lado, participacao por
