@@ -122,6 +122,16 @@
     transition: background 0.15s ease;
   }
   .gate button:hover, .filtros button:hover { background: var(--verde-escuro); }
+  .atalhos-periodo { display: flex; gap: 6px; }
+  .filtros button.atalho {
+    background: var(--cartao);
+    color: var(--texto-suave);
+    border: 1px solid var(--borda);
+    padding: 8px 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .filtros button.atalho:hover { background: var(--verde-claro); color: var(--verde-escuro); border-color: var(--verde); }
   .gate .erro { color: var(--erro); font-size: 0.9rem; font-weight: 600; }
   .filtros { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; }
   .filtros label { display: flex; flex-direction: column; font-size: 0.78rem; font-weight: 600; color: var(--texto-suave); gap: 5px; }
@@ -242,6 +252,18 @@
       <label>Ate
         <input id="filtro-data-fim" type="date" />
       </label>
+      <label>&nbsp;
+        <div class="atalhos-periodo">
+          <button type="button" class="atalho" data-dias="0">Hoje</button>
+          <button type="button" class="atalho" data-dias="7">7 dias</button>
+          <button type="button" class="atalho" data-dias="30">30 dias</button>
+        </div>
+      </label>
+      <label>Responsavel
+        <select id="filtro-responsavel">
+          <option value="">Todos</option>
+        </select>
+      </label>
       <label>Tipo
         <select id="filtro-tipo">
           <option value="">Todos</option>
@@ -284,6 +306,14 @@
       <div class="grafico-bloco">
         <h4>Top categorias de item</h4>
         <div id="grafico-categorias"></div>
+      </div>
+      <div class="grafico-bloco escondido" id="bloco-por-armazem">
+        <h4>Por armazem</h4>
+        <div id="grafico-armazem"></div>
+      </div>
+      <div class="grafico-bloco escondido" id="bloco-por-fluxo">
+        <h4>Por fluxo</h4>
+        <div id="grafico-fluxo"></div>
       </div>
     </div>
 
@@ -457,7 +487,8 @@
       dataInicio: document.getElementById("filtro-data-inicio").value,
       dataFim: document.getElementById("filtro-data-fim").value,
       tipo: document.getElementById("filtro-tipo").value,
-      situacao: document.getElementById("filtro-situacao").value
+      situacao: document.getElementById("filtro-situacao").value,
+      responsavel: document.getElementById("filtro-responsavel").value
     };
   }
 
@@ -484,6 +515,7 @@
     } else if (filtros.situacao === "entrada") {
       condicoes.push("tipo = 'entrada' AND estornado_de IS NULL");
     }
+    if (filtros.responsavel) { condicoes.push("usuario_nome = ?"); args.push(filtros.responsavel); }
     return { where: condicoes.length ? " WHERE " + condicoes.join(" AND ") : "", args: args };
   }
 
@@ -577,6 +609,26 @@
       return '<div class="status-armazem"><span class="ponto ' + frescor(ultimo) + '"></span>' +
         '<span><strong>' + codigo + '</strong>' + texto + '</span></div>';
     }).join("");
+  }
+
+  // Lista de responsaveis pro filtro dedicado - buscada uma vez (nao a cada
+  // "Atualizar agora"), independente dos filtros ativos, senao o proprio
+  // dropdown ia encolhendo conforme voce filtra.
+  async function buscarResponsaveis() {
+    var linhas = await executarSql(
+      "SELECT DISTINCT usuario_nome FROM movimentos_consolidados WHERE usuario_nome IS NOT NULL ORDER BY usuario_nome",
+      []
+    );
+    return linhas.map(function (linha) { return linha[0] && linha[0].value; }).filter(Boolean);
+  }
+
+  function renderizarOpcoesResponsavel(nomes) {
+    var el = document.getElementById("filtro-responsavel");
+    var selecionado = el.value;
+    el.innerHTML = '<option value="">Todos</option>' + nomes.map(function (nome) {
+      return '<option value="' + nome.replace(/"/g, "&quot;") + '">' + nome + "</option>";
+    }).join("");
+    if (nomes.indexOf(selecionado) >= 0) el.value = selecionado;
   }
 
   function totalItens(itens) {
@@ -689,13 +741,21 @@
     document.getElementById("rodape-tabela").textContent = rodape;
   }
 
+  var ROTULO_FLUXO = {
+    saida_armazem: "Saida de Armazem",
+    peca_montagem: "Montagem",
+    sac: "SAC"
+  };
+
   function calcularInsights(filtrados, pendentesCount) {
-    var porDia = {}, porCategoria = {};
+    var porDia = {}, porCategoria = {}, porArmazem = {}, porFluxo = {};
     var totalEstorno = 0, totalUnidades = 0, totalEntrada = 0, totalSaida = 0;
     filtrados.forEach(function (m) {
       var qtd = totalItens(m.itens);
       totalUnidades += qtd;
       porDia[m.data] = (porDia[m.data] || 0) + qtd;
+      porArmazem[m.armazem_codigo] = (porArmazem[m.armazem_codigo] || 0) + qtd;
+      porFluxo[m.fluxo] = (porFluxo[m.fluxo] || 0) + qtd;
       if (m.estornado_de != null) {
         totalEstorno += 1;
       } else if (m.tipo === "saida") {
@@ -710,6 +770,8 @@
     return {
       porDia: porDia,
       porCategoria: porCategoria,
+      porArmazem: porArmazem,
+      porFluxo: porFluxo,
       totalMovimentos: filtrados.length,
       totalUnidades: totalUnidades,
       totalEntrada: totalEntrada,
@@ -740,22 +802,40 @@
       return '<div class="stat-tile"><div class="valor">' + t[1] + '</div><div class="rotulo">' + t[0] + '</div></div>';
     }).join("");
 
-    var dias = Object.keys(dados.porDia).sort();
-    var maxDia = Math.max.apply(null, dias.map(function (d) { return dados.porDia[d]; }).concat([1]));
-    document.getElementById("grafico-volume").innerHTML = dias.map(function (d) {
-      return '<div class="barra-linha"><span class="rotulo-barra">' + formatarData(d) + '</span>' +
-        svgBarraHorizontal(dados.porDia[d], maxDia) +
-        '<span class="valor-barra">' + dados.porDia[d] + '</span></div>';
-    }).join("") || "<p>Sem dados no periodo.</p>";
-
+    renderizarBarras("grafico-volume", dados.porDia, Object.keys(dados.porDia).sort(), formatarData);
     var categorias = Object.keys(dados.porCategoria).sort(function (a, b) {
       return dados.porCategoria[b] - dados.porCategoria[a];
     });
-    var maxCat = Math.max.apply(null, categorias.map(function (c) { return dados.porCategoria[c]; }).concat([1]));
-    document.getElementById("grafico-categorias").innerHTML = categorias.map(function (c) {
-      return '<div class="barra-linha"><span class="rotulo-barra">' + c + '</span>' +
-        svgBarraHorizontal(dados.porCategoria[c], maxCat) +
-        '<span class="valor-barra">' + dados.porCategoria[c] + '</span></div>';
+    renderizarBarras("grafico-categorias", dados.porCategoria, categorias, function (c) { return c; });
+
+    // So faz sentido comparar armazem/fluxo quando o filtro ativo nao ja
+    // restringiu a um so - com um so armazem/fluxo no resultado a
+    // comparacao vira um grafico de uma barra so, sem informacao nova.
+    var blocoArmazem = document.getElementById("bloco-por-armazem");
+    var chavesArmazem = Object.keys(dados.porArmazem);
+    if (chavesArmazem.length > 1) {
+      blocoArmazem.classList.remove("escondido");
+      renderizarBarras("grafico-armazem", dados.porArmazem, chavesArmazem.sort(), function (c) { return c; });
+    } else {
+      blocoArmazem.classList.add("escondido");
+    }
+
+    var blocoFluxo = document.getElementById("bloco-por-fluxo");
+    var chavesFluxo = Object.keys(dados.porFluxo);
+    if (chavesFluxo.length > 1) {
+      blocoFluxo.classList.remove("escondido");
+      renderizarBarras("grafico-fluxo", dados.porFluxo, chavesFluxo.sort(), function (f) { return ROTULO_FLUXO[f] || f; });
+    } else {
+      blocoFluxo.classList.add("escondido");
+    }
+  }
+
+  function renderizarBarras(elId, valores, chaves, rotular) {
+    var max = Math.max.apply(null, chaves.map(function (c) { return valores[c]; }).concat([1]));
+    document.getElementById(elId).innerHTML = chaves.map(function (c) {
+      return '<div class="barra-linha"><span class="rotulo-barra">' + rotular(c) + '</span>' +
+        svgBarraHorizontal(valores[c], max) +
+        '<span class="valor-barra">' + valores[c] + '</span></div>';
     }).join("") || "<p>Sem dados no periodo.</p>";
   }
 
@@ -796,9 +876,17 @@
     }
   }
 
+  function dataIso(data) {
+    var pad = function (n) { return String(n).padStart(2, "0"); };
+    return data.getFullYear() + "-" + pad(data.getMonth() + 1) + "-" + pad(data.getDate());
+  }
+
   function iniciar() {
     document.getElementById("botao-atualizar").addEventListener("click", atualizar);
-    ["filtro-armazem", "filtro-fluxo", "filtro-data-inicio", "filtro-data-fim", "filtro-tipo", "filtro-situacao"].forEach(function (id) {
+    [
+      "filtro-armazem", "filtro-fluxo", "filtro-data-inicio", "filtro-data-fim",
+      "filtro-tipo", "filtro-situacao", "filtro-responsavel"
+    ].forEach(function (id) {
       document.getElementById(id).addEventListener("change", atualizar);
     });
     // Numero do pedido filtra no SQL (round-trip ao Turso), entao usa um
@@ -809,6 +897,21 @@
       debouncePedido = setTimeout(atualizar, 400);
     });
     document.getElementById("filtro-busca").addEventListener("input", reaplicarBusca);
+
+    document.querySelectorAll(".atalho").forEach(function (botao) {
+      botao.addEventListener("click", function () {
+        var dias = Number(botao.getAttribute("data-dias"));
+        var fim = new Date();
+        var inicio = new Date();
+        inicio.setDate(inicio.getDate() - dias);
+        document.getElementById("filtro-data-inicio").value = dataIso(inicio);
+        document.getElementById("filtro-data-fim").value = dataIso(fim);
+        atualizar();
+      });
+    });
+
+    buscarResponsaveis().then(renderizarOpcoesResponsavel).catch(function () {});
+
     atualizar();
     if (intervaloAtualizacao) clearInterval(intervaloAtualizacao);
     intervaloAtualizacao = setInterval(atualizar, 30000);

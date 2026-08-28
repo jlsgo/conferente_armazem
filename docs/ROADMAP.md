@@ -735,14 +735,26 @@ Prioridade 1 porque sem isso nenhum insight novo seria confiavel.
 - Verificado contra o Turso real: filtro por "3893" corretamente trouxe so a linha
   com esse pedido, escondendo as outras.
 
-### Sprints seguintes (planejadas, ainda nao feitas)
+### Sprint 4: mais insights e filtros (Feito)
 
-- **Sprint 4**: mais insights - comparativo A4 x B2 lado a lado, participacao por
-  fluxo (Saida de Armazem/Montagem/SAC), filtro por responsavel, atalhos de periodo
-  (hoje/7d/30d).
-- **Sprint 5**: confiabilidade visivel - comunicar na propria tela que e um espelho
-  somente-leitura (token read-only ja e verdade, so nao aparece pro usuario), talvez
-  um indicativo de integridade reaproveitando a cadeia de hash que o app ja calcula.
+- **Comparativo por armazem e por fluxo**: dois graficos novos ("Por armazem", "Por
+  fluxo") reaproveitando a mesma barra horizontal ja usada em "Volume por dia"/"Top
+  categorias" (`renderizarBarras`, extraido como funcao compartilhada). So aparecem
+  quando o filtro ativo nao ja restringiu a um armazem/fluxo so (senao vira um
+  grafico de uma barra sem informacao nova) - verificado nos dois estados (filtro
+  "Todos" mostrando A4 x B2 e Montagem x Saida de Armazem; filtro "A4" escondendo os
+  dois blocos).
+- **Filtro por responsavel**: select populado com `SELECT DISTINCT usuario_nome`
+  (buscado uma vez, nao a cada atualizacao, senao o proprio dropdown ia encolhendo
+  conforme o filtro estreita), filtra no SQL com bind.
+- **Atalhos de periodo**: botoes "Hoje"/"7 dias"/"30 dias" preenchem De/Ate e
+  atualizam - antes so dava pra digitar data manualmente nos dois campos.
+
+### Sprint 5 (planejada, ainda nao feita): confiabilidade visivel
+
+Comunicar na propria tela que e um espelho somente-leitura (token read-only ja e
+verdade, so nao aparece pro usuario), talvez um indicativo de integridade
+reaproveitando a cadeia de hash que o app ja calcula.
 
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
