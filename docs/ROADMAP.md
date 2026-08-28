@@ -750,11 +750,22 @@ Prioridade 1 porque sem isso nenhum insight novo seria confiavel.
 - **Atalhos de periodo**: botoes "Hoje"/"7 dias"/"30 dias" preenchem De/Ate e
   atualizam - antes so dava pra digitar data manualmente nos dois campos.
 
-### Sprint 5 (planejada, ainda nao feita): confiabilidade visivel
+### Sprint 5: confiabilidade visivel (Feito)
 
-Comunicar na propria tela que e um espelho somente-leitura (token read-only ja e
-verdade, so nao aparece pro usuario), talvez um indicativo de integridade
-reaproveitando a cadeia de hash que o app ja calcula.
+- Badge "🔒 somente leitura" no cabecalho (com tooltip explicando que o token do
+  Turso usado aqui e reforcado como read-only pelo proprio servidor do banco, nao so
+  uma trava no codigo da pagina) e uma frase no rodape da pagina deixando claro que
+  este e um espelho, nao a fonte oficial.
+- **Decisao deliberada**: nao foi implementada uma "verificacao de integridade" no
+  proprio painel (reproduzir `calcular_hash`/`verificar_cadeia` em JS). Duas razoes:
+  (1) a cadeia de hash e por armazem, na ordem de insercao local - a tabela
+  consolidada do Turso mistura os dois armazens e nao guarda "hash da linha
+  anterior" o suficiente pra revalidar do zero; (2) o proprio app ainda nao expoe
+  `verificar_cadeia` numa tela (CLAUDE.md: "domain-only hoje, sem comando/UI") -
+  construir uma verificacao *mais* avancada no painel (que tem menos contexto) antes
+  do app em si teria essa ordem invertida. Melhor ser honesto sobre o que da pra
+  garantir daqui (dado vem de um sistema com trilha de auditoria) do que fingir uma
+  verificacao que nao e real.
 
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 

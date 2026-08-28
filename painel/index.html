@@ -75,7 +75,16 @@
     justify-content: center;
     flex-shrink: 0;
   }
-  header h1 { margin: 0; font-size: 1.25rem; font-weight: 700; }
+  header h1 { margin: 0; font-size: 1.25rem; font-weight: 700; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .badge-somente-leitura {
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.16);
+    padding: 3px 10px;
+    border-radius: 999px;
+    cursor: help;
+    letter-spacing: 0.02em;
+  }
   header p { margin: 3px 0 0; font-size: 0.82rem; opacity: 0.92; }
   main { padding: 24px; max-width: 1200px; margin: 0 auto; }
   .cartao {
@@ -174,6 +183,7 @@
     margin: 0 0 14px;
   }
   .rodape { font-size: 0.75rem; color: var(--texto-suave); margin-top: 10px; }
+  .rodape-pagina { font-size: 0.72rem; color: var(--texto-suave); text-align: center; margin: 4px 0 0; }
   .escondido { display: none; }
   .subtitulo-cartao { margin: 0 0 12px; font-size: 0.82rem; color: var(--texto-suave); }
   .status-armazens { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -222,7 +232,9 @@
   <header>
     <span class="icone-cabecalho" aria-hidden="true">📦</span>
     <div>
-      <h1>Painel Ecoviva - Armazens A4 / B2</h1>
+      <h1>Painel Ecoviva - Armazens A4 / B2
+        <span class="badge-somente-leitura" title="Este painel so consegue LER os dados - o acesso usado aqui e um token do banco configurado para nunca aceitar escrita, reforcado pelo proprio servidor do banco (nao e so uma trava no codigo desta pagina). Os dados vem do app oficial de cada armazem, que registra cada lancamento com um hash de auditoria encadeado.">🔒 somente leitura</span>
+      </h1>
       <p id="status-topo">Carregando...</p>
     </div>
   </header>
@@ -346,6 +358,11 @@
       </div>
       <p class="rodape" id="rodape-tabela"></p>
     </div>
+    <p class="rodape-pagina">
+      Este painel espelha os dados do app oficial de A4/B2 em tempo quase real - nao e a fonte oficial nem o lugar
+      pra conferir a integridade de um lancamento especifico (cada lancamento tem um hash de auditoria encadeado
+      que fica no app, nao reproduzido aqui).
+    </p>
   </main>
 </div>
 
