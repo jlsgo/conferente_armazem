@@ -719,10 +719,24 @@ Prioridade 1 porque sem isso nenhum insight novo seria confiavel.
   avisar. Verificado contra o Turso real (um armazem com dado fresco, outro que nunca
   sincronizou) antes de commitar.
 
+### Sprint 3: visibilidade do numero do pedido (Feito)
+
+- Campo "Numero do pedido" proprio, primeiro na barra de filtros (antes da busca
+  generica), com destaque visual (borda/texto verde) - filtra no SQL
+  (`numero_pedido LIKE ?`, com bind de parametro) com um debounce de 400ms pra nao
+  disparar uma consulta a cada tecla. A busca generica ("Nome ou item") deixou de
+  tambem casar com pedido, pra nao ter dois campos fazendo a mesma coisa de jeito
+  ambiguo.
+- Coluna "Pedido" na tabela ganhou destaque (negrito + cor verde) - reconhecivel de
+  relance em vez de se misturar com o resto da linha. Fixar a coluna ao rolar
+  horizontal (`position: sticky`) ficou de fora por ora: com colunas de largura
+  variavel o calculo do offset fica fragil, e o ganho e menor que o risco de quebrar
+  visualmente - revisitar so se o usuario pedir depois de usar.
+- Verificado contra o Turso real: filtro por "3893" corretamente trouxe so a linha
+  com esse pedido, escondendo as outras.
+
 ### Sprints seguintes (planejadas, ainda nao feitas)
 
-- **Sprint 3**: destaque visual + busca dedicada pro numero do pedido (hoje e so mais
-  uma coluna no meio da tabela, a busca atual mistura pedido/nome/item).
 - **Sprint 4**: mais insights - comparativo A4 x B2 lado a lado, participacao por
   fluxo (Saida de Armazem/Montagem/SAC), filtro por responsavel, atalhos de periodo
   (hoje/7d/30d).

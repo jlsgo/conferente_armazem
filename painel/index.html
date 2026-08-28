@@ -125,6 +125,12 @@
   .gate .erro { color: var(--erro); font-size: 0.9rem; font-weight: 600; }
   .filtros { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; }
   .filtros label { display: flex; flex-direction: column; font-size: 0.78rem; font-weight: 600; color: var(--texto-suave); gap: 5px; }
+  .filtros label.campo-destaque { color: var(--verde-escuro); }
+  .filtros label.campo-destaque input {
+    border-color: var(--verde);
+    font-weight: 700;
+    min-width: 160px;
+  }
   .filtros select, .filtros input {
     padding: 8px 10px;
     border: 1px solid var(--borda);
@@ -146,6 +152,7 @@
   .badge-pendente { background: var(--aviso-claro); color: var(--aviso); }
   .badge-divergencia { background: var(--divergencia-claro); color: var(--divergencia); }
   .badge-estorno { background: var(--erro-claro); color: var(--erro); }
+  .col-pedido { font-weight: 700; color: var(--verde-escuro); }
   .aviso-truncado {
     background: var(--aviso-claro);
     color: var(--aviso);
@@ -211,6 +218,9 @@
   </header>
   <main>
     <div class="cartao filtros">
+      <label class="campo-destaque">Numero do pedido
+        <input id="filtro-pedido" type="search" placeholder="Ex: 3893" />
+      </label>
       <label>Armazem
         <select id="filtro-armazem">
           <option value="">Todos</option>
@@ -248,7 +258,7 @@
         </select>
       </label>
       <label>Busca
-        <input id="filtro-busca" type="search" placeholder="Pedido, nome ou item" />
+        <input id="filtro-busca" type="search" placeholder="Nome ou item" />
       </label>
       <label>&nbsp;
         <button id="botao-atualizar">Atualizar agora</button>
@@ -441,6 +451,7 @@
 
   function lerFiltrosDaTela() {
     return {
+      pedido: document.getElementById("filtro-pedido").value.trim(),
       armazem: document.getElementById("filtro-armazem").value,
       fluxo: document.getElementById("filtro-fluxo").value,
       dataInicio: document.getElementById("filtro-data-inicio").value,
@@ -460,6 +471,7 @@
   function montarFiltroSql(filtros) {
     var condicoes = [];
     var args = [];
+    if (filtros.pedido) { condicoes.push("numero_pedido LIKE ?"); args.push("%" + filtros.pedido + "%"); }
     if (filtros.armazem) { condicoes.push("armazem_codigo = ?"); args.push(filtros.armazem); }
     if (filtros.fluxo) { condicoes.push("fluxo = ?"); args.push(filtros.fluxo); }
     if (filtros.dataInicio) { condicoes.push("data >= ?"); args.push(filtros.dataInicio); }
@@ -635,16 +647,17 @@
   // Os filtros estruturados ja foram aplicados na consulta SQL - aqui so
   // sobra a busca livre (pedido/nome/item), que roda em cima do resultado
   // ja filtrado, sem precisar de nova consulta a cada tecla digitada.
+  // Numero do pedido tem campo proprio agora (filtra no SQL, ver
+  // montarFiltroSql) - aqui so sobra nome/item.
   function aplicarBusca(movimentos) {
     var busca = document.getElementById("filtro-busca").value.trim().toLowerCase();
     if (!busca) return movimentos;
     return movimentos.filter(function (m) {
-      var noPedido = (m.numero_pedido || "").toLowerCase().indexOf(busca) >= 0;
       var noNome = (m.usuario_nome || "").toLowerCase().indexOf(busca) >= 0;
       var noItem = m.itens.some(function (it) {
         return (it.descricao || "").toLowerCase().indexOf(busca) >= 0;
       });
-      return noPedido || noNome || noItem;
+      return noNome || noItem;
     });
   }
 
@@ -660,7 +673,7 @@
         "<td>" + m.tipo + "</td>" +
         "<td>" + formatarData(m.data) + "</td>" +
         "<td>" + m.hora + "</td>" +
-        "<td>" + (m.numero_pedido || "-") + "</td>" +
+        '<td class="col-pedido">' + (m.numero_pedido || "-") + "</td>" +
         "<td>" + resumoItens(m.itens) + divergencia + "</td>" +
         "<td>" + totalItens(m.itens) + "</td>" +
         "<td>" + m.usuario_nome + "</td>" +
@@ -787,6 +800,13 @@
     document.getElementById("botao-atualizar").addEventListener("click", atualizar);
     ["filtro-armazem", "filtro-fluxo", "filtro-data-inicio", "filtro-data-fim", "filtro-tipo", "filtro-situacao"].forEach(function (id) {
       document.getElementById(id).addEventListener("change", atualizar);
+    });
+    // Numero do pedido filtra no SQL (round-trip ao Turso), entao usa um
+    // pequeno debounce pra nao disparar uma consulta a cada tecla digitada.
+    var debouncePedido = null;
+    document.getElementById("filtro-pedido").addEventListener("input", function () {
+      clearTimeout(debouncePedido);
+      debouncePedido = setTimeout(atualizar, 400);
     });
     document.getElementById("filtro-busca").addEventListener("input", reaplicarBusca);
     atualizar();
