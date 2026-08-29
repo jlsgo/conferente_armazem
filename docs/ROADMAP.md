@@ -849,6 +849,13 @@ Prioridade 1 porque sem isso nenhum insight novo seria confiavel.
 - Verificado contra o Turso real (dado de producao) nos dois idiomas
   (pt/zh) e duas larguras de janela, sem erro de console.
 
+### Senha do painel trocada (2026-08-29)
+
+- `SENHA_HASH` (gate de acesso do painel) foi trocado a pedido do usuario -
+  a senha anterior nao era conhecida/lembrada. Como de praxe, a senha em
+  texto puro **nao** fica no repositorio, so o hash SHA-256 dela; foi
+  comunicada direto pro usuario no chat, fora do git.
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um
