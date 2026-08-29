@@ -856,6 +856,59 @@ Prioridade 1 porque sem isso nenhum insight novo seria confiavel.
   texto puro **nao** fica no repositorio, so o hash SHA-256 dela; foi
   comunicada direto pro usuario no chat, fora do git.
 
+### Auditoria pos-v1.0: 4 correcoes rapidas (2026-08-29)
+
+Pedido do usuario: analisar o codigo (app Tauri, nao o painel) e propor pontos de
+qualidade/UX pras proximas versoes. Duas explorações paralelas (backend Rust +
+frontend React) levantaram achados; os 4 mais baratos/de maior valor foram
+implementados e verificados nesta mesma sessao (os demais ficam registrados
+pra retomar depois, ver lista abaixo). 126 testes Rust (125 -> 126).
+
+- **`buscar_historico` tratava `%`/`_` como curinga na busca por
+  pedido/contraparte** (`domain::movimentos`) — o filtro usava
+  `LIKE '%' || ?N || '%'` sem escapar, entao buscar pelo pedido "50_1" tambem
+  trazia "5011" (o `_` do SQLite casa qualquer caractere). Corrigido com
+  `escapar_curinga_like` (escapa `\`/`%`/`_`) + `ESCAPE '\'` nas duas
+  clausulas. **Gotcha do proprio fix**: escrever `ESCAPE '\'` direto no
+  literal Rust nao funciona — `\'` e sequencia de escape do *Rust* (vira so
+  `'`), entao a string SQL de fato executada ficava com `ESCAPE ''` (vazio),
+  e o SQLite rejeitava com "ESCAPE expression must be a single character".
+  Precisou `ESCAPE '\\'` no Rust pra a string SQL em tempo de execucao conter
+  o backslash literal. Pego pelos proprios testes (4 deles falharam na
+  primeira tentativa) antes de qualquer commit. Novo teste
+  `historico_trata_underscore_no_pedido_como_texto_literal_nao_curinga`.
+- **`AppState::iniciar_sessao`/`encerrar_sessao` engoliam erro de mutex
+  "poisoned" silenciosamente** (`state.rs`), diferente de `conn()`/
+  `usuario_logado()` que ja propagavam. Agora as duas retornam `AppResult<()>`
+  e propagam o erro igual as outras — `login`/`logout`
+  (`commands/auth_commands.rs`) atualizados pra usar `?`. Probabilidade de
+  disparar na pratica e baixa (secao critica e uma atribuicao so), mas o
+  fix e barato e remove a inconsistencia.
+- **Quantidade recebida na confirmacao de transferencia so era validada no
+  backend, nao no campo** (`TransferenciasChegando.tsx`) — dava pra digitar
+  0/negativo/vazio no `&lt;input type="number"&gt;` e so descobrir que era
+  invalido depois de clicar "Confirmar recebimento" (o backend ja rejeitava
+  corretamente via `validar_quantidades_recebidas`, entao nao havia risco
+  real ao dado, so fricção de UX). Agora o `onChange` clampa pra
+  `[1, quantidade_enviada]` na hora, e o campo ganhou `aria-label` (nao tinha
+  nenhum, so um `&lt;span&gt;` irmao com o texto).
+- **Abas do Dashboard sem `aria-current`** — a aba ativa so mudava de cor via
+  classe CSS `.ativo`, sem nenhum sinal semantico pra leitor de tela. Cada
+  botao de aba ganhou `aria-current={aba === 'X' ? 'page' : undefined}`.
+
+**Verificado**: `cargo test`/`clippy --all-targets --all-features -- -D
+warnings`/`fmt --check` limpos, `tsc --noEmit` e `vite build` limpos.
+
+**Deixado pra depois** (do mesmo levantamento, nao implementado ainda):
+duplicacao do mapeamento de `Movimento` em 3 lugares (`buscar_movimento`/
+`listar_movimentos_do_dia`/`buscar_historico`); duplicacao de
+`itensTexto`/soma de quantidade entre `FechamentoImpressao.tsx` e
+`exportFechamento.ts`; `Login.tsx`/`Setup.tsx` quase identicos sem wrapper
+compartilhado; `rusqlite 0.32` (atual 0.40) e `rusqlite_migration 1.3` (atual
+2.6) atrasados; Historico sem botao de retry no erro de busca; campos de
+senha sem `autocomplete`; camada `commands/*.rs` sem teste proprio (so a
+`domain` um nivel abaixo).
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um

@@ -966,6 +966,16 @@ pub fn listar_movimentos_do_dia(
 
 const LIMITE_HISTORICO: i64 = 500;
 
+/// Escapa `\`, `%` e `_` (nessa ordem) pra um termo de busca usado num LIKE
+/// com `ESCAPE '\'` - sem isso, um usuario buscando um pedido com `%`/`_` no
+/// meio (ex. "50_1") casaria como curinga em vez de texto literal.
+fn escapar_curinga_like(termo: &str) -> String {
+    termo
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 /// Uma pagina de `buscar_historico`: os movimentos da pagina e se ha mais
 /// alem dela. `tem_mais` vem de pedir uma linha a mais que o limite ao banco
 /// (`LIMITE_HISTORICO + 1`) e conferir se ela veio, em vez de um `COUNT(*)`
@@ -1004,11 +1014,14 @@ pub fn buscar_historico(
          WHERE m.armazem_id = ?1 AND m.fluxo = ?2
            AND (?3 IS NULL OR m.data >= ?3)
            AND (?4 IS NULL OR m.data <= ?4)
-           AND (?5 IS NULL OR m.contraparte LIKE '%' || ?5 || '%')
-           AND (?6 IS NULL OR m.numero_pedido LIKE '%' || ?6 || '%')
+           AND (?5 IS NULL OR m.contraparte LIKE '%' || ?5 || '%' ESCAPE '\\')
+           AND (?6 IS NULL OR m.numero_pedido LIKE '%' || ?6 || '%' ESCAPE '\\')
          ORDER BY m.data DESC, m.hora DESC, m.id DESC
          LIMIT ?7 OFFSET ?8",
     )?;
+
+    let cliente_escapado = cliente.map(escapar_curinga_like);
+    let numero_pedido_escapado = numero_pedido.map(escapar_curinga_like);
 
     let mut movimentos = stmt
         .query_map(
@@ -1017,8 +1030,8 @@ pub fn buscar_historico(
                 fluxo,
                 data_inicio,
                 data_fim,
-                cliente,
-                numero_pedido,
+                cliente_escapado,
+                numero_pedido_escapado,
                 LIMITE_HISTORICO + 1,
                 offset
             ],
@@ -2110,6 +2123,41 @@ mod tests {
         assert_eq!(
             resultado.movimentos[0].numero_pedido.as_deref(),
             Some("3893")
+        );
+    }
+
+    #[test]
+    fn historico_trata_underscore_no_pedido_como_texto_literal_nao_curinga() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        criar_movimento(
+            &mut conn,
+            movimento_com(armazem_id, usuario_id, "2026-08-10", "50_1", "Cliente A"),
+        )
+        .unwrap();
+        criar_movimento(
+            &mut conn,
+            movimento_com(armazem_id, usuario_id, "2026-08-11", "5011", "Cliente A"),
+        )
+        .unwrap();
+
+        // Sem escape, "_" no LIKE do SQLite casa qualquer caractere - "50_1"
+        // tambem bateria com "5011". O filtro deve trazer so o pedido exato.
+        let resultado = buscar_historico(
+            &conn,
+            armazem_id,
+            "saida_armazem",
+            None,
+            None,
+            None,
+            Some("50_1"),
+            0,
+        )
+        .unwrap();
+
+        assert_eq!(resultado.movimentos.len(), 1);
+        assert_eq!(
+            resultado.movimentos[0].numero_pedido.as_deref(),
+            Some("50_1")
         );
     }
 

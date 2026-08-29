@@ -50,14 +50,13 @@ pub struct LoginPayload {
 pub fn login(state: State<AppState>, payload: LoginPayload) -> AppResult<Usuario> {
     let conn = state.conn()?;
     let usuario = auth::login(&conn, &payload.login, &payload.senha)?;
-    state.iniciar_sessao(usuario.id);
+    state.iniciar_sessao(usuario.id)?;
     Ok(usuario)
 }
 
 #[tauri::command]
 pub fn logout(state: State<AppState>) -> AppResult<()> {
-    state.encerrar_sessao();
-    Ok(())
+    state.encerrar_sessao()
 }
 
 #[tauri::command(rename_all = "snake_case")]

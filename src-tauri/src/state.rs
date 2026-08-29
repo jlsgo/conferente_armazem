@@ -31,16 +31,22 @@ impl AppState {
             .map_err(|_| AppError::Interno("Falha ao acessar o banco de dados.".into()))
     }
 
-    pub fn iniciar_sessao(&self, usuario_id: i64) {
-        if let Ok(mut sessao) = self.sessao.lock() {
-            *sessao = Some(usuario_id);
-        }
+    pub fn iniciar_sessao(&self, usuario_id: i64) -> AppResult<()> {
+        let mut sessao = self
+            .sessao
+            .lock()
+            .map_err(|_| AppError::Interno("Falha ao acessar a sessao.".into()))?;
+        *sessao = Some(usuario_id);
+        Ok(())
     }
 
-    pub fn encerrar_sessao(&self) {
-        if let Ok(mut sessao) = self.sessao.lock() {
-            *sessao = None;
-        }
+    pub fn encerrar_sessao(&self) -> AppResult<()> {
+        let mut sessao = self
+            .sessao
+            .lock()
+            .map_err(|_| AppError::Interno("Falha ao acessar a sessao.".into()))?;
+        *sessao = None;
+        Ok(())
     }
 
     pub fn usuario_logado(&self) -> AppResult<i64> {

@@ -146,10 +146,15 @@ export default function TransferenciasChegando({ fluxo, outroArmazem, onConfirma
                           type="number"
                           min={1}
                           max={it.quantidade}
+                          aria-label={`Quantidade recebida de ${it.categoria}${it.descricao ? ` (${it.descricao})` : ''}`}
                           value={quantidadesRecebidas[chave]?.[indice] ?? it.quantidade}
-                          onChange={(e) =>
-                            atualizarQuantidadeRecebida(chave, indice, Number(e.target.value))
-                          }
+                          onChange={(e) => {
+                            const digitado = Number(e.target.value);
+                            const valido = Number.isFinite(digitado)
+                              ? Math.min(Math.max(digitado, 1), it.quantidade)
+                              : it.quantidade;
+                            atualizarQuantidadeRecebida(chave, indice, valido);
+                          }}
                           style={{ width: 70 }}
                         />
                       </div>

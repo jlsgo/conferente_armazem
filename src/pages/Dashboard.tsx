@@ -120,6 +120,7 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
         <button
           className={`aba-lancamentos${aba === 'lancamentos' ? ' ativo' : ''}`}
           onClick={() => setAba('lancamentos')}
+          aria-current={aba === 'lancamentos' ? 'page' : undefined}
         >
           <IconCaixa size={15} />
           Saida de Armazem
@@ -132,6 +133,7 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
         <button
           className={`aba-montagem${aba === 'montagem' ? ' ativo' : ''}`}
           onClick={() => setAba('montagem')}
+          aria-current={aba === 'montagem' ? 'page' : undefined}
         >
           <IconAjuste size={15} />
           Montagem
@@ -141,13 +143,18 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
             </span>
           )}
         </button>
-        <button className={`aba-sac${aba === 'sac' ? ' ativo' : ''}`} onClick={() => setAba('sac')}>
+        <button
+          className={`aba-sac${aba === 'sac' ? ' ativo' : ''}`}
+          onClick={() => setAba('sac')}
+          aria-current={aba === 'sac' ? 'page' : undefined}
+        >
           <IconChat size={15} />
           SAC
         </button>
         <button
           className={`aba-historico${aba === 'historico' ? ' ativo' : ''}`}
           onClick={() => setAba('historico')}
+          aria-current={aba === 'historico' ? 'page' : undefined}
         >
           <IconRelogio size={15} />
           Historico
@@ -156,6 +163,7 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
           <button
             className={`aba-usuarios${aba === 'usuarios' ? ' ativo' : ''}`}
             onClick={() => setAba('usuarios')}
+            aria-current={aba === 'usuarios' ? 'page' : undefined}
           >
             <IconUsuarios size={15} />
             Usuarios
