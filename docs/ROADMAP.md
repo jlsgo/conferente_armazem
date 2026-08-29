@@ -936,12 +936,29 @@ nova).
 
 **Verificado**: mesma bateria da leva anterior, tudo limpo.
 
+### Auditoria pos-v1.0: terceira leva (2026-08-29)
+
+Pedido do usuario: continuar as sprints e gerar a versao final pro pendrive.
+
+- **`Login.tsx`/`Setup.tsx` consolidados**: os dois eram quase identicos no
+  entorno (logo, cartao centralizado, titulo, mensagem de erro, botao com
+  estado "enviando"), so diferindo nos campos do meio e nos textos. Extraido
+  `src/components/AuthCard.tsx` (logo/titulo/subtitulo/erro/botao como
+  props, campos como `children`) - `Login.tsx` e `Setup.tsx` agora so tem a
+  logica e os campos especificos de cada um. Verificado visualmente
+  (headless Chrome, `window.__TAURI_INTERNALS__.invoke` mockado pra simular
+  `get_status` com/sem `precisa_configurar_primeiro_usuario`, ja que o app
+  fora do runtime Tauri de verdade nao tem o bridge de IPC) - as duas telas
+  renderizam identicas a antes do refactor.
+
 **Deixado pra depois** (do levantamento original, ainda nao implementado):
-`Login.tsx`/`Setup.tsx` quase identicos sem wrapper compartilhado (menor
-prioridade — poucas linhas, baixo risco de drift real); `rusqlite 0.32`
-(atual 0.40) e `rusqlite_migration 1.3` (atual 2.6) atrasados — merece uma
-sessao propria, nao um fix pontual, dado o tamanho do salto de versao;
-camada `commands/*.rs` sem teste proprio (so a `domain` um nivel abaixo).
+`rusqlite 0.32` (atual 0.40) e `rusqlite_migration 1.3` (atual 2.6)
+atrasados — merece uma sessao propria, nao um fix pontual, dado o tamanho do
+salto de versao, e nao e prudente arriscar bem na hora de gerar uma versao
+pra producao; camada `commands/*.rs` sem teste proprio (so a `domain` um
+nivel abaixo) — testar a camada de comando Tauri de verdade exige montar
+infraestrutura de mock do `tauri::test` (App/AppHandle), esforco maior que
+um fix pontual, melhor como sessao dedicada.
 
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 

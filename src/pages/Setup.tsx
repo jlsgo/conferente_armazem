@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react';
 import type { Armazem } from '../types';
 import { setupPrimeiroUsuario } from '../lib/api';
-import logoEcoviva from '../assets/ecoviva-logo.png';
+import AuthCard from '../components/AuthCard';
 
 interface Props {
   armazens: Armazem[];
@@ -44,74 +44,64 @@ export default function Setup({ armazens, onConcluido }: Props) {
   }
 
   return (
-    <div className="tela-centralizada">
-      <form className="cartao" onSubmit={handleSubmit}>
-        <img src={logoEcoviva} alt="Ecoviva" className="logo-ecoviva" />
-        <h1>Configuracao inicial</h1>
-        <p className="subtitulo">
-          Este computador ainda nao tem nenhum usuario cadastrado. Crie a primeira conta
-          (gestor) para comecar a usar o sistema.
-        </p>
+    <AuthCard
+      titulo="Configuracao inicial"
+      subtitulo="Este computador ainda nao tem nenhum usuario cadastrado. Crie a primeira conta (gestor) para comecar a usar o sistema."
+      erro={erro}
+      enviando={enviando}
+      textoBotao="Criar conta e continuar"
+      textoBotaoEnviando="Criando..."
+      onSubmit={handleSubmit}
+    >
+      <label>
+        Nome completo
+        <input value={nome} onChange={(e) => setNome(e.target.value)} required autoFocus />
+      </label>
 
-        <label>
-          Nome completo
-          <input value={nome} onChange={(e) => setNome(e.target.value)} required autoFocus />
-        </label>
+      <label>
+        Usuario de acesso
+        <input
+          value={login}
+          onChange={(e) => setLogin(e.target.value.trim())}
+          autoComplete="username"
+          required
+        />
+      </label>
 
-        <label>
-          Usuario de acesso
-          <input
-            value={login}
-            onChange={(e) => setLogin(e.target.value.trim())}
-            autoComplete="username"
-            required
-          />
-        </label>
+      <label>
+        Armazem deste computador
+        <select value={armazemId ?? ''} onChange={(e) => setArmazemId(Number(e.target.value))}>
+          {armazens.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.codigo} - {a.nome}
+            </option>
+          ))}
+        </select>
+      </label>
 
-        <label>
-          Armazem deste computador
-          <select
-            value={armazemId ?? ''}
-            onChange={(e) => setArmazemId(Number(e.target.value))}
-          >
-            {armazens.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.codigo} - {a.nome}
-              </option>
-            ))}
-          </select>
-        </label>
+      <label>
+        Senha
+        <input
+          type="password"
+          value={senha}
+          onChange={(e) => setSenha(e.target.value)}
+          autoComplete="new-password"
+          minLength={6}
+          required
+        />
+      </label>
 
-        <label>
-          Senha
-          <input
-            type="password"
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
-            autoComplete="new-password"
-            minLength={6}
-            required
-          />
-        </label>
-
-        <label>
-          Confirmar senha
-          <input
-            type="password"
-            value={confirmarSenha}
-            onChange={(e) => setConfirmarSenha(e.target.value)}
-            autoComplete="new-password"
-            minLength={6}
-            required
-          />
-        </label>
-
-        {erro && <p className="erro">{erro}</p>}
-
-        <button type="submit" disabled={enviando}>
-          {enviando ? 'Criando...' : 'Criar conta e continuar'}
-        </button>
-      </form>
-    </div>
+      <label>
+        Confirmar senha
+        <input
+          type="password"
+          value={confirmarSenha}
+          onChange={(e) => setConfirmarSenha(e.target.value)}
+          autoComplete="new-password"
+          minLength={6}
+          required
+        />
+      </label>
+    </AuthCard>
   );
 }

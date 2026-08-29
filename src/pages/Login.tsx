@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react';
 import type { Usuario } from '../types';
 import { login as autenticar } from '../lib/api';
-import logoEcoviva from '../assets/ecoviva-logo.png';
+import AuthCard from '../components/AuthCard';
 
 interface Props {
   onLogin: (usuario: Usuario) => void;
@@ -29,40 +29,36 @@ export default function Login({ onLogin }: Props) {
   }
 
   return (
-    <div className="tela-centralizada">
-      <form className="cartao" onSubmit={handleSubmit}>
-        <img src={logoEcoviva} alt="Ecoviva" className="logo-ecoviva" />
-        <h1>Ecoviva</h1>
-        <p className="subtitulo">Controle de entradas e saidas do armazem</p>
+    <AuthCard
+      titulo="Ecoviva"
+      subtitulo="Controle de entradas e saidas do armazem"
+      erro={erro}
+      enviando={enviando}
+      textoBotao="Entrar"
+      textoBotaoEnviando="Entrando..."
+      onSubmit={handleSubmit}
+    >
+      <label>
+        Usuario
+        <input
+          value={login}
+          onChange={(e) => setLogin(e.target.value.trim())}
+          autoComplete="username"
+          required
+          autoFocus
+        />
+      </label>
 
-        <label>
-          Usuario
-          <input
-            value={login}
-            onChange={(e) => setLogin(e.target.value.trim())}
-            autoComplete="username"
-            required
-            autoFocus
-          />
-        </label>
-
-        <label>
-          Senha
-          <input
-            type="password"
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
-            autoComplete="current-password"
-            required
-          />
-        </label>
-
-        {erro && <p className="erro">{erro}</p>}
-
-        <button type="submit" disabled={enviando}>
-          {enviando ? 'Entrando...' : 'Entrar'}
-        </button>
-      </form>
-    </div>
+      <label>
+        Senha
+        <input
+          type="password"
+          value={senha}
+          onChange={(e) => setSenha(e.target.value)}
+          autoComplete="current-password"
+          required
+        />
+      </label>
+    </AuthCard>
   );
 }
