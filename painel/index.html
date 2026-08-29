@@ -188,8 +188,22 @@
     background: var(--cartao);
     color: var(--texto);
   }
-  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+  /* table-layout: fixed (largura de cada coluna vem so do <th>, ver
+     .col-* abaixo) - sem isso o navegador da a cada coluna a largura do
+     seu conteudo mais largo, o que sempre acabava exigindo rolagem
+     horizontal pra ver as ultimas colunas (Situacao/Sincronizado). Com
+     largura fixa por coluna, colunas de texto variavel (Fluxo/Registrado
+     por/Pedido) quebram linha ou cortam com reticencias (title com o
+     valor completo) em vez de esticar a tabela. */
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; table-layout: fixed; }
+  th, td { text-align: left; padding: 8px 8px; border-bottom: 1px solid var(--borda); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .col-armazem { width: 8%; }
+  .col-fluxo { width: 11%; white-space: normal; }
+  .col-datahora { width: 12%; }
+  .col-qtd { width: 6%; }
+  .col-registrado { width: 13%; }
+  .col-situacao { width: 9%; }
+  .col-sincronizado { width: 11%; }
   th { position: sticky; top: 0; background: var(--cartao); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--texto-suave); }
   tbody tr:hover { background: var(--bg); }
   .tabela-scroll { overflow-x: auto; max-height: 65vh; overflow-y: auto; border-radius: 8px; border: 1px solid var(--borda); }
@@ -201,8 +215,9 @@
   .badge-pendente { background: var(--aviso-claro); color: var(--aviso); }
   .badge-divergencia { background: var(--divergencia-claro); color: var(--divergencia); }
   .badge-estorno { background: var(--erro-claro); color: var(--erro); }
-  .col-pedido { font-weight: 700; color: var(--verde-escuro); }
-  .col-itens { white-space: normal; min-width: 240px; }
+  .col-pedido { width: 10%; }
+  td.col-pedido { font-weight: 700; color: var(--verde-escuro); }
+  .col-itens { width: 20%; white-space: normal; }
   .aviso-truncado {
     background: var(--aviso-claro);
     color: var(--aviso);
@@ -379,17 +394,15 @@
         <table>
           <thead>
             <tr>
-              <th data-i18n="colArmazem">Armazem</th>
-              <th data-i18n="colFluxo">Fluxo</th>
-              <th data-i18n="colTipo">Tipo</th>
-              <th data-i18n="colData">Data</th>
-              <th data-i18n="colHora">Hora</th>
-              <th data-i18n="colPedido">Pedido</th>
+              <th class="col-armazem" data-i18n="colArmazem">Armazem</th>
+              <th class="col-fluxo" data-i18n="colFluxo">Fluxo</th>
+              <th class="col-datahora" data-i18n="colData">Data/Hora</th>
+              <th class="col-pedido" data-i18n="colPedido">Pedido</th>
               <th class="col-itens" data-i18n="colItens">Itens</th>
-              <th data-i18n="colQtd">Qtd.</th>
-              <th data-i18n="colRegistradoPor">Registrado por</th>
-              <th data-i18n="colSituacao">Situacao</th>
-              <th data-i18n="colSincronizado">Sincronizado</th>
+              <th class="col-qtd" data-i18n="colQtd">Qtd.</th>
+              <th class="col-registrado" data-i18n="colRegistradoPor">Registrado por</th>
+              <th class="col-situacao" data-i18n="colSituacao">Situacao</th>
+              <th class="col-sincronizado" data-i18n="colSincronizado">Sincronizado</th>
             </tr>
           </thead>
           <tbody id="corpo-tabela"></tbody>
@@ -485,9 +498,7 @@
       cartaoMovimentosTitulo: "Movimentos recentes",
       colArmazem: "Armazem",
       colFluxo: "Fluxo",
-      colTipo: "Tipo",
-      colData: "Data",
-      colHora: "Hora",
+      colData: "Data/Hora",
       colPedido: "Pedido",
       colItens: "Itens",
       colQtd: "Qtd.",
@@ -555,9 +566,7 @@
       cartaoMovimentosTitulo: "最近的记录",
       colArmazem: "仓库",
       colFluxo: "流程",
-      colTipo: "类型",
-      colData: "日期",
-      colHora: "时间",
+      colData: "日期/时间",
       colPedido: "订单",
       colItens: "物品",
       colQtd: "数量",
@@ -585,10 +594,6 @@
     pt: { saida_armazem: "Saida de Armazem", peca_montagem: "Montagem", sac: "SAC" },
     zh: { saida_armazem: "仓库出库", peca_montagem: "组装", sac: "客服(SAC)" }
   };
-  var ROTULO_TIPO_IDIOMA = {
-    pt: { entrada: "Entrada", saida: "Saida" },
-    zh: { entrada: "入库", saida: "出库" }
-  };
   // Categorias fixas de item (ver domain::movimentos no app - scooter/
   // triciclo/patinete/peca/outro, sem catalogo aberto).
   var ROTULO_CATEGORIA_IDIOMA = {
@@ -606,11 +611,6 @@
   function rotuloFluxo(fluxo) {
     var mapa = ROTULO_FLUXO_IDIOMA[idiomaAtual] || ROTULO_FLUXO_IDIOMA.pt;
     return mapa[fluxo] || fluxo;
-  }
-
-  function rotuloTipo(tipo) {
-    var mapa = ROTULO_TIPO_IDIOMA[idiomaAtual] || ROTULO_TIPO_IDIOMA.pt;
-    return mapa[tipo] || tipo;
   }
 
   function rotuloCategoria(categoria) {
@@ -1023,18 +1023,20 @@
       var divergencia = temDivergencia(m.itens)
         ? ' <span class="badge badge-divergencia">' + t("divergenciaBadge") + '</span>'
         : "";
+      var sincronizado = m.enviado_em
+        ? '<td class="col-sincronizado" title="' + formatarDataHora(m.enviado_em) + '">' + tempoRelativo(m.enviado_em) + "</td>"
+        : '<td class="col-sincronizado">-</td>';
+      var nomeAttr = (m.usuario_nome || "").replace(/"/g, "&quot;");
       return "<tr>" +
-        "<td>" + m.armazem_codigo + "</td>" +
-        "<td>" + rotuloFluxo(m.fluxo) + "</td>" +
-        "<td>" + rotuloTipo(m.tipo) + "</td>" +
-        "<td>" + formatarData(m.data) + "</td>" +
-        "<td>" + m.hora + "</td>" +
+        '<td class="col-armazem">' + m.armazem_codigo + "</td>" +
+        '<td class="col-fluxo">' + rotuloFluxo(m.fluxo) + "</td>" +
+        '<td class="col-datahora" title="' + formatarData(m.data) + " " + m.hora + '">' + formatarData(m.data) + " " + m.hora + "</td>" +
         '<td class="col-pedido">' + (m.numero_pedido || "-") + "</td>" +
         '<td class="col-itens">' + resumoItens(m.itens) + divergencia + "</td>" +
-        "<td>" + totalItens(m.itens) + "</td>" +
-        "<td>" + m.usuario_nome + "</td>" +
-        "<td>" + situacaoBadge(m) + "</td>" +
-        "<td>" + (m.enviado_em ? formatarDataHora(m.enviado_em) : "-") + "</td>" +
+        '<td class="col-qtd">' + totalItens(m.itens) + "</td>" +
+        '<td class="col-registrado" title="' + nomeAttr + '">' + m.usuario_nome + "</td>" +
+        '<td class="col-situacao">' + situacaoBadge(m) + "</td>" +
+        sincronizado +
         "</tr>";
     }).join("");
     var rodape = idiomaAtual === "zh"

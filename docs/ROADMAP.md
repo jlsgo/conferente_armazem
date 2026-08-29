@@ -822,6 +822,33 @@ Prioridade 1 porque sem isso nenhum insight novo seria confiavel.
   screenshot headless dos sprints anteriores - sem erro de console, cores
   distintas e consistentes nos tres graficos.
 
+### Tabela "Movimentos recentes" sem rolagem horizontal (Feito, 2026-08-29)
+
+- A tabela tinha `white-space: nowrap` em toda celula e largura livre por
+  coluna (`table-layout: auto`) - cada coluna crescia ate caber seu
+  conteudo mais largo, entao colunas essenciais (Situacao, Sincronizado)
+  ficavam fora da area visivel, exigindo rolagem lateral sem indicacao
+  visual clara de que havia mais conteudo pra ver.
+- Duas colunas foram removidas por serem redundantes com outra ja exibida:
+  **Tipo** (Entrada/Saida) - a coluna Situacao (badge ENTRADA/BAIXA/ESTORNO,
+  mesmo vocabulario de `src/lib/situacao.ts`) ja cobre essa informacao; e
+  **Hora**, fundida dentro de Data ("Data/Hora": `28/08/2026 16:26`).
+- **Sincronizado** deixou de mostrar o timestamp completo e passa a
+  mostrar tempo relativo (`tempoRelativo()`, mesma funcao ja usada no
+  card "Sincronizacao por armazem" - "agora mesmo"/"ha 2h"/"ha 3 dias"),
+  com o timestamp completo disponivel no `title` (tooltip ao passar o
+  mouse) - bem mais curto sem perder o dado exato.
+- A tabela agora usa `table-layout: fixed` com largura em % fixada por
+  coluna (classes `.col-*`) - a coluna Itens fica com a maior fatia (20%,
+  ja quebra linha desde a mudanca anterior), colunas de texto variavel que
+  ainda podem estourar (Registrado por, Pedido, Data/Hora) cortam com
+  reticencias e mostram o valor completo no `title`. Resultado: as 9
+  colunas cabem sem rolagem horizontal em telas de desktop comuns (testado
+  1300px e 1100px) - so a rolagem vertical do `.tabela-scroll` continua
+  (esperada, e o que evita a tabela esticar a pagina toda).
+- Verificado contra o Turso real (dado de producao) nos dois idiomas
+  (pt/zh) e duas larguras de janela, sem erro de console.
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um
