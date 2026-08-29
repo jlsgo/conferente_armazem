@@ -886,12 +886,12 @@ pra retomar depois, ver lista abaixo). 126 testes Rust (125 -> 126).
   fix e barato e remove a inconsistencia.
 - **Quantidade recebida na confirmacao de transferencia so era validada no
   backend, nao no campo** (`TransferenciasChegando.tsx`) — dava pra digitar
-  0/negativo/vazio no `&lt;input type="number"&gt;` e so descobrir que era
+  0/negativo/vazio no `<input type="number">` e so descobrir que era
   invalido depois de clicar "Confirmar recebimento" (o backend ja rejeitava
   corretamente via `validar_quantidades_recebidas`, entao nao havia risco
   real ao dado, so fricção de UX). Agora o `onChange` clampa pra
   `[1, quantidade_enviada]` na hora, e o campo ganhou `aria-label` (nao tinha
-  nenhum, so um `&lt;span&gt;` irmao com o texto).
+  nenhum, so um `<span>` irmao com o texto).
 - **Abas do Dashboard sem `aria-current`** — a aba ativa so mudava de cor via
   classe CSS `.ativo`, sem nenhum sinal semantico pra leitor de tela. Cada
   botao de aba ganhou `aria-current={aba === 'X' ? 'page' : undefined}`.
@@ -899,15 +899,49 @@ pra retomar depois, ver lista abaixo). 126 testes Rust (125 -> 126).
 **Verificado**: `cargo test`/`clippy --all-targets --all-features -- -D
 warnings`/`fmt --check` limpos, `tsc --noEmit` e `vite build` limpos.
 
-**Deixado pra depois** (do mesmo levantamento, nao implementado ainda):
-duplicacao do mapeamento de `Movimento` em 3 lugares (`buscar_movimento`/
-`listar_movimentos_do_dia`/`buscar_historico`); duplicacao de
-`itensTexto`/soma de quantidade entre `FechamentoImpressao.tsx` e
-`exportFechamento.ts`; `Login.tsx`/`Setup.tsx` quase identicos sem wrapper
-compartilhado; `rusqlite 0.32` (atual 0.40) e `rusqlite_migration 1.3` (atual
-2.6) atrasados; Historico sem botao de retry no erro de busca; campos de
-senha sem `autocomplete`; camada `commands/*.rs` sem teste proprio (so a
-`domain` um nivel abaixo).
+### Auditoria pos-v1.0: segunda leva (2026-08-29)
+
+Continuacao pedida pelo usuario ("sim e continue") logo apos a primeira leva
+acima. 126 testes Rust (sem mudanca de contagem — refatoracao, nao logica
+nova).
+
+- **Mapeamento de `Movimento` a partir da linha do SQLite, antes duplicado em
+  3 lugares** (`buscar_movimento`/`listar_movimentos_do_dia`/
+  `buscar_historico`, `domain::movimentos`) — consolidado numa constante
+  `COLUNAS_MOVIMENTO` (lista de colunas do SELECT) + uma funcao
+  `mapear_movimento(r: &Row) -> rusqlite::Result<Movimento>` reusada pelas
+  tres. `buscar_movimento` passou a incluir `m.id` no SELECT tambem (antes
+  vinha so do parametro, indices deslocados em 1 em relacao as outras duas)
+  pra poder compartilhar o mesmo mapeador com indice identico.
+- **`itensTexto`/`qtdTotal` duplicados** entre `FechamentoImpressao.tsx`
+  (inline, dentro do JSX da tabela) e `lib/exportFechamento.ts` (ja existiam
+  la, so nao exportadas) — agora `exportFechamento.ts` exporta as duas e
+  `FechamentoImpressao.tsx` importa em vez de duplicar; `totalGeral` (soma
+  com sinal invertido pra estorno) tambem passou a chamar `qtdTotal(m)` em
+  vez de reimplementar a soma. `type Variante` (existia identica nos dois
+  arquivos) virou `VarianteFechamento` em `types.ts`, importado pelos dois.
+- **Historico sem botao de retry no erro de busca**: o `erro` da tela era um
+  unico estado compartilhado por busca, exportar CSV/XLSX *e* estornar — um
+  "Tentar novamente" generico ali chamaria `buscar()` mesmo quando o erro
+  real era de uma exportacao ou estorno, escondendo o problema de verdade em
+  vez de corrigi-lo. Separado em `erroBusca` (mostra o botao, chama
+  `buscar()`) e `erroAcao` (exportar/estornar, sem botao — mesmo padrao das
+  outras paginas pra erro de acao pontual).
+- **Campos de senha sem `autocomplete`**: `Login.tsx` (`current-password`),
+  `Setup.tsx`/`Usuarios.tsx` (`new-password` — criando conta nova). O campo
+  de usuario em `Usuarios.tsx` ganhou `autocomplete="off"` de proposito (nao
+  `username`) — quem digita ali e o gestor cadastrando o login de *outra*
+  pessoa, autopreencher com a propria conta do gestor seria o comportamento
+  errado.
+
+**Verificado**: mesma bateria da leva anterior, tudo limpo.
+
+**Deixado pra depois** (do levantamento original, ainda nao implementado):
+`Login.tsx`/`Setup.tsx` quase identicos sem wrapper compartilhado (menor
+prioridade — poucas linhas, baixo risco de drift real); `rusqlite 0.32`
+(atual 0.40) e `rusqlite_migration 1.3` (atual 2.6) atrasados — merece uma
+sessao propria, nao um fix pontual, dado o tamanho do salto de versao;
+camada `commands/*.rs` sem teste proprio (so a `domain` um nivel abaixo).
 
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 

@@ -40,6 +40,7 @@ export default function Login({ onLogin }: Props) {
           <input
             value={login}
             onChange={(e) => setLogin(e.target.value.trim())}
+            autoComplete="username"
             required
             autoFocus
           />
@@ -47,7 +48,13 @@ export default function Login({ onLogin }: Props) {
 
         <label>
           Senha
-          <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required />
+          <input
+            type="password"
+            value={senha}
+            onChange={(e) => setSenha(e.target.value)}
+            autoComplete="current-password"
+            required
+          />
         </label>
 
         {erro && <p className="erro">{erro}</p>}

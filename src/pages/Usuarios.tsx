@@ -78,7 +78,15 @@ export default function Usuarios({ armazens }: Props) {
 
             <label>
               Usuario de acesso
-              <input value={login} onChange={(e) => setLogin(e.target.value.trim())} required />
+              {/* "off", nao "username": quem digita aqui e o gestor criando o
+                  login de OUTRA pessoa, nao o proprio - nao queremos que o
+                  navegador tente autopreencher com a conta do gestor. */}
+              <input
+                value={login}
+                onChange={(e) => setLogin(e.target.value.trim())}
+                autoComplete="off"
+                required
+              />
             </label>
 
             <label>
@@ -87,6 +95,7 @@ export default function Usuarios({ armazens }: Props) {
                 type="password"
                 value={senha}
                 onChange={(e) => setSenha(e.target.value)}
+                autoComplete="new-password"
                 minLength={6}
                 required
               />

@@ -70,7 +70,12 @@ export default function Historico({ usuario }: Props) {
   const [temMais, setTemMais] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [carregandoMais, setCarregandoMais] = useState(false);
-  const [erro, setErro] = useState('');
+  // Separado em dois: erro de busca (bloqueia a lista, mostra "Tentar
+  // novamente" chamando buscar() de novo) vs erro de acao (exportar/estornar
+  // - um "Tentar novamente" generico ali chamaria buscar() por engano em vez
+  // de reexecutar a acao que de fato falhou).
+  const [erroBusca, setErroBusca] = useState('');
+  const [erroAcao, setErroAcao] = useState('');
   const [estornando, setEstornando] = useState<number | null>(null);
   const [exportando, setExportando] = useState(false);
   const [exportandoXlsx, setExportandoXlsx] = useState(false);
@@ -91,13 +96,13 @@ export default function Historico({ usuario }: Props) {
 
   async function buscar() {
     setCarregando(true);
-    setErro('');
+    setErroBusca('');
     try {
       const resultado = await buscarPagina(0);
       setResultados(resultado.movimentos);
       setTemMais(resultado.tem_mais);
     } catch (err) {
-      setErro(typeof err === 'string' ? err : 'Nao foi possivel buscar o historico.');
+      setErroBusca(typeof err === 'string' ? err : 'Nao foi possivel buscar o historico.');
     } finally {
       setCarregando(false);
     }
@@ -105,13 +110,13 @@ export default function Historico({ usuario }: Props) {
 
   async function carregarMais() {
     setCarregandoMais(true);
-    setErro('');
+    setErroBusca('');
     try {
       const resultado = await buscarPagina(resultados.length);
       setResultados((atual) => [...atual, ...resultado.movimentos]);
       setTemMais(resultado.tem_mais);
     } catch (err) {
-      setErro(typeof err === 'string' ? err : 'Nao foi possivel carregar mais resultados.');
+      setErroBusca(typeof err === 'string' ? err : 'Nao foi possivel carregar mais resultados.');
     } finally {
       setCarregandoMais(false);
     }
@@ -214,7 +219,7 @@ export default function Historico({ usuario }: Props) {
 
   async function handleExportarCsv() {
     setExportando(true);
-    setErro('');
+    setErroAcao('');
     try {
       const { cabecalhos, linhas } = await construirColunas();
       const csv = paraCsv(cabecalhos, linhas);
@@ -223,7 +228,7 @@ export default function Historico({ usuario }: Props) {
         csv
       );
     } catch (err) {
-      setErro(typeof err === 'string' ? err : 'Nao foi possivel exportar o CSV.');
+      setErroAcao(typeof err === 'string' ? err : 'Nao foi possivel exportar o CSV.');
     } finally {
       setExportando(false);
     }
@@ -231,7 +236,7 @@ export default function Historico({ usuario }: Props) {
 
   async function handleExportarXlsx() {
     setExportandoXlsx(true);
-    setErro('');
+    setErroAcao('');
     try {
       const { cabecalhos, linhas, fechamentosPorData } = await construirColunas();
       const auditoria: string[][] = [
@@ -253,7 +258,7 @@ export default function Historico({ usuario }: Props) {
         ]
       );
     } catch (err) {
-      setErro(typeof err === 'string' ? err : 'Nao foi possivel exportar o XLSX.');
+      setErroAcao(typeof err === 'string' ? err : 'Nao foi possivel exportar o XLSX.');
     } finally {
       setExportandoXlsx(false);
     }
@@ -265,13 +270,13 @@ export default function Historico({ usuario }: Props) {
     );
     if (!justificativa || !justificativa.trim()) return;
 
-    setErro('');
+    setErroAcao('');
     setEstornando(movimento.id);
     const resultado = await estornarMovimento(movimento.id, justificativa);
     setEstornando(null);
 
     if (!resultado.ok) {
-      setErro(resultado.error ?? 'Nao foi possivel estornar o lancamento.');
+      setErroAcao(resultado.error ?? 'Nao foi possivel estornar o lancamento.');
       return;
     }
 
@@ -360,7 +365,15 @@ export default function Historico({ usuario }: Props) {
       </section>
 
       <section className="cartao">
-        {erro && <p className="erro">{erro}</p>}
+        {erroBusca && (
+          <div>
+            <p className="erro">{erroBusca}</p>
+            <button type="button" onClick={buscar}>
+              Tentar novamente
+            </button>
+          </div>
+        )}
+        {erroAcao && <p className="erro">{erroAcao}</p>}
         {carregando ? (
           <Carregando texto="Buscando..." />
         ) : (

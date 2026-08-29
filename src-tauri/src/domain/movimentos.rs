@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -857,46 +857,59 @@ pub(crate) fn carregar_itens(
     Ok(itens)
 }
 
+/// Lista de colunas compartilhada por toda consulta que devolve `Movimento`
+/// (`buscar_movimento`/`listar_movimentos_do_dia`/`buscar_historico`) - as
+/// tres liam a mesma coisa com a lista repetida (e uma delas, `id` fora da
+/// lista por vir do parametro), risco real de uma migration nova de coluna
+/// atualizar so 2 das 3 sem ninguem notar. `m.id` sempre primeiro, na mesma
+/// ordem que `mapear_movimento` espera.
+const COLUNAS_MOVIMENTO: &str =
+    "m.id, m.armazem_id, m.armazem_destino_id, m.fluxo, m.tipo, m.data, m.hora,
+                m.turno, m.usuario_id, u.nome, m.numero_pedido, m.codigo_rastreio, m.contraparte,
+                m.quem_retirou, m.motivo, m.valor_centavos, m.observacoes, m.status,
+                m.estornado_de, m.recebido_de_armazem_codigo, m.recebido_de_id_origem,
+                m.retirada_completa, m.hash_integridade";
+
+fn mapear_movimento(r: &Row) -> rusqlite::Result<Movimento> {
+    Ok(Movimento {
+        id: r.get(0)?,
+        numero: 0,
+        armazem_id: r.get(1)?,
+        armazem_destino_id: r.get(2)?,
+        fluxo: r.get(3)?,
+        tipo: r.get(4)?,
+        data: r.get(5)?,
+        hora: r.get(6)?,
+        turno: r.get(7)?,
+        usuario_id: r.get(8)?,
+        usuario_nome: r.get(9)?,
+        numero_pedido: r.get(10)?,
+        codigo_rastreio: r.get(11)?,
+        contraparte: r.get(12)?,
+        quem_retirou: r.get(13)?,
+        motivo: r.get(14)?,
+        valor_centavos: r.get(15)?,
+        observacoes: r.get(16)?,
+        status: r.get(17)?,
+        estornado_de: r.get(18)?,
+        recebido_de_armazem_codigo: r.get(19)?,
+        recebido_de_id_origem: r.get(20)?,
+        retirada_completa: r.get(21)?,
+        hash_integridade: r.get(22)?,
+        itens: Vec::new(),
+    })
+}
+
 pub fn buscar_movimento(conn: &Connection, id: i64) -> AppResult<Movimento> {
     let encontrado = conn
         .query_row(
-            "SELECT m.armazem_id, m.armazem_destino_id, m.fluxo, m.tipo, m.data, m.hora, m.turno,
-                    m.usuario_id, u.nome, m.numero_pedido, m.codigo_rastreio, m.contraparte,
-                    m.quem_retirou, m.motivo, m.valor_centavos, m.observacoes, m.status,
-                    m.estornado_de, m.recebido_de_armazem_codigo, m.recebido_de_id_origem,
-                    m.retirada_completa, m.hash_integridade
-             FROM movimentos m JOIN usuarios u ON u.id = m.usuario_id
-             WHERE m.id = ?1",
+            &format!(
+                "SELECT {COLUNAS_MOVIMENTO}
+                 FROM movimentos m JOIN usuarios u ON u.id = m.usuario_id
+                 WHERE m.id = ?1"
+            ),
             params![id],
-            |r| {
-                Ok(Movimento {
-                    id,
-                    numero: 0,
-                    armazem_id: r.get(0)?,
-                    armazem_destino_id: r.get(1)?,
-                    fluxo: r.get(2)?,
-                    tipo: r.get(3)?,
-                    data: r.get(4)?,
-                    hora: r.get(5)?,
-                    turno: r.get(6)?,
-                    usuario_id: r.get(7)?,
-                    usuario_nome: r.get(8)?,
-                    numero_pedido: r.get(9)?,
-                    codigo_rastreio: r.get(10)?,
-                    contraparte: r.get(11)?,
-                    quem_retirou: r.get(12)?,
-                    motivo: r.get(13)?,
-                    valor_centavos: r.get(14)?,
-                    observacoes: r.get(15)?,
-                    status: r.get(16)?,
-                    estornado_de: r.get(17)?,
-                    recebido_de_armazem_codigo: r.get(18)?,
-                    recebido_de_id_origem: r.get(19)?,
-                    retirada_completa: r.get(20)?,
-                    hash_integridade: r.get(21)?,
-                    itens: Vec::new(),
-                })
-            },
+            mapear_movimento,
         )
         .optional()?;
 
@@ -913,47 +926,15 @@ pub fn listar_movimentos_do_dia(
     fluxo: &str,
     data: &str,
 ) -> AppResult<Vec<Movimento>> {
-    let mut stmt = conn.prepare(
-        "SELECT m.id, m.armazem_id, m.armazem_destino_id, m.fluxo, m.tipo, m.data, m.hora,
-                m.turno, m.usuario_id, u.nome, m.numero_pedido, m.codigo_rastreio, m.contraparte,
-                m.quem_retirou, m.motivo, m.valor_centavos, m.observacoes, m.status,
-                m.estornado_de, m.recebido_de_armazem_codigo, m.recebido_de_id_origem,
-                m.retirada_completa, m.hash_integridade
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {COLUNAS_MOVIMENTO}
          FROM movimentos m JOIN usuarios u ON u.id = m.usuario_id
          WHERE m.armazem_id = ?1 AND m.fluxo = ?2 AND m.data = ?3
-         ORDER BY m.id ASC",
-    )?;
+         ORDER BY m.id ASC"
+    ))?;
 
     let mut movimentos = stmt
-        .query_map(params![armazem_id, fluxo, data], |r| {
-            Ok(Movimento {
-                id: r.get(0)?,
-                numero: 0,
-                armazem_id: r.get(1)?,
-                armazem_destino_id: r.get(2)?,
-                fluxo: r.get(3)?,
-                tipo: r.get(4)?,
-                data: r.get(5)?,
-                hora: r.get(6)?,
-                turno: r.get(7)?,
-                usuario_id: r.get(8)?,
-                usuario_nome: r.get(9)?,
-                numero_pedido: r.get(10)?,
-                codigo_rastreio: r.get(11)?,
-                contraparte: r.get(12)?,
-                quem_retirou: r.get(13)?,
-                motivo: r.get(14)?,
-                valor_centavos: r.get(15)?,
-                observacoes: r.get(16)?,
-                status: r.get(17)?,
-                estornado_de: r.get(18)?,
-                recebido_de_armazem_codigo: r.get(19)?,
-                recebido_de_id_origem: r.get(20)?,
-                retirada_completa: r.get(21)?,
-                hash_integridade: r.get(22)?,
-                itens: Vec::new(),
-            })
-        })?
+        .query_map(params![armazem_id, fluxo, data], mapear_movimento)?
         .collect::<Result<Vec<_>, _>>()?;
 
     for (indice, movimento) in movimentos.iter_mut().enumerate() {
@@ -1004,12 +985,8 @@ pub fn buscar_historico(
     numero_pedido: Option<&str>,
     offset: i64,
 ) -> AppResult<ResultadoHistorico> {
-    let mut stmt = conn.prepare(
-        "SELECT m.id, m.armazem_id, m.armazem_destino_id, m.fluxo, m.tipo, m.data, m.hora,
-                m.turno, m.usuario_id, u.nome, m.numero_pedido, m.codigo_rastreio, m.contraparte,
-                m.quem_retirou, m.motivo, m.valor_centavos, m.observacoes, m.status,
-                m.estornado_de, m.recebido_de_armazem_codigo, m.recebido_de_id_origem,
-                m.retirada_completa, m.hash_integridade
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {COLUNAS_MOVIMENTO}
          FROM movimentos m JOIN usuarios u ON u.id = m.usuario_id
          WHERE m.armazem_id = ?1 AND m.fluxo = ?2
            AND (?3 IS NULL OR m.data >= ?3)
@@ -1017,8 +994,8 @@ pub fn buscar_historico(
            AND (?5 IS NULL OR m.contraparte LIKE '%' || ?5 || '%' ESCAPE '\\')
            AND (?6 IS NULL OR m.numero_pedido LIKE '%' || ?6 || '%' ESCAPE '\\')
          ORDER BY m.data DESC, m.hora DESC, m.id DESC
-         LIMIT ?7 OFFSET ?8",
-    )?;
+         LIMIT ?7 OFFSET ?8"
+    ))?;
 
     let cliente_escapado = cliente.map(escapar_curinga_like);
     let numero_pedido_escapado = numero_pedido.map(escapar_curinga_like);
@@ -1035,35 +1012,7 @@ pub fn buscar_historico(
                 LIMITE_HISTORICO + 1,
                 offset
             ],
-            |r| {
-                Ok(Movimento {
-                    id: r.get(0)?,
-                    numero: 0,
-                    armazem_id: r.get(1)?,
-                    armazem_destino_id: r.get(2)?,
-                    fluxo: r.get(3)?,
-                    tipo: r.get(4)?,
-                    data: r.get(5)?,
-                    hora: r.get(6)?,
-                    turno: r.get(7)?,
-                    usuario_id: r.get(8)?,
-                    usuario_nome: r.get(9)?,
-                    numero_pedido: r.get(10)?,
-                    codigo_rastreio: r.get(11)?,
-                    contraparte: r.get(12)?,
-                    quem_retirou: r.get(13)?,
-                    motivo: r.get(14)?,
-                    valor_centavos: r.get(15)?,
-                    observacoes: r.get(16)?,
-                    status: r.get(17)?,
-                    estornado_de: r.get(18)?,
-                    recebido_de_armazem_codigo: r.get(19)?,
-                    recebido_de_id_origem: r.get(20)?,
-                    retirada_completa: r.get(21)?,
-                    hash_integridade: r.get(22)?,
-                    itens: Vec::new(),
-                })
-            },
+            mapear_movimento,
         )?
         .collect::<Result<Vec<_>, _>>()?;
 

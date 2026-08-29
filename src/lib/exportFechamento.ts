@@ -1,10 +1,14 @@
-import type { Fechamento, Movimento } from '../types';
+import type { Fechamento, Movimento, VarianteFechamento } from '../types';
 import { agoraLocalTexto, formatarDataHora } from './data';
 import { motivoSacTexto, situacaoInfo } from './situacao';
 
-type Variante = 'armazem' | 'montagem' | 'sac';
+type Variante = VarianteFechamento;
 
-function itensTexto(m: Movimento): string {
+/** Texto "2x categoria (descricao) - observacao [enviado: N]" por item,
+ * unido por " + " - usado tanto no fechamento impresso quanto nos exports
+ * CSV/XLSX, pra nao arriscar as duas versoes mostrarem itens diferentes pro
+ * mesmo fechamento. */
+export function itensTexto(m: Movimento): string {
   return m.itens
     .map((it) => {
       const base = `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}${it.observacao ? ' - ' + it.observacao : ''}`;
@@ -14,7 +18,7 @@ function itensTexto(m: Movimento): string {
     .join(' + ');
 }
 
-function qtdTotal(m: Movimento): number {
+export function qtdTotal(m: Movimento): number {
   return m.itens.reduce((s, it) => s + it.quantidade, 0);
 }
 

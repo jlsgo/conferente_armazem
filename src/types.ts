@@ -21,6 +21,9 @@ export interface Usuario {
 export type Categoria = 'scooter' | 'triciclo' | 'patinete' | 'peca' | 'outro';
 export type TipoMovimento = 'entrada' | 'saida';
 export type Fluxo = 'saida_armazem' | 'peca_montagem' | 'sac';
+/** Variante do fechamento diario/impressao - mesmos 3 fluxos, nomes diferentes
+ * (usada por `FechamentoImpressao.tsx`/`exportFechamento.ts`, nao vem do banco). */
+export type VarianteFechamento = 'armazem' | 'montagem' | 'sac';
 export type Montagem = 'montado' | 'caixa';
 export type Condicao = 'boa' | 'defeito' | 'sucata' | 'outro';
 

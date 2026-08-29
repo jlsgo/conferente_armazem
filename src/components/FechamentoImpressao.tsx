@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import type { Armazem, Fechamento, Movimento } from '../types';
+import type { Armazem, Fechamento, Movimento, VarianteFechamento } from '../types';
 import { motivoSacTexto, resumoMovimentos, situacaoInfo } from '../lib/situacao';
 import { agoraLocalTexto, formatarData, formatarDataArquivo, formatarDataHora } from '../lib/data';
 import { paraCsv, baixarCsv } from '../lib/csv';
 import { baixarXlsx } from '../lib/xlsx';
-import { colunasFechamento, rodapeAuditoria } from '../lib/exportFechamento';
+import { colunasFechamento, itensTexto, qtdTotal, rodapeAuditoria } from '../lib/exportFechamento';
 import logoEcoviva from '../assets/ecoviva-logo.png';
 
-type Variante = 'armazem' | 'montagem' | 'sac';
+type Variante = VarianteFechamento;
 
 interface Props {
   armazem: Armazem | undefined;
@@ -56,7 +56,7 @@ export default function FechamentoImpressao({
   // vazio), cai pra quem fechou o dia.
   const assinantes = nomesResponsaveis.length > 0 ? nomesResponsaveis : [fechamento.usuario_nome];
   const totalGeral = lancamentos.reduce(
-    (soma, m) => soma + (m.estornado_de ? -1 : 1) * m.itens.reduce((s, it) => s + it.quantidade, 0),
+    (soma, m) => soma + (m.estornado_de ? -1 : 1) * qtdTotal(m),
     0
   );
 
@@ -176,16 +176,8 @@ export default function FechamentoImpressao({
                   <td>{m.contraparte || '-'}</td>
                 </>
               )}
-              <td>
-                {m.itens
-                  .map((it) => {
-                    const base = `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}${it.observacao ? ' - ' + it.observacao : ''}`;
-                    const divergente = it.quantidade_enviada != null && it.quantidade_enviada !== it.quantidade;
-                    return divergente ? `${base} [enviado: ${it.quantidade_enviada}]` : base;
-                  })
-                  .join(' + ')}
-              </td>
-              <td>{m.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
+              <td>{itensTexto(m)}</td>
+              <td>{qtdTotal(m)}</td>
               {variante === 'armazem' && <td>{m.quem_retirou || '-'}</td>}
               {variante === 'montagem' && (
                 <td>{m.itens.map((it) => it.condicao).filter(Boolean).join(', ') || '-'}</td>

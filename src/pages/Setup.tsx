@@ -60,7 +60,12 @@ export default function Setup({ armazens, onConcluido }: Props) {
 
         <label>
           Usuario de acesso
-          <input value={login} onChange={(e) => setLogin(e.target.value.trim())} required />
+          <input
+            value={login}
+            onChange={(e) => setLogin(e.target.value.trim())}
+            autoComplete="username"
+            required
+          />
         </label>
 
         <label>
@@ -83,6 +88,7 @@ export default function Setup({ armazens, onConcluido }: Props) {
             type="password"
             value={senha}
             onChange={(e) => setSenha(e.target.value)}
+            autoComplete="new-password"
             minLength={6}
             required
           />
@@ -94,6 +100,7 @@ export default function Setup({ armazens, onConcluido }: Props) {
             type="password"
             value={confirmarSenha}
             onChange={(e) => setConfirmarSenha(e.target.value)}
+            autoComplete="new-password"
             minLength={6}
             required
           />
