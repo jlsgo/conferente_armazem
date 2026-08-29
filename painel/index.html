@@ -26,6 +26,19 @@
     --aviso-claro: #fffbeb;
     --divergencia: #b7791f;
     --divergencia-claro: #fef0e7;
+    /* Paleta categorica pros graficos de barra que comparam entidades
+       (armazem/categoria/fluxo) - distinta da paleta semantica acima
+       (verde/erro/aviso ja tem significado proprio de status). Mesmos tons
+       nos dois temas, mesmo padrao ja usado pro resto das cores fixas
+       (nao redefinidas no bloco dark abaixo). */
+    --grafico-1: #2563eb;
+    --grafico-2: #1a9350;
+    --grafico-3: #db2777;
+    --grafico-4: #ca8a04;
+    --grafico-5: #7c3aed;
+    --grafico-6: #0891b2;
+    --grafico-7: #dc2626;
+    --grafico-8: #65a30d;
     --sombra-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
     --sombra-md: 0 6px 20px rgba(15, 23, 42, 0.08);
     --raio: 10px;
@@ -1069,11 +1082,28 @@
     };
   }
 
-  function svgBarraHorizontal(valor, max) {
+  // Cores fixas por chave conhecida (nao por posicao/ordem), pra cada
+  // armazem/categoria/fluxo sempre aparecer com a mesma cor em qualquer
+  // grafico, independente do filtro ativo ou da ordem de classificacao.
+  var CORES_ARMAZEM = { A4: "var(--grafico-1)", B2: "var(--grafico-5)" };
+  var CORES_FLUXO = {
+    saida_armazem: "var(--grafico-1)",
+    peca_montagem: "var(--grafico-4)",
+    sac: "var(--grafico-6)"
+  };
+  var CORES_CATEGORIA = {
+    scooter: "var(--grafico-2)",
+    triciclo: "var(--grafico-3)",
+    patinete: "var(--grafico-4)",
+    peca: "var(--grafico-1)",
+    outro: "var(--grafico-7)"
+  };
+
+  function svgBarraHorizontal(valor, max, cor) {
     var largura = max > 0 ? Math.round((valor / max) * 100) : 0;
     return '<svg viewBox="0 0 100 16" preserveAspectRatio="none">' +
       '<rect x="0" y="2" width="100" height="12" fill="var(--borda)" rx="2"></rect>' +
-      '<rect x="0" y="2" width="' + largura + '" height="12" fill="var(--verde)" rx="2"></rect>' +
+      '<rect x="0" y="2" width="' + largura + '" height="12" fill="' + (cor || "var(--verde)") + '" rx="2"></rect>' +
       '</svg>';
   }
 
@@ -1094,7 +1124,9 @@
     var categorias = Object.keys(dados.porCategoria).sort(function (a, b) {
       return dados.porCategoria[b] - dados.porCategoria[a];
     });
-    renderizarBarras("grafico-categorias", dados.porCategoria, categorias, rotuloCategoria);
+    renderizarBarras("grafico-categorias", dados.porCategoria, categorias, rotuloCategoria, function (c) {
+      return CORES_CATEGORIA[c];
+    });
 
     // So faz sentido comparar armazem/fluxo quando o filtro ativo nao ja
     // restringiu a um so - com um so armazem/fluxo no resultado a
@@ -1103,7 +1135,9 @@
     var chavesArmazem = Object.keys(dados.porArmazem);
     if (chavesArmazem.length > 1) {
       blocoArmazem.classList.remove("escondido");
-      renderizarBarras("grafico-armazem", dados.porArmazem, chavesArmazem.sort(), function (c) { return c; });
+      renderizarBarras("grafico-armazem", dados.porArmazem, chavesArmazem.sort(), function (c) { return c; }, function (c) {
+        return CORES_ARMAZEM[c];
+      });
     } else {
       blocoArmazem.classList.add("escondido");
     }
@@ -1112,17 +1146,23 @@
     var chavesFluxo = Object.keys(dados.porFluxo);
     if (chavesFluxo.length > 1) {
       blocoFluxo.classList.remove("escondido");
-      renderizarBarras("grafico-fluxo", dados.porFluxo, chavesFluxo.sort(), rotuloFluxo);
+      renderizarBarras("grafico-fluxo", dados.porFluxo, chavesFluxo.sort(), rotuloFluxo, function (f) {
+        return CORES_FLUXO[f];
+      });
     } else {
       blocoFluxo.classList.add("escondido");
     }
   }
 
-  function renderizarBarras(elId, valores, chaves, rotular) {
+  // `corPara` e opcional - quando omitido (grafico "Volume por dia", uma
+  // serie temporal, nao uma comparacao entre entidades) todas as barras
+  // ficam verdes, como antes.
+  function renderizarBarras(elId, valores, chaves, rotular, corPara) {
     var max = Math.max.apply(null, chaves.map(function (c) { return valores[c]; }).concat([1]));
     document.getElementById(elId).innerHTML = chaves.map(function (c) {
+      var cor = corPara ? corPara(c) : null;
       return '<div class="barra-linha"><span class="rotulo-barra">' + rotular(c) + '</span>' +
-        svgBarraHorizontal(valores[c], max) +
+        svgBarraHorizontal(valores[c], max, cor) +
         '<span class="valor-barra">' + valores[c] + '</span></div>';
     }).join("") || "<p>" + t("semDadosPeriodo") + "</p>";
   }

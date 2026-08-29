@@ -803,6 +803,25 @@ Prioridade 1 porque sem isso nenhum insight novo seria confiavel.
   (ou entrar num dos mapas `ROTULO_*_IDIOMA`) - senao aparece em portugues
   mesmo com 中文 selecionado, sem erro nenhum pra avisar.
 
+### Cores por entidade nos graficos de barra (Feito, 2026-08-29)
+
+- Os graficos "Top categorias de item", "Por armazem" e "Por fluxo" (mesma
+  funcao `renderizarBarras`, compartilhada) ganharam uma cor fixa por chave
+  conhecida (`CORES_ARMAZEM`/`CORES_FLUXO`/`CORES_CATEGORIA`, mapas fixos, nao
+  por posicao/ordem na lista) - antes toda barra de todo grafico saia verde,
+  dificultando bater o olho e diferenciar categorias/armazens/fluxos.
+- Paleta nova e separada da paleta semantica existente (`--verde`/`--erro`/
+  `--aviso`/`--divergencia` continuam so pra badges de status) - 8 tons fixos
+  em `--grafico-1` a `--grafico-8`, mesmos valores nos dois temas (claro/
+  escuro), mesmo padrao ja usado pro resto das cores fixas do arquivo.
+- **"Volume por dia" continua monocromatico (verde)** de proposito - e uma
+  serie temporal, nao uma comparacao entre entidades; colorir por dia mudaria
+  a cor de cada barra conforme o filtro de periodo muda, sem ganho real de
+  legibilidade.
+- Verificado contra o Turso real (dado de producao) via o mesmo metodo de
+  screenshot headless dos sprints anteriores - sem erro de console, cores
+  distintas e consistentes nos tres graficos.
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um
