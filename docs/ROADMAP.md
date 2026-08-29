@@ -960,6 +960,20 @@ nivel abaixo) — testar a camada de comando Tauri de verdade exige montar
 infraestrutura de mock do `tauri::test` (App/AppHandle), esforco maior que
 um fix pontual, melhor como sessao dedicada.
 
+## Versao 1.0.1
+
+Bump de `1.0.0` pra `1.0.1` (`package.json`, `Cargo.toml`, `tauri.conf.json` +
+lockfiles regenerados - `package-lock.json` estava parado em `0.3.0` desde antes do
+bump pra `1.0.0`, corrigido de quebra) juntando as 3 levas da auditoria pos-v1.0
+acima: correcao de busca com curinga indevido no Historico, mutex "poisoned"
+engolido, validacao de quantidade recebida no proprio campo, `aria-current` nas
+abas, mapeamento de `Movimento` e `itensTexto`/`qtdTotal` consolidados,
+`erroBusca`/`erroAcao` separados no Historico, `autocomplete` correto nos campos
+de senha, e `AuthCard` compartilhado entre Login/Setup. Instalador Windows gerado
+pelo `build-installer.yml` e copiado pra `~/Downloads/PARA-O-PENDRIVE-ECOVIVA`
+(substituindo os arquivos `1.0.0`), `LEIA-ME.txt` atualizado com os nomes de
+arquivo novos.
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um
