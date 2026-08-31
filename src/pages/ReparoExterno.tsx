@@ -35,9 +35,17 @@ interface Props {
   onReparoAtualizado?: () => void;
 }
 
+interface CodigoGerado {
+  descricao: string;
+  codigo: string;
+}
+
 interface ItemForm {
   categoria: Categoria;
   descricao: string;
+  // So digitado na entrada (o que esta escrito na etiqueta fisica colada na
+  // peca) - na saida o backend gera sozinho (ver `criar_movimento` /
+  // `gerar_codigos_reparo_externo`), mostrado depois em `codigosGerados`.
   codigoComponente: string;
   // Resultado do conserto - so faz sentido (e e obrigatorio) na entrada,
   // quando a peca volta do tecnico. Reaproveita o mesmo campo/valores de
@@ -97,6 +105,7 @@ export default function ReparoExterno({ usuario, armazem, onReparoAtualizado }: 
     {}
   );
   const [erro, setErro] = useState('');
+  const [codigosGerados, setCodigosGerados] = useState<CodigoGerado[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [fechando, setFechando] = useState(false);
   const [estornando, setEstornando] = useState<number | null>(null);
@@ -184,8 +193,8 @@ export default function ReparoExterno({ usuario, armazem, onReparoAtualizado }: 
       return;
     }
     const itensComQuantidade = itens.filter((it) => it.quantidade > 0);
-    if (itensComQuantidade.some((it) => !it.codigoComponente.trim())) {
-      setErro('Informe o codigo/serie do componente (bateria, motor, modulo) de cada item.');
+    if (tipo === 'entrada' && itensComQuantidade.some((it) => !it.codigoComponente.trim())) {
+      setErro('Informe o codigo da etiqueta colada na peca de cada item.');
       return;
     }
     if (tipo === 'entrada' && itensComQuantidade.some((it) => !it.condicao)) {
@@ -202,7 +211,9 @@ export default function ReparoExterno({ usuario, armazem, onReparoAtualizado }: 
       descricao: it.descricao.trim() || null,
       quantidade: it.quantidade,
       observacao: it.observacao.trim() || null,
-      codigo_componente: it.codigoComponente.trim(),
+      // Na saida fica null de proposito - o backend gera o codigo sozinho
+      // (ver `criar_movimento`), devolvido em resultado.movimento.itens.
+      codigo_componente: tipo === 'entrada' ? it.codigoComponente.trim() : null,
       condicao: tipo === 'entrada' ? it.condicao || null : null,
     }));
 
@@ -228,6 +239,14 @@ export default function ReparoExterno({ usuario, armazem, onReparoAtualizado }: 
       setErro(resultado.error ?? 'Nao foi possivel registrar o lancamento.');
       return;
     }
+
+    setCodigosGerados(
+      tipo === 'saida'
+        ? (resultado.movimento?.itens ?? [])
+            .filter((it) => it.codigo_componente)
+            .map((it) => ({ descricao: it.descricao || it.categoria, codigo: it.codigo_componente as string }))
+        : []
+    );
 
     limparFormulario();
     await carregarTudo();
@@ -363,12 +382,34 @@ export default function ReparoExterno({ usuario, armazem, onReparoAtualizado }: 
           conserto{tipo === 'saida' ? ' com o tecnico externo.' : ' voltando consertado.'}
         </p>
 
+        {codigosGerados.length > 0 && (
+          <div className="aviso-fechado" style={{ marginBottom: 20 }}>
+            <p>
+              <strong>Anote o codigo na etiqueta de cada peca antes de enviar ao tecnico</strong> - e o
+              que vai ser digitado na entrada pra confirmar que voltou a mesma peca:
+            </p>
+            <ul style={{ margin: '6px 0 0', paddingLeft: 20 }}>
+              {codigosGerados.map((cg, i) => (
+                <li key={i}>
+                  <strong>{cg.codigo}</strong> - {cg.descricao}
+                </li>
+              ))}
+            </ul>
+            <button type="button" className="secundario" onClick={() => setCodigosGerados([])} style={{ marginTop: 10 }}>
+              Ok, ja anotei
+            </button>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
           <div className="abas" style={{ marginBottom: 20 }}>
             <button
               type="button"
               className={`tipo-saida ${tipo === 'saida' ? 'ativo' : ''}`}
-              onClick={() => setTipo('saida')}
+              onClick={() => {
+                setTipo('saida');
+                setCodigosGerados([]);
+              }}
             >
               Saida (vai pro tecnico)
             </button>
@@ -378,6 +419,7 @@ export default function ReparoExterno({ usuario, armazem, onReparoAtualizado }: 
               onClick={() => {
                 setTipo('entrada');
                 setAlertasCodigo({});
+                setCodigosGerados([]);
               }}
             >
               Entrada (retorno do conserto)
@@ -431,11 +473,12 @@ export default function ReparoExterno({ usuario, armazem, onReparoAtualizado }: 
                   </datalist>
 
                   <input
-                    value={item.codigoComponente}
+                    value={tipo === 'entrada' ? item.codigoComponente : ''}
                     onChange={(e) => atualizarItem(indice, { codigoComponente: e.target.value })}
                     onBlur={() => verificarCodigo(indice)}
-                    placeholder="Codigo/serie"
-                    required
+                    placeholder={tipo === 'entrada' ? 'Codigo da etiqueta' : 'Gerado ao registrar'}
+                    disabled={tipo === 'saida'}
+                    required={tipo === 'entrada'}
                   />
 
                   {tipo === 'entrada' ? (

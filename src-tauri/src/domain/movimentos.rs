@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection, OptionalExtension, Row};
+use rusqlite::{params, Connection, OptionalExtension, Row, Transaction};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -37,10 +37,15 @@ pub struct MovimentoItemInput {
     /// guarda quanto o remetente registrou, pra comparar com `quantidade`
     /// (quanto realmente chegou). `None` em todo lancamento normal.
     pub quantidade_enviada: Option<i64>,
-    /// Codigo/serie do componente (bateria, motor, modulo) - obrigatorio
-    /// quando `fluxo == "reparo_externo"`, usado para casar a saida pro
-    /// tecnico externo com a entrada de retorno (ver `buscar_reparos_em_aberto`).
-    /// `None` nos outros fluxos.
+    /// Codigo curto usado pra casar a saida pro tecnico externo com a
+    /// entrada de retorno (ver `buscar_reparos_em_aberto`), so relevante
+    /// quando `fluxo == "reparo_externo"`. Na saida, `criar_movimento` o
+    /// gera sozinho (`gerar_codigos_reparo_externo`) quando vem vazio -
+    /// depender de a conferente copiar certo o numero de serie do
+    /// fabricante nas duas pontas era fragil; o codigo gerado e pra ser
+    /// escrito numa etiqueta fisica colada na peca. Na entrada continua
+    /// sendo digitado (o que esta escrito na etiqueta) e obrigatorio - ver
+    /// `validar_novo_movimento`. `None`/ignorado nos outros fluxos.
     pub codigo_componente: Option<String>,
 }
 
@@ -273,12 +278,15 @@ fn validar_novo_movimento(novo: &NovoMovimento) -> AppResult<()> {
         if item.categoria == "outro" || item.condicao.as_deref() == Some("outro") {
             exigir_detalhe_para_outro(item.observacao.as_deref(), "o item na observacao")?;
         }
-        if novo.fluxo == "reparo_externo" {
+        // Na saida o codigo e gerado sozinho (`gerar_codigos_reparo_externo`,
+        // chamado por `criar_movimento` depois desta validacao) - so a
+        // entrada exige que a conferente digite o que esta na etiqueta.
+        if novo.fluxo == "reparo_externo" && novo.tipo == "entrada" {
             match item.codigo_componente.as_deref() {
                 Some(codigo) if !codigo.trim().is_empty() => {}
                 _ => {
                     return Err(AppError::Validation(
-                        "Informe o codigo/serie do componente (bateria, motor, modulo).".into(),
+                        "Informe o codigo da etiqueta colada na peca.".into(),
                     ));
                 }
             }
@@ -542,7 +550,42 @@ fn ultimo_hash(tx: &Connection) -> String {
     .unwrap_or_else(|_| "GENESIS-ECOVIVA".to_string())
 }
 
-pub fn criar_movimento(conn: &mut Connection, novo: NovoMovimento) -> AppResult<Movimento> {
+/// Gera um codigo curto e unico (ex: "RE-000042") pra cada item de uma saida
+/// de reparo externo que ainda nao tem `codigo_componente` preenchido - vira
+/// o que a conferente escreve na etiqueta fisica colada na peca antes dela
+/// sair, e o que ela digita de volta na entrada pra casar com esta saida
+/// (`buscar_reparos_em_aberto`). Usa o proximo id de `movimento_itens`
+/// (AUTOINCREMENT) como base, lido de `sqlite_sequence` dentro da mesma
+/// transacao que vai inserir os itens - seguro porque `AppState` protege a
+/// unica conexao com um mutex, entao nada mais escreve nessa tabela entre
+/// esta leitura e o INSERT que a consome logo em seguida (`criar_movimento`).
+fn gerar_codigos_reparo_externo(
+    tx: &Transaction,
+    itens: &mut [MovimentoItemInput],
+) -> AppResult<()> {
+    let ultimo_id: i64 = tx
+        .query_row(
+            "SELECT seq FROM sqlite_sequence WHERE name = 'movimento_itens'",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?
+        .unwrap_or(0);
+
+    for (i, item) in itens.iter_mut().enumerate() {
+        let vazio = item
+            .codigo_componente
+            .as_deref()
+            .map(|c| c.trim().is_empty())
+            .unwrap_or(true);
+        if vazio {
+            item.codigo_componente = Some(format!("RE-{:06}", ultimo_id + i as i64 + 1));
+        }
+    }
+    Ok(())
+}
+
+pub fn criar_movimento(conn: &mut Connection, mut novo: NovoMovimento) -> AppResult<Movimento> {
     validar_novo_movimento(&novo)?;
     autorizar_movimento(conn, novo.usuario_id, novo.armazem_id)?;
     if let Some(armazem_destino_id) = novo.armazem_destino_id {
@@ -564,6 +607,10 @@ pub fn criar_movimento(conn: &mut Connection, novo: NovoMovimento) -> AppResult<
         return Err(AppError::Validation(
             "Este dia ja foi fechado. Nao e possivel adicionar novos lancamentos.".into(),
         ));
+    }
+
+    if novo.fluxo == "reparo_externo" && novo.tipo == "saida" {
+        gerar_codigos_reparo_externo(&tx, &mut novo.itens)?;
     }
 
     let hash_anterior = ultimo_hash(&tx);
@@ -2661,10 +2708,27 @@ mod tests {
     }
 
     #[test]
-    fn rejeita_reparo_externo_sem_codigo_componente() {
+    fn reparo_externo_saida_gera_codigo_automatico_quando_nao_informado() {
         let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
         let novo = movimento_reparo(armazem_id, usuario_id, "saida", None);
-        let resultado = criar_movimento(&mut conn, novo);
+        let criado = criar_movimento(&mut conn, novo).unwrap();
+        let codigo = criado.itens[0].codigo_componente.clone().unwrap();
+        assert!(codigo.starts_with("RE-"));
+
+        let abertos = buscar_reparos_em_aberto(&conn, armazem_id).unwrap();
+        assert_eq!(abertos.len(), 1);
+        assert_eq!(abertos[0].codigo_componente, codigo);
+    }
+
+    #[test]
+    fn rejeita_reparo_externo_entrada_sem_codigo_componente() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let saida = movimento_reparo(armazem_id, usuario_id, "saida", Some("BAT-001"));
+        criar_movimento(&mut conn, saida).unwrap();
+
+        let mut entrada = movimento_reparo(armazem_id, usuario_id, "entrada", None);
+        entrada.hora = "15:00".into();
+        let resultado = criar_movimento(&mut conn, entrada);
         assert!(matches!(resultado, Err(AppError::Validation(_))));
     }
 
