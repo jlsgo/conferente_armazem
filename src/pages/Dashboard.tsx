@@ -3,33 +3,48 @@ import type { Armazem, Fluxo, StatusSincronizacao, Usuario } from '../types';
 import Lancamentos from './Lancamentos';
 import Montagem from './Montagem';
 import Sac from './Sac';
+import ReparoExterno from './ReparoExterno';
 import Historico from './Historico';
 import Usuarios from './Usuarios';
 import logoEcoviva from '../assets/ecoviva-logo.png';
-import { buscarTransferenciasPendentes, sincronizarAgora, statusSincronizacao } from '../lib/api';
-import { IconAjuste, IconCaixa, IconChat, IconLogout, IconRelogio, IconSpinner, IconUsuarios } from '../components/Icon';
+import { buscarReparosEmAberto, buscarTransferenciasPendentes, sincronizarAgora, statusSincronizacao } from '../lib/api';
+import { useCliquesSecretos } from '../hooks/useCliquesSecretos';
+import CobrinhaSecreta from '../components/CobrinhaSecreta';
+import {
+  IconAjuste,
+  IconCaixa,
+  IconChat,
+  IconFerramenta,
+  IconLogout,
+  IconRelogio,
+  IconSpinner,
+  IconUsuarios,
+} from '../components/Icon';
 import { useToast } from '../lib/toast';
 
-const INTERVALO_RETRY_SYNC_MS = 5 * 60 * 1000;
+const INTERVALO_STATUS_SYNC_MS = 5 * 60 * 1000;
 const INTERVALO_PENDENTES_MS = 60 * 1000;
 
 interface Props {
   usuario: Usuario;
   armazem: Armazem | undefined;
   armazens: Armazem[];
+  versao?: string;
   onSair: () => void;
 }
 
-type Aba = 'lancamentos' | 'montagem' | 'sac' | 'historico' | 'usuarios';
+type Aba = 'lancamentos' | 'montagem' | 'sac' | 'reparo_externo' | 'historico' | 'usuarios';
 
-export default function Dashboard({ usuario, armazem, armazens, onSair }: Props) {
+export default function Dashboard({ usuario, armazem, armazens, versao, onSair }: Props) {
   const [aba, setAba] = useState<Aba>('lancamentos');
   const ehGestor = usuario.papel === 'gestor';
 
   const [sincronizando, setSincronizando] = useState(false);
   const [statusSync, setStatusSync] = useState<StatusSincronizacao | null>(null);
   const [pendentesPorFluxo, setPendentesPorFluxo] = useState<Partial<Record<Fluxo, number>>>({});
+  const [reparosEmAberto, setReparosEmAberto] = useState(0);
   const { notificar } = useToast();
+  const cobrinha = useCliquesSecretos();
 
   async function atualizarStatusSync() {
     if (ehGestor) setStatusSync(await statusSincronizacao());
@@ -49,26 +64,45 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
     }
   }
 
-  async function handleSincronizar(manual: boolean) {
+  // Contador de reparos externos em aberto - endpoint separado dos
+  // "pendentesPorFluxo" acima, que e especificamente sobre transferencias
+  // entre A4/B2 (nao existe pra reparo externo). So faz sentido pra quem tem
+  // um armazem fixo (gestor sem armazem fixo nao usa essa tela).
+  async function atualizarReparosEmAberto() {
+    if (!armazem) {
+      setReparosEmAberto(0);
+      return;
+    }
+    try {
+      const abertos = await buscarReparosEmAberto(armazem.id);
+      setReparosEmAberto(abertos.length);
+    } catch {
+      // Mesmo atalho visual - so um contador, a tela de Reparo Externo mostra
+      // erro de verdade com retry se isso falhar de novo por la.
+    }
+  }
+
+  // O retry automatico de verdade agora roda no backend (loop em `lib.rs`,
+  // independente de sessao/gestor - ver docs/ARQUITETURA.md), entao esta
+  // funcao so cobre o clique manual do botao "Sincronizar agora".
+  async function handleSincronizar() {
     setSincronizando(true);
     const resultado = await sincronizarAgora();
     setSincronizando(false);
-    if (manual || !resultado.ok) {
-      notificar(
-        resultado.ok ? resultado.mensagem ?? 'Sincronizado.' : resultado.error ?? 'Falha ao sincronizar.',
-        resultado.ok ? 'sucesso' : 'erro'
-      );
-    }
+    notificar(
+      resultado.ok ? resultado.mensagem ?? 'Sincronizado.' : resultado.error ?? 'Falha ao sincronizar.',
+      resultado.ok ? 'sucesso' : 'erro'
+    );
     await atualizarStatusSync();
     await atualizarPendentes();
   }
 
+  // So atualiza o retrato local (sem rede) periodicamente - quem de fato
+  // tenta sincronizar com o Turso e o loop de backend, nao esta tela.
   useEffect(() => {
     if (!ehGestor) return;
     atualizarStatusSync();
-    const intervalo = setInterval(() => {
-      handleSincronizar(false);
-    }, INTERVALO_RETRY_SYNC_MS);
+    const intervalo = setInterval(atualizarStatusSync, INTERVALO_STATUS_SYNC_MS);
     return () => clearInterval(intervalo);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ehGestor]);
@@ -77,16 +111,20 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
   // so gestor), ja que quem recebe fisicamente e confirma e o conferente.
   useEffect(() => {
     atualizarPendentes();
-    const intervalo = setInterval(atualizarPendentes, INTERVALO_PENDENTES_MS);
+    atualizarReparosEmAberto();
+    const intervalo = setInterval(() => {
+      atualizarPendentes();
+      atualizarReparosEmAberto();
+    }, INTERVALO_PENDENTES_MS);
     return () => clearInterval(intervalo);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [armazem?.id]);
 
   return (
     <div className="pagina">
       <header className="topo">
         <div className="topo-marca">
-          <img src={logoEcoviva} alt="Ecoviva" />
+          <img src={logoEcoviva} alt="Ecoviva" onClick={cobrinha.registrarClique} />
           <div>
             <h1>Controle de Armazem {armazem ? `(${armazem.codigo})` : ''}</h1>
             <p className="subtitulo" style={{ margin: 0 }}>
@@ -103,12 +141,13 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
                   {statusSync.com_erro > 0 ? ` (${statusSync.com_erro} com erro)` : ''}
                 </span>
               )}
-              <button className="info" onClick={() => handleSincronizar(true)} disabled={sincronizando}>
+              <button className="info" onClick={handleSincronizar} disabled={sincronizando}>
                 {sincronizando ? <IconSpinner size={15} /> : null}
                 {sincronizando ? 'Sincronizando...' : 'Sincronizar agora'}
               </button>
             </>
           )}
+          {versao && <span className="pilula-versao">v{versao}</span>}
           <button className="secundario" onClick={onSair}>
             <IconLogout size={15} />
             Sair
@@ -152,6 +191,19 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
           SAC
         </button>
         <button
+          className={`aba-reparo${aba === 'reparo_externo' ? ' ativo' : ''}`}
+          onClick={() => setAba('reparo_externo')}
+          aria-current={aba === 'reparo_externo' ? 'page' : undefined}
+        >
+          <IconFerramenta size={15} />
+          Reparo Externo
+          {!!reparosEmAberto && (
+            <span className="badge badge-notificacao" title="Pecas aguardando retorno do tecnico">
+              {reparosEmAberto}
+            </span>
+          )}
+        </button>
+        <button
           className={`aba-historico${aba === 'historico' ? ' ativo' : ''}`}
           onClick={() => setAba('historico')}
           aria-current={aba === 'historico' ? 'page' : undefined}
@@ -189,9 +241,13 @@ export default function Dashboard({ usuario, armazem, armazens, onSair }: Props)
           />
         )}
         {aba === 'sac' && <Sac usuario={usuario} armazem={armazem} />}
-        {aba === 'historico' && <Historico usuario={usuario} />}
+        {aba === 'reparo_externo' && (
+          <ReparoExterno usuario={usuario} armazem={armazem} onReparoAtualizado={atualizarReparosEmAberto} />
+        )}
+        {aba === 'historico' && <Historico usuario={usuario} armazem={armazem} />}
         {aba === 'usuarios' && ehGestor && <Usuarios armazens={armazens} />}
       </main>
+      {cobrinha.ativo && <CobrinhaSecreta onFechar={cobrinha.fechar} />}
     </div>
   );
 }

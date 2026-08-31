@@ -10,6 +10,8 @@ interface Props {
   onConfirmado: () => void;
 }
 
+const INTERVALO_POLL_MS = 60 * 1000;
+
 function chaveTransferencia(t: TransferenciaPendente): string {
   return `${t.armazem_origem_codigo}:${t.id_origem}`;
 }
@@ -49,8 +51,13 @@ export default function TransferenciasChegando({ fluxo, outroArmazem, onConfirma
     }
   }
 
+  // Repolha enquanto a aba fica aberta - sem isso, uma transferencia que
+  // fica pendente durante a sessao so aparecia de novo ao trocar de aba e
+  // voltar (remount), nao com a lista ja na tela.
   useEffect(() => {
     carregar();
+    const intervalo = setInterval(carregar, INTERVALO_POLL_MS);
+    return () => clearInterval(intervalo);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fluxo]);
 

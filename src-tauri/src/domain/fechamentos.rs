@@ -222,6 +222,7 @@ mod tests {
                     quantidade: 2,
                     observacao: None,
                     quantidade_enviada: None,
+                    codigo_componente: None,
                 }],
             },
         )
@@ -272,6 +273,7 @@ mod tests {
                     quantidade: 1,
                     observacao: None,
                     quantidade_enviada: None,
+                    codigo_componente: None,
                 }],
             },
         );

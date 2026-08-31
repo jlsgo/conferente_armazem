@@ -15,6 +15,11 @@ pub struct Armazem {
 pub struct AppStatus {
     pub precisa_configurar_primeiro_usuario: bool,
     pub armazens: Vec<Armazem>,
+    /// Versao do `Cargo.toml`, lida em tempo de compilacao - a fonte mais
+    /// proxima do que de fato roda neste binario. Mostrada num selo visivel
+    /// em toda tela (Setup/Login/Dashboard) pra nunca haver duvida se A4 e
+    /// B2 estao rodando a mesma versao.
+    pub versao: String,
 }
 
 #[tauri::command]
@@ -37,5 +42,6 @@ pub fn get_status(state: State<AppState>) -> AppResult<AppStatus> {
     Ok(AppStatus {
         precisa_configurar_primeiro_usuario: total_usuarios == 0,
         armazens,
+        versao: env!("CARGO_PKG_VERSION").to_string(),
     })
 }

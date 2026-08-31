@@ -58,7 +58,10 @@ export default function Sac({ usuario, armazem }: Props) {
   const { notificar } = useToast();
 
   const [hora, setHora] = useState(horaAtual());
-  const [tipo, setTipo] = useState<TipoMovimento>('entrada');
+  // Saida (fim do atendimento) e o fluxo bem mais frequente no dia a dia do
+  // SAC do que entrada (devolucao do cliente) - vem primeiro e ja comeca
+  // selecionado, pra poupar um clique na maioria dos lancamentos.
+  const [tipo, setTipo] = useState<TipoMovimento>('saida');
   const [protocolo, setProtocolo] = useState('');
   const [coleta, setColeta] = useState('');
   const [motivo, setMotivo] = useState<Motivo | ''>('');
@@ -317,16 +320,6 @@ export default function Sac({ usuario, armazem }: Props) {
           <div className="abas" style={{ marginBottom: 20 }}>
             <button
               type="button"
-              className={`tipo-entrada ${tipo === 'entrada' ? 'ativo' : ''}`}
-              onClick={() => {
-                setTipo('entrada');
-                setMotivo('');
-              }}
-            >
-              Entrada (devolucao do cliente)
-            </button>
-            <button
-              type="button"
               className={`tipo-saida ${tipo === 'saida' ? 'ativo' : ''}`}
               onClick={() => {
                 setTipo('saida');
@@ -334,6 +327,16 @@ export default function Sac({ usuario, armazem }: Props) {
               }}
             >
               Saida (fim do atendimento)
+            </button>
+            <button
+              type="button"
+              className={`tipo-entrada ${tipo === 'entrada' ? 'ativo' : ''}`}
+              onClick={() => {
+                setTipo('entrada');
+                setMotivo('');
+              }}
+            >
+              Entrada (devolucao do cliente)
             </button>
           </div>
 

@@ -48,11 +48,11 @@ export default function App() {
   }
 
   if (status.precisa_configurar_primeiro_usuario) {
-    return <Setup armazens={status.armazens} onConcluido={refreshStatus} />;
+    return <Setup armazens={status.armazens} onConcluido={refreshStatus} versao={status.versao} />;
   }
 
   if (!usuario) {
-    return <Login onLogin={setUsuario} />;
+    return <Login onLogin={setUsuario} versao={status.versao} />;
   }
 
   const armazem = status.armazens.find((a) => a.id === usuario.armazem_id);
@@ -62,6 +62,7 @@ export default function App() {
       usuario={usuario}
       armazem={armazem}
       armazens={status.armazens}
+      versao={status.versao}
       onSair={() => {
         logout().finally(() => setUsuario(null));
       }}

@@ -4,7 +4,7 @@ import { motivoSacTexto, resumoMovimentos, situacaoInfo } from '../lib/situacao'
 import { agoraLocalTexto, formatarData, formatarDataArquivo, formatarDataHora } from '../lib/data';
 import { paraCsv, baixarCsv } from '../lib/csv';
 import { baixarXlsx } from '../lib/xlsx';
-import { colunasFechamento, itensTexto, qtdTotal, rodapeAuditoria } from '../lib/exportFechamento';
+import { colunasFechamento, itensTexto, qtdTotal, resultadoReparoTexto, rodapeAuditoria } from '../lib/exportFechamento';
 import logoEcoviva from '../assets/ecoviva-logo.png';
 
 type Variante = VarianteFechamento;
@@ -21,6 +21,7 @@ const TITULOS: Record<Variante, string> = {
   armazem: 'Controle de Saidas de Armazem',
   montagem: 'Controle de Pecas para Montagem',
   sac: 'Controle de Saidas do SAC',
+  reparo_externo: 'Controle de Reparo Externo',
 };
 
 // Mesma cor usada no friso de cada aba do menu (ver global.css, "Cor por
@@ -30,6 +31,7 @@ const CORES_VARIANTE: Record<Variante, string> = {
   armazem: 'var(--cor-lancamentos-escuro)',
   montagem: 'var(--cor-montagem-escuro)',
   sac: 'var(--cor-sac-escuro)',
+  reparo_externo: 'var(--cor-reparo-escuro)',
 };
 
 // Largura (%) de cada coluna na impressao, na mesma ordem dos <th> abaixo -
@@ -39,6 +41,7 @@ const LARGURAS_COLUNAS: Record<Variante, number[]> = {
   armazem: [3, 6, 8, 13, 24, 4, 8, 18, 8, 8],
   montagem: [4, 7, 10, 38, 5, 10, 14, 12],
   sac: [3, 6, 9, 15, 26, 4, 13, 12, 12],
+  reparo_externo: [4, 7, 13, 38, 5, 10, 13, 10],
 };
 
 export default function FechamentoImpressao({
@@ -145,11 +148,13 @@ export default function FechamentoImpressao({
                 <th>Coleta</th>
               </>
             )}
+            {variante === 'reparo_externo' && <th>Tecnico/Oficina</th>}
             <th>Itens</th>
             <th>Qtd.</th>
             {variante === 'armazem' && <th>Quem retirou</th>}
             {variante === 'montagem' && <th>Condicao</th>}
             {variante === 'sac' && <th>Motivo</th>}
+            {variante === 'reparo_externo' && <th>Resultado</th>}
             {variante === 'armazem' && <th>Observacoes</th>}
             <th>Registrado por</th>
             <th>Situacao</th>
@@ -176,13 +181,13 @@ export default function FechamentoImpressao({
                   <td>{m.contraparte || '-'}</td>
                 </>
               )}
+              {variante === 'reparo_externo' && <td>{m.contraparte || '-'}</td>}
               <td>{itensTexto(m)}</td>
               <td>{qtdTotal(m)}</td>
               {variante === 'armazem' && <td>{m.quem_retirou || '-'}</td>}
-              {variante === 'montagem' && (
-                <td>{m.itens.map((it) => it.condicao).filter(Boolean).join(', ') || '-'}</td>
-              )}
+              {variante === 'montagem' && <td>{resultadoReparoTexto(m)}</td>}
               {variante === 'sac' && <td>{motivoSacTexto(m)}</td>}
+              {variante === 'reparo_externo' && <td>{resultadoReparoTexto(m)}</td>}
               {variante === 'armazem' && <td>{m.observacoes || '-'}</td>}
               <td>{m.usuario_nome}</td>
               <td>

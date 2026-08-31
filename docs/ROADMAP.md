@@ -974,6 +974,42 @@ pelo `build-installer.yml` e copiado pra `~/Downloads/PARA-O-PENDRIVE-ECOVIVA`
 (substituindo os arquivos `1.0.0`), `LEIA-ME.txt` atualizado com os nomes de
 arquivo novos.
 
+## Versao 2.0.0
+
+Bump de `1.0.1` pra `2.0.0` (`package.json`, `Cargo.toml`, `tauri.conf.json` +
+lockfiles regenerados via `npm install`/`cargo check`) - marcada como versao 2.0 porque
+a partir desta versao o app vira o controle padrao de saidas/entradas dos armazens A4 e
+B2, substituindo as planilhas. Junta:
+
+- **Fluxo Reparo Externo completo** (novo `fluxo = "reparo_externo"`): peca (bateria/
+  motor/modulo) sai pra tecnico externo com um `codigo_componente` obrigatorio por
+  item, casado com a entrada de retorno pelo mesmo codigo (`domain::movimentos::
+  buscar_reparos_em_aberto`, painel "Reparos em aberto" na tela). A entrada tambem
+  exige `condicao` (reaproveitando o mesmo campo/valores de `peca_montagem`: boa =
+  consertada, defeito/sucata = nao consertada) - so entrada com `condicao = 'boa'` conta
+  como reparo "concluido". **Relatorio de pagamento por quinzena**
+  (`buscar_reparos_concluidos`, nova secao em Historico quando o fluxo e Reparo
+  Externo): casa saida/entrada pelo codigo dentro de um intervalo dia 1-15 ou 16-fim do
+  mes, resumo por tecnico + detalhe, exportavel em CSV/XLSX/impressao.
+- **Correcao critica de sincronizacao entre A4/B2** (reclamacao real de "nao esta
+  entregando tudo" - ver `docs/ARQUITETURA.md`, secao "Sincronizacao com Turso"): o
+  retry automatico de 5 minutos, que so existia no frontend e so rodava com um gestor
+  logado (`Dashboard.tsx`), virou um loop no backend (`lib.rs`) independente de
+  sessao/papel - roda a vida inteira do processo, mesmo com um conferente logado ou
+  ninguem logado. Alem disso, uma queda de conexao *total* com o Turso (sem internet,
+  servico fora do ar, token expirado) nao era registrada como erro nenhum -
+  `enviar_para_turso` foi reestruturada (`conectar_turso` isolada) pra que isso vire
+  `falhas` pra todo o lote, igual a uma falha por linha, em vez de abortar com `Err` sem
+  deixar rastro. `status_sincronizacao` agora reflete corretamente uma queda de rede
+  prolongada.
+- **Selo de versao visivel** em Setup/Login/Dashboard (`AppStatus.versao`, lido de
+  `env!("CARGO_PKG_VERSION")`) - pra nunca haver duvida se A4 e B2 estao rodando a
+  mesma versao.
+
+**Pendente pra concluir o rollout**: gerar o instalador Windows via `build-installer.yml`
+e redistribuir pro pendrive (`~/Downloads/PARA-O-PENDRIVE-ECOVIVA`), atualizando o
+`LEIA-ME.txt` - nao foi feito nesta sessao (precisa rodar no CI/numa maquina Windows).
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um

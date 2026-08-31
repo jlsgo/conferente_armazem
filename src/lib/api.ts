@@ -7,6 +7,8 @@ import type {
   Movimento,
   NovoMovimento,
   NovoUsuarioInput,
+  ReparoConcluido,
+  ReparoPendente,
   ResultadoHistorico,
   StatusSincronizacao,
   TransferenciaPendente,
@@ -113,6 +115,18 @@ export async function verificarRetiradaPendente(params: {
   } catch {
     return null;
   }
+}
+
+export function buscarReparosEmAberto(armazemId: number): Promise<ReparoPendente[]> {
+  return invoke<ReparoPendente[]>('buscar_reparos_em_aberto', { armazem_id: armazemId });
+}
+
+export function buscarReparosConcluidos(params: {
+  armazem_id: number;
+  data_inicio: string;
+  data_fim: string;
+}): Promise<ReparoConcluido[]> {
+  return invoke<ReparoConcluido[]>('buscar_reparos_concluidos', params);
 }
 
 export function buscarHistorico(params: {

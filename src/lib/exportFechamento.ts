@@ -12,14 +12,23 @@ export function itensTexto(m: Movimento): string {
   return m.itens
     .map((it) => {
       const base = `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}${it.observacao ? ' - ' + it.observacao : ''}`;
+      const comCodigo = it.codigo_componente ? `${base} [cod: ${it.codigo_componente}]` : base;
       const divergente = it.quantidade_enviada != null && it.quantidade_enviada !== it.quantidade;
-      return divergente ? `${base} [enviado: ${it.quantidade_enviada}]` : base;
+      return divergente ? `${comCodigo} [enviado: ${it.quantidade_enviada}]` : comCodigo;
     })
     .join(' + ');
 }
 
 export function qtdTotal(m: Movimento): number {
   return m.itens.reduce((s, it) => s + it.quantidade, 0);
+}
+
+/** Resultado do conserto (fluxo `reparo_externo`) - so preenchido na
+ * entrada, vazio na saida. Compartilhado entre `FechamentoImpressao.tsx` e
+ * `Historico.tsx` pra nao arriscar as duas telas mostrarem coisas
+ * diferentes pro mesmo movimento. */
+export function resultadoReparoTexto(m: Movimento): string {
+  return m.itens.map((it) => it.condicao).filter(Boolean).join(', ') || '-';
 }
 
 /**
@@ -69,7 +78,23 @@ export function colunasFechamento(variante: Variante): {
         m.tipo === 'saida' ? 'Saida B2' : 'Entrada B2',
         itensTexto(m),
         String(qtdTotal(m)),
-        m.itens.map((it) => it.condicao).filter(Boolean).join(', ') || '-',
+        resultadoReparoTexto(m),
+        m.usuario_nome,
+        situacaoInfo(m).texto,
+      ],
+    };
+  }
+
+  if (variante === 'reparo_externo') {
+    return {
+      cabecalhos: ['Nº', 'Horario', 'Tecnico/Oficina', 'Itens', 'Qtd.', 'Resultado', 'Registrado por', 'Situacao'],
+      linha: (m) => [
+        String(m.numero),
+        m.hora,
+        m.contraparte || '-',
+        itensTexto(m),
+        String(qtdTotal(m)),
+        resultadoReparoTexto(m),
         m.usuario_nome,
         situacaoInfo(m).texto,
       ],

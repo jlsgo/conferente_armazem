@@ -20,6 +20,7 @@ fn migrations() -> Migrations<'static> {
         )),
         M::up(include_str!("../../migrations/0007_retirada_parcial.sql")),
         M::up(include_str!("../../migrations/0008_lockout_login.sql")),
+        M::up(include_str!("../../migrations/0009_reparo_externo.sql")),
     ])
 }
 

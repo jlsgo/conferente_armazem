@@ -7,6 +7,7 @@ export interface Armazem {
 export interface AppStatus {
   precisa_configurar_primeiro_usuario: boolean;
   armazens: Armazem[];
+  versao: string;
 }
 
 export interface Usuario {
@@ -20,10 +21,10 @@ export interface Usuario {
 
 export type Categoria = 'scooter' | 'triciclo' | 'patinete' | 'peca' | 'outro';
 export type TipoMovimento = 'entrada' | 'saida';
-export type Fluxo = 'saida_armazem' | 'peca_montagem' | 'sac';
-/** Variante do fechamento diario/impressao - mesmos 3 fluxos, nomes diferentes
+export type Fluxo = 'saida_armazem' | 'peca_montagem' | 'sac' | 'reparo_externo';
+/** Variante do fechamento diario/impressao - mesmos fluxos, nomes diferentes
  * (usada por `FechamentoImpressao.tsx`/`exportFechamento.ts`, nao vem do banco). */
-export type VarianteFechamento = 'armazem' | 'montagem' | 'sac';
+export type VarianteFechamento = 'armazem' | 'montagem' | 'sac' | 'reparo_externo';
 export type Montagem = 'montado' | 'caixa';
 export type Condicao = 'boa' | 'defeito' | 'sucata' | 'outro';
 
@@ -34,6 +35,10 @@ export interface MovimentoItemInput {
   condicao?: Condicao | null;
   quantidade: number;
   observacao?: string | null;
+  /** Codigo/serie do componente (bateria, motor, modulo) - obrigatorio
+   * quando `fluxo === 'reparo_externo'`, usado pra casar a saida pro
+   * tecnico externo com a entrada de retorno. */
+  codigo_componente?: string | null;
 }
 
 export interface NovoMovimento {
@@ -65,6 +70,7 @@ export interface MovimentoItem {
   quantidade: number;
   observacao: string | null;
   quantidade_enviada: number | null;
+  codigo_componente: string | null;
 }
 
 export interface Movimento {
@@ -108,6 +114,38 @@ export interface TransferenciaPendente {
   hora: string;
   armazem_destino_codigo: string | null;
   itens: MovimentoItem[];
+}
+
+/** Um item enviado pra reparo externo que ainda nao voltou (nenhuma entrada
+ * registrada ainda com o mesmo `codigo_componente` nesse armazem/fluxo). */
+export interface ReparoPendente {
+  movimento_id: number;
+  item_id: number;
+  codigo_componente: string;
+  categoria: Categoria;
+  descricao: string | null;
+  quantidade: number;
+  contraparte: string | null;
+  data: string;
+  hora: string;
+}
+
+/** Um reparo externo que saiu e voltou consertado (`condicao 'boa'` na
+ * entrada) - usado pelo relatorio de pagamento por quinzena do tecnico. */
+export interface ReparoConcluido {
+  movimento_id_saida: number;
+  movimento_id_entrada: number;
+  item_id_saida: number;
+  codigo_componente: string;
+  categoria: Categoria;
+  descricao: string | null;
+  quantidade: number;
+  contraparte: string | null;
+  data_saida: string;
+  hora_saida: string;
+  data_entrada: string;
+  hora_entrada: string;
+  observacao_entrada: string | null;
 }
 
 export interface Fechamento {

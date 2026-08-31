@@ -281,12 +281,14 @@ pub struct ResultadoSincronizacao {
     pub falhas: Vec<(i64, String)>,
 }
 
-pub async fn enviar_para_turso(
-    url: &str,
-    token: &str,
-    pendentes: &[LinhaPendente],
-    enviado_em_local: &str,
-) -> AppResult<ResultadoSincronizacao> {
+/// Conecta no Turso e garante que a tabela consolidada exista. Isolado de
+/// `enviar_para_turso` pra que uma falha aqui (sem internet, Turso fora do
+/// ar, token expirado - exatamente o cenario de uma queda de conexao
+/// completa, nao uma falha por linha) vire `falhas` pra todo o lote em vez
+/// de abortar a funcao inteira com `Err` - sem isso, uma queda total nunca
+/// era registrada via `marcar_falha_sincronizacao`, e `status_sincronizacao`
+/// continuava mostrando "0 com erro" mesmo depois de dias sem sincronizar.
+async fn conectar_turso(url: &str, token: &str) -> AppResult<libsql::Connection> {
     let banco = libsql::Builder::new_remote(url.to_string(), token.to_string())
         .build()
         .await
@@ -303,6 +305,29 @@ pub async fn enviar_para_turso(
             AppError::Interno(format!("Nao foi possivel preparar a tabela remota: {e}"))
         })?;
 
+    Ok(remoto)
+}
+
+pub async fn enviar_para_turso(
+    url: &str,
+    token: &str,
+    pendentes: &[LinhaPendente],
+    enviado_em_local: &str,
+) -> AppResult<ResultadoSincronizacao> {
+    let remoto = match conectar_turso(url, token).await {
+        Ok(remoto) => remoto,
+        Err(e) => {
+            let falhas = pendentes
+                .iter()
+                .map(|linha| (linha.movimento.id, e.to_string()))
+                .collect();
+            return Ok(ResultadoSincronizacao {
+                enviados: Vec::new(),
+                falhas,
+            });
+        }
+    };
+
     for alter in SQL_ALTER_TABELA_REMOTA {
         let _ = remoto.execute(alter, ()).await;
     }
@@ -310,8 +335,16 @@ pub async fn enviar_para_turso(
     let mut resultado = ResultadoSincronizacao::default();
 
     for linha in pendentes {
-        let itens_json = serde_json::to_string(&linha.itens)
-            .map_err(|e| AppError::Interno(format!("Nao foi possivel serializar os itens: {e}")))?;
+        let itens_json = match serde_json::to_string(&linha.itens) {
+            Ok(json) => json,
+            Err(e) => {
+                resultado.falhas.push((
+                    linha.movimento.id,
+                    format!("Nao foi possivel serializar os itens: {e}"),
+                ));
+                continue;
+            }
+        };
 
         let execucao = remoto
             .execute(
@@ -351,6 +384,56 @@ pub async fn enviar_para_turso(
     }
 
     Ok(resultado)
+}
+
+/// Tenta sincronizar a fila local com o Turso uma vez: busca os pendentes,
+/// envia, e grava o resultado (sucesso ou falha, incluindo uma queda de
+/// conexao total - ver `conectar_turso`) de volta no banco local. Nunca
+/// entra em panico nem propaga erro - so registra no log - porque quem chama
+/// isto e um loop de segundo plano (`lib.rs`) que precisa continuar rodando
+/// independente do resultado. Nao exige sessao/login: e infraestrutura, roda
+/// pela vida inteira do processo, nao uma acao de um usuario especifico (ver
+/// docs/ARQUITETURA.md).
+pub async fn tentar_sincronizar_uma_vez(app_handle: &tauri::AppHandle, url: &str, token: &str) {
+    use tauri::Manager;
+
+    let state = app_handle.state::<crate::state::AppState>();
+
+    let (pendentes, agora_local_valor) = {
+        let Ok(conn) = state.conn() else {
+            return;
+        };
+        let pendentes = match movimentos_pendentes(&conn) {
+            Ok(p) => p,
+            Err(e) => {
+                log::warn!("Falha ao preparar sincronizacao com o Turso: {e}");
+                return;
+            }
+        };
+        let Ok(agora) = agora_local(&conn) else {
+            return;
+        };
+        (pendentes, agora)
+    };
+
+    match enviar_para_turso(url, token, &pendentes, &agora_local_valor).await {
+        Ok(resultado) => {
+            if let Ok(conn) = state.conn() {
+                if let Err(e) = marcar_sincronizado(&conn, &resultado.enviados) {
+                    log::warn!("Falha ao marcar lancamentos como sincronizados: {e}");
+                }
+                if let Err(e) = marcar_falha_sincronizacao(&conn, &resultado.falhas) {
+                    log::warn!("Falha ao registrar erro de sincronizacao: {e}");
+                }
+            }
+            log::info!(
+                "Sincronizacao com o Turso: {} enviados, {} com erro.",
+                resultado.enviados.len(),
+                resultado.falhas.len()
+            );
+        }
+        Err(e) => log::warn!("Falha na sincronizacao com o Turso: {e}"),
+    }
 }
 
 /// Um envio (`saida` de `peca_montagem` OU `saida_armazem` com
@@ -666,6 +749,7 @@ mod tests {
                     quantidade: 1,
                     observacao: None,
                     quantidade_enviada: None,
+                    codigo_componente: None,
                 }],
             },
         )
@@ -793,6 +877,7 @@ mod tests {
                     quantidade: 2,
                     observacao: None,
                     quantidade_enviada: None,
+                    codigo_componente: None,
                 }],
             },
         )
@@ -857,5 +942,70 @@ mod tests {
             "nao e json".into(),
         );
         assert!(resultado.is_err());
+    }
+
+    fn linha_pendente_de_teste(id: i64) -> LinhaPendente {
+        LinhaPendente {
+            movimento: Movimento {
+                id,
+                numero: 0,
+                armazem_id: 1,
+                armazem_destino_id: None,
+                fluxo: "reparo_externo".into(),
+                tipo: "saida".into(),
+                data: "2026-08-25".into(),
+                hora: "09:00".into(),
+                turno: "diurno".into(),
+                usuario_id: 1,
+                usuario_nome: "Teste".into(),
+                numero_pedido: None,
+                codigo_rastreio: None,
+                contraparte: None,
+                quem_retirou: None,
+                motivo: None,
+                valor_centavos: None,
+                observacoes: None,
+                status: "aberto".into(),
+                estornado_de: None,
+                recebido_de_armazem_codigo: None,
+                recebido_de_id_origem: None,
+                retirada_completa: true,
+                hash_integridade: "hash".into(),
+                itens: Vec::new(),
+            },
+            armazem_codigo: "A4".into(),
+            armazem_destino_codigo: None,
+            itens: Vec::new(),
+        }
+    }
+
+    /// Antes desta correcao, uma queda de conexao total (sem internet, Turso
+    /// fora do ar, URL/token invalidos) fazia `enviar_para_turso` devolver
+    /// `Err` sem registrar nada em `falhas` - `status_sincronizacao`
+    /// continuava mostrando "0 com erro" mesmo com a fila parada ha dias.
+    /// Agora a falha de conexao vira `falhas` pra todo o lote, igual a uma
+    /// falha por linha. Timeout de guarda pra nao arriscar travar o teste
+    /// esperando DNS numa rede sem internet.
+    #[tokio::test]
+    async fn enviar_para_turso_registra_falha_em_todos_os_pendentes_quando_a_conexao_falha() {
+        let pendentes = vec![linha_pendente_de_teste(1), linha_pendente_de_teste(2)];
+
+        let resultado = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            enviar_para_turso(
+                "nao-e-uma-url-valida",
+                "token-falso",
+                &pendentes,
+                "2026-08-25 09:00:00",
+            ),
+        )
+        .await
+        .expect("nao deveria travar esperando rede")
+        .expect("uma falha de conexao deve virar Ok com falhas preenchidas, nao Err");
+
+        assert!(resultado.enviados.is_empty());
+        assert_eq!(resultado.falhas.len(), 2);
+        assert_eq!(resultado.falhas[0].0, 1);
+        assert_eq!(resultado.falhas[1].0, 2);
     }
 }

@@ -6,9 +6,10 @@ import AuthCard from '../components/AuthCard';
 interface Props {
   armazens: Armazem[];
   onConcluido: () => void;
+  versao?: string;
 }
 
-export default function Setup({ armazens, onConcluido }: Props) {
+export default function Setup({ armazens, onConcluido, versao }: Props) {
   const [nome, setNome] = useState('');
   const [login, setLogin] = useState('');
   const [senha, setSenha] = useState('');
@@ -47,6 +48,7 @@ export default function Setup({ armazens, onConcluido }: Props) {
     <AuthCard
       titulo="Configuracao inicial"
       subtitulo="Este computador ainda nao tem nenhum usuario cadastrado. Crie a primeira conta (gestor) para comecar a usar o sistema."
+      versao={versao}
       erro={erro}
       enviando={enviando}
       textoBotao="Criar conta e continuar"

@@ -120,6 +120,36 @@ pub fn verificar_retirada_pendente(
     movimentos::buscar_retirada_parcial_pendente(&conn, armazem_id, &fluxo, &numero_pedido)
 }
 
+/// Usado pela tela de Reparo Externo: lista os itens que ja sairam pra
+/// conserto com tecnico externo e ainda nao tem entrada de retorno
+/// registrada com o mesmo codigo/serie de componente.
+#[tauri::command(rename_all = "snake_case")]
+pub fn buscar_reparos_em_aberto(
+    state: State<AppState>,
+    armazem_id: i64,
+) -> AppResult<Vec<movimentos::ReparoPendente>> {
+    let usuario_id = state.usuario_logado()?;
+    let conn = state.conn()?;
+    movimentos::autorizar_leitura(&conn, usuario_id, armazem_id)?;
+    movimentos::buscar_reparos_em_aberto(&conn, armazem_id)
+}
+
+/// Usado pelo relatorio de pagamento por quinzena: reparos externos que
+/// voltaram consertados (`condicao = 'boa'` na entrada) dentro do intervalo
+/// de datas pedido.
+#[tauri::command(rename_all = "snake_case")]
+pub fn buscar_reparos_concluidos(
+    state: State<AppState>,
+    armazem_id: i64,
+    data_inicio: String,
+    data_fim: String,
+) -> AppResult<Vec<movimentos::ReparoConcluido>> {
+    let usuario_id = state.usuario_logado()?;
+    let conn = state.conn()?;
+    movimentos::autorizar_leitura(&conn, usuario_id, armazem_id)?;
+    movimentos::buscar_reparos_concluidos(&conn, armazem_id, &data_inicio, &data_fim)
+}
+
 #[tauri::command(rename_all = "snake_case")]
 #[allow(clippy::too_many_arguments)]
 pub fn buscar_historico(

@@ -1,6 +1,6 @@
 [package]
 name = "ecoviva-controle-armazem"
-version = "1.0.1"
+version = "2.0.0"
 description = "Controle de entradas e saidas dos armazens Ecoviva (offline-first)"
 authors = ["Ecoviva"]
 license = "UNLICENSED"
@@ -29,6 +29,7 @@ rand_core = { version = "0.6", features = ["getrandom"] }
 sha2 = "0.10"
 thiserror = "2"
 libsql = { version = "0.9.30", default-features = false, features = ["remote", "tls"] }
+tokio = { version = "1", features = ["time"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

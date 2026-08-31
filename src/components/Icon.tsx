@@ -125,3 +125,11 @@ export function IconSpinner(props: Props) {
     </svg>
   );
 }
+
+export function IconFerramenta(props: Props) {
+  return (
+    <svg {...base(props)}>
+      <path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 1 5.4-5.4l-2.6 2.6-2-2z" />
+    </svg>
+  );
+}

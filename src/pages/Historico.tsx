@@ -1,20 +1,24 @@
 import { FormEvent, useEffect, useState } from 'react';
-import type { Fluxo, Movimento, Usuario } from '../types';
+import type { Armazem, Fluxo, Movimento, Usuario } from '../types';
 import { buscarFechamentoDoDia, buscarHistorico, estornarMovimento } from '../lib/api';
 import { motivoSacTexto, situacaoInfo } from '../lib/situacao';
 import { baixarCsv, paraCsv } from '../lib/csv';
 import { baixarXlsx } from '../lib/xlsx';
 import { agoraLocalTexto, formatarData, formatarDataArquivo, formatarDataHora } from '../lib/data';
+import { resultadoReparoTexto } from '../lib/exportFechamento';
 import Carregando from '../components/Carregando';
+import RelatorioPagamentoReparo from '../components/RelatorioPagamentoReparo';
 
 interface Props {
   usuario: Usuario;
+  armazem: Armazem | undefined;
 }
 
 const ABAS: { valor: Fluxo; rotulo: string }[] = [
   { valor: 'saida_armazem', rotulo: 'Saida de Armazem' },
   { valor: 'peca_montagem', rotulo: 'Montagem' },
   { valor: 'sac', rotulo: 'SAC' },
+  { valor: 'reparo_externo', rotulo: 'Reparo Externo' },
 ];
 
 function dataDeHoje(): string {
@@ -38,8 +42,9 @@ function itensResumo(m: Movimento): string {
   return m.itens
     .map((it) => {
       const base = `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`;
+      const comCodigo = it.codigo_componente ? `${base} [cod: ${it.codigo_componente}]` : base;
       const divergente = it.quantidade_enviada != null && it.quantidade_enviada !== it.quantidade;
-      return divergente ? `${base} [enviado: ${it.quantidade_enviada}]` : base;
+      return divergente ? `${comCodigo} [enviado: ${it.quantidade_enviada}]` : comCodigo;
     })
     .join(' + ');
 }
@@ -57,7 +62,7 @@ function direcaoTexto(m: Movimento): string {
   return m.tipo === 'saida' ? 'Saida B2' : 'Entrada B2';
 }
 
-export default function Historico({ usuario }: Props) {
+export default function Historico({ usuario, armazem }: Props) {
   const armazemId = usuario.armazem_id as number;
 
   const [fluxo, setFluxo] = useState<Fluxo>('saida_armazem');
@@ -80,7 +85,10 @@ export default function Historico({ usuario }: Props) {
   const [exportando, setExportando] = useState(false);
   const [exportandoXlsx, setExportandoXlsx] = useState(false);
 
-  const mostraFiltrosDePedido = fluxo !== 'peca_montagem';
+  // Montagem nao tem contraparte/pedido; reparo externo tem contraparte
+  // (tecnico/oficina) mas nunca preenche numero_pedido.
+  const mostraFiltroCliente = fluxo !== 'peca_montagem';
+  const mostraFiltroPedido = fluxo === 'saida_armazem' || fluxo === 'sac';
 
   async function buscarPagina(offset: number) {
     return buscarHistorico({
@@ -88,8 +96,8 @@ export default function Historico({ usuario }: Props) {
       fluxo,
       data_inicio: dataInicio || null,
       data_fim: dataFim || null,
-      cliente: mostraFiltrosDePedido && cliente ? cliente : null,
-      numero_pedido: mostraFiltrosDePedido && numeroPedido ? numeroPedido : null,
+      cliente: mostraFiltroCliente && cliente ? cliente : null,
+      numero_pedido: mostraFiltroPedido && numeroPedido ? numeroPedido : null,
       offset,
     });
   }
@@ -183,6 +191,29 @@ export default function Historico({ usuario }: Props) {
           direcaoTexto(m),
           itensResumo(m),
           String(qtdTotal(m)),
+          m.usuario_nome,
+          situacaoInfo(m).texto,
+          fechadoEm(m),
+        ]);
+      } else if (fluxo === 'reparo_externo') {
+        cabecalhos = [
+          'Data',
+          'Horario',
+          'Tecnico/Oficina',
+          'Itens',
+          'Qtd.',
+          'Resultado',
+          'Registrado por',
+          'Situacao',
+          'Fechado em',
+        ];
+        linhas = resultados.map((m) => [
+          formatarData(m.data),
+          m.hora,
+          m.contraparte || '-',
+          itensResumo(m),
+          String(qtdTotal(m)),
+          resultadoReparoTexto(m),
           m.usuario_nome,
           situacaoInfo(m).texto,
           fechadoEm(m),
@@ -323,21 +354,21 @@ export default function Historico({ usuario }: Props) {
               Ate
               <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
             </label>
-            {mostraFiltrosDePedido && (
-              <>
-                <label>
-                  Cliente / coleta
-                  <input value={cliente} onChange={(e) => setCliente(e.target.value)} placeholder="Ex: Disk" />
-                </label>
-                <label>
-                  Numero do pedido
-                  <input
-                    value={numeroPedido}
-                    onChange={(e) => setNumeroPedido(e.target.value)}
-                    placeholder="Ex: 3893"
-                  />
-                </label>
-              </>
+            {mostraFiltroCliente && (
+              <label>
+                {fluxo === 'reparo_externo' ? 'Tecnico/oficina' : 'Cliente / coleta'}
+                <input value={cliente} onChange={(e) => setCliente(e.target.value)} placeholder="Ex: Disk" />
+              </label>
+            )}
+            {mostraFiltroPedido && (
+              <label>
+                Numero do pedido
+                <input
+                  value={numeroPedido}
+                  onChange={(e) => setNumeroPedido(e.target.value)}
+                  placeholder="Ex: 3893"
+                />
+              </label>
             )}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
@@ -397,10 +428,12 @@ export default function Historico({ usuario }: Props) {
                         <th>Coleta</th>
                       </>
                     )}
+                    {fluxo === 'reparo_externo' && <th>Tecnico/Oficina</th>}
                     <th>Itens</th>
                     <th>Qtd.</th>
                     {fluxo === 'saida_armazem' && <th>Quem retirou</th>}
                     {fluxo === 'sac' && <th>Motivo</th>}
+                    {fluxo === 'reparo_externo' && <th>Resultado</th>}
                     <th>Registrado por</th>
                     <th>Situacao</th>
                     <th className="somente-tela">Acoes</th>
@@ -424,10 +457,12 @@ export default function Historico({ usuario }: Props) {
                           <td>{m.contraparte || '-'}</td>
                         </>
                       )}
+                      {fluxo === 'reparo_externo' && <td>{m.contraparte || '-'}</td>}
                       <td>{itensResumo(m)}</td>
                       <td>{qtdTotal(m)}</td>
                       {fluxo === 'saida_armazem' && <td>{m.quem_retirou || '-'}</td>}
                       {fluxo === 'sac' && <td>{motivoSacTexto(m)}</td>}
+                      {fluxo === 'reparo_externo' && <td>{resultadoReparoTexto(m)}</td>}
                       <td>{m.usuario_nome}</td>
                       <td>
                         <span className={situacaoInfo(m).classe}>{situacaoInfo(m).texto}</span>
@@ -467,6 +502,8 @@ export default function Historico({ usuario }: Props) {
           </>
         )}
       </section>
+
+      {fluxo === 'reparo_externo' && <RelatorioPagamentoReparo armazemId={armazemId} armazem={armazem} />}
     </div>
   );
 }

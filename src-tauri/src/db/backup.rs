@@ -329,6 +329,7 @@ mod tests {
                     quantidade: 3,
                     observacao: None,
                     quantidade_enviada: None,
+                    codigo_componente: None,
                 }],
             },
         )

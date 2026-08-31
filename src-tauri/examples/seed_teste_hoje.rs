@@ -58,6 +58,7 @@ fn item(
         quantidade,
         observacao: observacao.map(String::from),
         quantidade_enviada: None,
+        codigo_componente: None,
     }
 }
 

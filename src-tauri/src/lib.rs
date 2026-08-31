@@ -39,55 +39,28 @@ pub fn run() {
             app.manage(AppState::new(conn));
 
             // Sincronizacao oportunista com o Turso (se configurada nesta
-            // maquina via turso.txt): tentativa em segundo plano, nunca
-            // trava a abertura do app se nao tiver internet ou o arquivo
-            // nao existir. Mesma logica de `sincronizar_agora`, mas sem
-            // exigir sessao (roda antes de qualquer login).
-            if let Some((url, token)) = db::sync::ler_config_turso(&diretorio_dados) {
-                let app_handle = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    let state = app_handle.state::<AppState>();
-                    let (pendentes, agora_local) = {
-                        let Ok(conn) = state.conn() else { return };
-                        let pendentes = match db::sync::movimentos_pendentes(&conn) {
-                            Ok(p) => p,
-                            Err(e) => {
-                                log::warn!("Falha ao preparar sincronizacao com o Turso: {e}");
-                                return;
-                            }
-                        };
-                        let Ok(agora_local) = db::sync::agora_local(&conn) else {
-                            return;
-                        };
-                        (pendentes, agora_local)
-                    };
-                    match db::sync::enviar_para_turso(&url, &token, &pendentes, &agora_local).await
-                    {
-                        Ok(resultado) => {
-                            if let Ok(conn) = state.conn() {
-                                if let Err(e) =
-                                    db::sync::marcar_sincronizado(&conn, &resultado.enviados)
-                                {
-                                    log::warn!(
-                                        "Falha ao marcar lancamentos como sincronizados: {e}"
-                                    );
-                                }
-                                if let Err(e) =
-                                    db::sync::marcar_falha_sincronizacao(&conn, &resultado.falhas)
-                                {
-                                    log::warn!("Falha ao registrar erro de sincronizacao: {e}");
-                                }
-                            }
-                            log::info!(
-                                "Sincronizacao com o Turso: {} enviados, {} com erro.",
-                                resultado.enviados.len(),
-                                resultado.falhas.len()
-                            );
-                        }
-                        Err(e) => log::warn!("Falha na sincronizacao com o Turso: {e}"),
+            // maquina via turso.txt): um loop de segundo plano que tenta a
+            // cada INTERVALO_SINCRONIZACAO, pela vida inteira do processo -
+            // nao exige sessao/login nem gestor (roda antes de qualquer
+            // login e continua rodando com um conferente logado), pra nao
+            // depender de um gestor abrir o Dashboard pra a fila ser
+            // reenviada (ver docs/ARQUITETURA.md). Reconfere turso.txt a
+            // cada iteracao, nao so uma vez no boot - configurar o arquivo
+            // numa maquina ja aberta passa a funcionar sem reiniciar o app.
+            // Nunca trava a abertura do app se nao tiver internet ou o
+            // arquivo nao existir.
+            const INTERVALO_SINCRONIZACAO: std::time::Duration =
+                std::time::Duration::from_secs(5 * 60);
+            let app_handle = app.handle().clone();
+            let diretorio_dados_sync = diretorio_dados.clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    if let Some((url, token)) = db::sync::ler_config_turso(&diretorio_dados_sync) {
+                        db::sync::tentar_sincronizar_uma_vez(&app_handle, &url, &token).await;
                     }
-                });
-            }
+                    tokio::time::sleep(INTERVALO_SINCRONIZACAO).await;
+                }
+            });
 
             Ok(())
         })
@@ -104,6 +77,8 @@ pub fn run() {
             commands::movimento_commands::sugestoes_descricao,
             commands::movimento_commands::buscar_historico,
             commands::movimento_commands::verificar_retirada_pendente,
+            commands::movimento_commands::buscar_reparos_em_aberto,
+            commands::movimento_commands::buscar_reparos_concluidos,
             commands::fechamento_commands::fechar_dia,
             commands::fechamento_commands::buscar_fechamento_do_dia,
             commands::sync_commands::sincronizar_agora,

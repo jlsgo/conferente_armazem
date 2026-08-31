@@ -44,6 +44,7 @@ fn item(
         quantidade: qtd,
         observacao: None,
         quantidade_enviada: None,
+        codigo_componente: None,
     }
 }
 

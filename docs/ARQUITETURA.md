@@ -93,12 +93,26 @@ novos (`movimentos.sincronizado_em IS NULL`) para uma tabela consolidada
 (`movimentos_consolidados`) num banco [Turso](https://turso.tech) (SQLite gerenciado na
 nuvem, free tier), chaveada por `(armazem_codigo, id_origem)` — um upsert idempotente,
 seguro se a rede cair no meio do envio. Isso acontece:
-- Automaticamente, em segundo plano, toda vez que o app abre (`.setup()` em `lib.rs`) —
-  falha (sem internet, por exemplo) so grava um aviso no log, nunca trava o app.
+- **Automaticamente, em loop de segundo plano** (`lib.rs`, `tauri::async_runtime::spawn`
+  dentro de `.setup()`): tenta uma vez na abertura do app e depois a cada 5 minutos,
+  pela vida inteira do processo, chamando `db::sync::tentar_sincronizar_uma_vez`. Isto
+  **nao depende de sessao/login nem de papel** — roda igual com um conferente logado,
+  com ninguem logado (tela de login), ou com um gestor — de proposito: antes, o retry
+  periodico so existia no frontend (`Dashboard.tsx`) e era gestor-only, entao um PC
+  onde so um conferente trabalha o dia inteiro nunca reenviava nada depois da tentativa
+  inicial. `turso.txt` e relido a cada iteracao do loop (nao so uma vez no boot), entao
+  configurar sincronizacao numa maquina ja aberta funciona sem reiniciar.
 - Sob demanda, pelo botao "Sincronizar agora" no cabecalho (so gestor), que chama o
-  comando `sincronizar_agora`.
+  comando `sincronizar_agora` — um disparo imediato, complementar ao loop de fundo.
 - Logo apos confirmar o recebimento de uma transferencia (ver abaixo), pra fechar o
   ciclo sem esperar o proximo sync automatico.
+
+Uma falha de **conexao total** (sem internet, Turso fora do ar, token expirado) e
+tratada igual a uma falha por linha: `db::sync::conectar_turso` isola os passos de
+conexao, e se falharem, `enviar_para_turso` devolve `Ok(ResultadoSincronizacao)` com
+todo o lote em `falhas` em vez de `Err` — antes disso, uma queda total nunca era
+gravada via `marcar_falha_sincronizacao`, e `status_sincronizacao` continuava mostrando
+"0 com erro" mesmo depois de dias sem sincronizar de verdade.
 
 **Configurar numa maquina** (uma vez, por PC): crie uma conta em turso.tech, instale a
 CLI (`curl -sSfL https://get.tur.so/install.sh | bash`), rode
@@ -158,10 +172,12 @@ devolve `ResultadoSincronizacao { enviados, falhas }` em vez de so uma lista de
 sucesso, e cada falha e registrada via `marcar_falha_sincronizacao` com um backoff
 progressivo (`calcular_backoff_minutos`: 1/5/15/30 min, fixo em 60 min a partir da 5a
 tentativa) — a linha some de `movimentos_pendentes` ate esse horario passar, pra nao
-martelar o Turso repetidamente numa falha persistente. `Dashboard.tsx` re-tenta
-sozinho a cada 5 minutos (`setInterval`) alem do botao manual e da tentativa na
-abertura do app, e mostra quantos lancamentos estao pendentes/com erro
-(`status_sincronizacao`, gestor-only).
+martelar o Turso repetidamente numa falha persistente. Quem re-tenta sozinho a cada 5
+minutos e o loop de backend descrito acima (`lib.rs`), independente de quem esta
+logado; `Dashboard.tsx` so re-le esse retrato local (`status_sincronizacao`,
+gestor-only) no mesmo intervalo, sem disparar rede — ver "Versao 2.0.0" no
+`docs/ROADMAP.md` pra por que isso mudou (retry preso a uma sessao de gestor era a
+causa raiz de transferencias nao chegarem no outro armazem).
 
 ### Divergencia de quantidade na confirmacao de recebimento (Sprint 7)
 

@@ -10,7 +10,7 @@ use super::errors::{AppError, AppResult};
 /// nas outras 4 - exige observacao preenchida (ver `validar_novo_movimento`),
 /// entao sempre fica registrado o que era de fato.
 const CATEGORIAS_VALIDAS: [&str; 5] = ["scooter", "triciclo", "patinete", "peca", "outro"];
-const FLUXOS_VALIDOS: [&str; 3] = ["saida_armazem", "peca_montagem", "sac"];
+const FLUXOS_VALIDOS: [&str; 4] = ["saida_armazem", "peca_montagem", "sac", "reparo_externo"];
 const TIPOS_VALIDOS: [&str; 2] = ["entrada", "saida"];
 const TURNOS_VALIDOS: [&str; 2] = ["diurno", "noturno"];
 const MONTAGENS_VALIDAS: [&str; 2] = ["montado", "caixa"];
@@ -37,6 +37,11 @@ pub struct MovimentoItemInput {
     /// guarda quanto o remetente registrou, pra comparar com `quantidade`
     /// (quanto realmente chegou). `None` em todo lancamento normal.
     pub quantidade_enviada: Option<i64>,
+    /// Codigo/serie do componente (bateria, motor, modulo) - obrigatorio
+    /// quando `fluxo == "reparo_externo"`, usado para casar a saida pro
+    /// tecnico externo com a entrada de retorno (ver `buscar_reparos_em_aberto`).
+    /// `None` nos outros fluxos.
+    pub codigo_componente: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -79,6 +84,7 @@ pub struct MovimentoItem {
     pub quantidade: i64,
     pub observacao: Option<String>,
     pub quantidade_enviada: Option<i64>,
+    pub codigo_componente: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -254,15 +260,28 @@ fn validar_novo_movimento(novo: &NovoMovimento) -> AppResult<()> {
                     "Condicao invalida: {condicao}"
                 )));
             }
-        } else if novo.fluxo == "peca_montagem" {
+        } else if novo.fluxo == "peca_montagem"
+            || (novo.fluxo == "reparo_externo" && novo.tipo == "entrada")
+        {
             return Err(AppError::Validation(
                 "Informe a condicao da peca: boa, defeito, sucata ou outro.".into(),
             ));
         }
         validar_texto_livre("Descricao do item", item.descricao.as_deref())?;
         validar_texto_livre("Observacao do item", item.observacao.as_deref())?;
+        validar_texto_livre("Codigo do componente", item.codigo_componente.as_deref())?;
         if item.categoria == "outro" || item.condicao.as_deref() == Some("outro") {
             exigir_detalhe_para_outro(item.observacao.as_deref(), "o item na observacao")?;
+        }
+        if novo.fluxo == "reparo_externo" {
+            match item.codigo_componente.as_deref() {
+                Some(codigo) if !codigo.trim().is_empty() => {}
+                _ => {
+                    return Err(AppError::Validation(
+                        "Informe o codigo/serie do componente (bateria, motor, modulo).".into(),
+                    ));
+                }
+            }
         }
     }
     Ok(())
@@ -307,6 +326,7 @@ pub fn validar_quantidades_recebidas(
                 quantidade: recebido,
                 observacao: item.observacao.clone(),
                 quantidade_enviada: Some(item.quantidade),
+                codigo_componente: item.codigo_componente.clone(),
             })
         })
         .collect()
@@ -375,6 +395,7 @@ struct ItemHash {
     quantidade: i64,
     observacao: Option<String>,
     quantidade_enviada: Option<i64>,
+    codigo_componente: Option<String>,
 }
 
 /// Tudo que entra no hash de auditoria de uma linha - precisa cobrir todo
@@ -436,6 +457,7 @@ impl CamposHash {
                     quantidade: i.quantidade,
                     observacao: i.observacao.clone(),
                     quantidade_enviada: i.quantidade_enviada,
+                    codigo_componente: i.codigo_componente.clone(),
                 })
                 .collect(),
         }
@@ -448,7 +470,7 @@ fn calcular_hash(hash_anterior: &str, campos: &CamposHash) -> String {
         .iter()
         .map(|i| {
             format!(
-                "{}:{}:{}:{}:{}:{}:{}",
+                "{}:{}:{}:{}:{}:{}:{}:{}",
                 i.categoria,
                 i.descricao.as_deref().unwrap_or(""),
                 i.montagem.as_deref().unwrap_or(""),
@@ -458,6 +480,7 @@ fn calcular_hash(hash_anterior: &str, campos: &CamposHash) -> String {
                 i.quantidade_enviada
                     .map(|v| v.to_string())
                     .unwrap_or_default(),
+                i.codigo_componente.as_deref().unwrap_or(""),
             )
         })
         .collect();
@@ -582,8 +605,8 @@ pub fn criar_movimento(conn: &mut Connection, novo: NovoMovimento) -> AppResult<
 
     {
         let mut inserir_item = tx.prepare(
-            "INSERT INTO movimento_itens (movimento_id, categoria, descricao, montagem, condicao, quantidade, observacao, quantidade_enviada)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO movimento_itens (movimento_id, categoria, descricao, montagem, condicao, quantidade, observacao, quantidade_enviada, codigo_componente)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )?;
         for item in &novo.itens {
             inserir_item.execute(params![
@@ -595,6 +618,7 @@ pub fn criar_movimento(conn: &mut Connection, novo: NovoMovimento) -> AppResult<
                 item.quantidade,
                 item.observacao,
                 item.quantidade_enviada,
+                item.codigo_componente,
             ])?;
         }
     }
@@ -681,6 +705,7 @@ pub fn estornar_movimento(
                 quantidade: i.quantidade,
                 observacao: i.observacao.clone(),
                 quantidade_enviada: i.quantidade_enviada,
+                codigo_componente: i.codigo_componente.clone(),
             })
             .collect(),
     };
@@ -722,8 +747,8 @@ pub fn estornar_movimento(
 
     {
         let mut inserir_item = tx.prepare(
-            "INSERT INTO movimento_itens (movimento_id, categoria, descricao, montagem, condicao, quantidade, observacao, quantidade_enviada)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO movimento_itens (movimento_id, categoria, descricao, montagem, condicao, quantidade, observacao, quantidade_enviada, codigo_componente)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )?;
         for item in &itens_originais {
             inserir_item.execute(params![
@@ -735,6 +760,7 @@ pub fn estornar_movimento(
                 item.quantidade,
                 item.observacao,
                 item.quantidade_enviada,
+                item.codigo_componente,
             ])?;
         }
     }
@@ -816,6 +842,7 @@ pub fn verificar_cadeia(conn: &Connection) -> AppResult<Option<QuebraCadeia>> {
                 quantidade: i.quantidade,
                 observacao: i.observacao,
                 quantidade_enviada: i.quantidade_enviada,
+                codigo_componente: i.codigo_componente,
             })
             .collect();
 
@@ -837,7 +864,7 @@ pub(crate) fn carregar_itens(
     movimento_id: i64,
 ) -> AppResult<Vec<MovimentoItem>> {
     let mut stmt = conn.prepare(
-        "SELECT id, categoria, descricao, montagem, condicao, quantidade, observacao, quantidade_enviada
+        "SELECT id, categoria, descricao, montagem, condicao, quantidade, observacao, quantidade_enviada, codigo_componente
          FROM movimento_itens WHERE movimento_id = ?1 ORDER BY id ASC",
     )?;
     let itens = stmt
@@ -851,6 +878,7 @@ pub(crate) fn carregar_itens(
                 quantidade: r.get(5)?,
                 observacao: r.get(6)?,
                 quantidade_enviada: r.get(7)?,
+                codigo_componente: r.get(8)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -1067,6 +1095,140 @@ pub fn buscar_retirada_parcial_pendente(
     }
 }
 
+/// Um item enviado para reparo externo (`fluxo = "reparo_externo"`, saida)
+/// que ainda nao tem uma entrada correspondente com o mesmo
+/// `codigo_componente` no mesmo armazem - ver `buscar_reparos_em_aberto`.
+#[derive(Debug, Serialize)]
+pub struct ReparoPendente {
+    pub movimento_id: i64,
+    pub item_id: i64,
+    pub codigo_componente: String,
+    pub categoria: String,
+    pub descricao: Option<String>,
+    pub quantidade: i64,
+    pub contraparte: Option<String>,
+    pub data: String,
+    pub hora: String,
+}
+
+/// Lista os itens de reparo externo que ja sairam mas ainda nao voltaram -
+/// isto e, nao ha nenhuma entrada (nao estornada) do mesmo armazem/fluxo com
+/// o mesmo `codigo_componente`. Mesmo idioma `NOT EXISTS` de
+/// `buscar_retirada_parcial_pendente`, mas listando todos os itens em aberto
+/// em vez de um so numero de pedido.
+pub fn buscar_reparos_em_aberto(
+    conn: &Connection,
+    armazem_id: i64,
+) -> AppResult<Vec<ReparoPendente>> {
+    let mut stmt = conn.prepare(
+        "SELECT mi.id, mi.movimento_id, mi.categoria, mi.descricao, mi.quantidade,
+                mi.codigo_componente, m.contraparte, m.data, m.hora
+         FROM movimento_itens mi
+         JOIN movimentos m ON m.id = mi.movimento_id
+         WHERE m.armazem_id = ?1 AND m.fluxo = 'reparo_externo' AND m.tipo = 'saida'
+           AND m.estornado_de IS NULL
+           AND NOT EXISTS (SELECT 1 FROM movimentos x WHERE x.estornado_de = m.id)
+           AND mi.codigo_componente IS NOT NULL AND mi.codigo_componente != ''
+           AND NOT EXISTS (
+             SELECT 1 FROM movimento_itens ei
+             JOIN movimentos em ON em.id = ei.movimento_id
+             WHERE em.armazem_id = m.armazem_id AND em.fluxo = 'reparo_externo'
+               AND em.tipo = 'entrada' AND em.estornado_de IS NULL
+               AND ei.codigo_componente = mi.codigo_componente
+           )
+         ORDER BY m.data ASC, m.hora ASC",
+    )?;
+    let pendentes = stmt
+        .query_map(params![armazem_id], |r| {
+            Ok(ReparoPendente {
+                item_id: r.get(0)?,
+                movimento_id: r.get(1)?,
+                categoria: r.get(2)?,
+                descricao: r.get(3)?,
+                quantidade: r.get(4)?,
+                codigo_componente: r.get(5)?,
+                contraparte: r.get(6)?,
+                data: r.get(7)?,
+                hora: r.get(8)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(pendentes)
+}
+
+/// Um reparo externo que saiu e voltou consertado (`condicao = 'boa'` na
+/// entrada) dentro de um intervalo de datas - usado pelo relatorio de
+/// pagamento por quinzena do tecnico externo (so reparo que "deu certo"
+/// conta pro pagamento; `defeito`/`sucata`/`outro` na entrada nao entram
+/// aqui, mesmo que a peca tenha voltado fisicamente).
+#[derive(Debug, Serialize)]
+pub struct ReparoConcluido {
+    pub movimento_id_saida: i64,
+    pub movimento_id_entrada: i64,
+    pub item_id_saida: i64,
+    pub codigo_componente: String,
+    pub categoria: String,
+    pub descricao: Option<String>,
+    pub quantidade: i64,
+    pub contraparte: Option<String>,
+    pub data_saida: String,
+    pub hora_saida: String,
+    pub data_entrada: String,
+    pub hora_entrada: String,
+    pub observacao_entrada: Option<String>,
+}
+
+/// Casa item de saida com item de entrada pelo mesmo `codigo_componente`
+/// (inverso de `buscar_reparos_em_aberto`: aqui e um `JOIN`/par casado, la e
+/// `NOT EXISTS`), filtrando pela `condicao` da entrada ('boa' = consertada)
+/// e pela data da *entrada* (quando o reparo efetivamente concluiu) dentro
+/// do intervalo pedido.
+pub fn buscar_reparos_concluidos(
+    conn: &Connection,
+    armazem_id: i64,
+    data_inicio: &str,
+    data_fim: &str,
+) -> AppResult<Vec<ReparoConcluido>> {
+    let mut stmt = conn.prepare(
+        "SELECT si.id, si.movimento_id, si.categoria, si.descricao, si.quantidade, si.codigo_componente,
+                sm.contraparte, sm.data, sm.hora, em.id, em.data, em.hora, ei.observacao
+         FROM movimento_itens si
+         JOIN movimentos sm ON sm.id = si.movimento_id
+         JOIN movimento_itens ei ON ei.codigo_componente = si.codigo_componente
+         JOIN movimentos em ON em.id = ei.movimento_id
+         WHERE sm.armazem_id = ?1 AND sm.fluxo = 'reparo_externo' AND sm.tipo = 'saida'
+           AND sm.estornado_de IS NULL
+           AND NOT EXISTS (SELECT 1 FROM movimentos x WHERE x.estornado_de = sm.id)
+           AND si.codigo_componente IS NOT NULL AND si.codigo_componente != ''
+           AND em.armazem_id = sm.armazem_id AND em.fluxo = 'reparo_externo' AND em.tipo = 'entrada'
+           AND em.estornado_de IS NULL
+           AND NOT EXISTS (SELECT 1 FROM movimentos x WHERE x.estornado_de = em.id)
+           AND ei.condicao = 'boa'
+           AND em.data BETWEEN ?2 AND ?3
+         ORDER BY em.data ASC, em.hora ASC",
+    )?;
+    let concluidos = stmt
+        .query_map(params![armazem_id, data_inicio, data_fim], |r| {
+            Ok(ReparoConcluido {
+                item_id_saida: r.get(0)?,
+                movimento_id_saida: r.get(1)?,
+                categoria: r.get(2)?,
+                descricao: r.get(3)?,
+                quantidade: r.get(4)?,
+                codigo_componente: r.get(5)?,
+                contraparte: r.get(6)?,
+                data_saida: r.get(7)?,
+                hora_saida: r.get(8)?,
+                movimento_id_entrada: r.get(9)?,
+                data_entrada: r.get(10)?,
+                hora_entrada: r.get(11)?,
+                observacao_entrada: r.get(12)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(concluidos)
+}
+
 /// Sugestoes de descricao ja usadas para a categoria informada, para
 /// autocompletar o formulario sem precisar de um catalogo mantido a parte.
 pub fn sugestoes_descricao(conn: &Connection, categoria: &str) -> AppResult<Vec<String>> {
@@ -1149,6 +1311,7 @@ mod tests {
                 quantidade: 1,
                 observacao: None,
                 quantidade_enviada: None,
+                codigo_componente: None,
             },
             MovimentoItemInput {
                 categoria: "patinete".into(),
@@ -1158,6 +1321,7 @@ mod tests {
                 quantidade: 2,
                 observacao: None,
                 quantidade_enviada: None,
+                codigo_componente: None,
             },
         ];
 
@@ -1187,6 +1351,7 @@ mod tests {
             quantidade: 1,
             observacao: None,
             quantidade_enviada: None,
+            codigo_componente: None,
         }];
         let resultado = criar_movimento(&mut conn, movimento_base(armazem_id, usuario_id, itens));
         assert!(matches!(resultado, Err(AppError::Validation(_))));
@@ -1203,6 +1368,7 @@ mod tests {
             quantidade: 0,
             observacao: None,
             quantidade_enviada: None,
+            codigo_componente: None,
         }];
         let resultado = criar_movimento(&mut conn, movimento_base(armazem_id, usuario_id, itens));
         assert!(matches!(resultado, Err(AppError::Validation(_))));
@@ -1221,6 +1387,7 @@ mod tests {
                 quantidade: qtd,
                 observacao: None,
                 quantidade_enviada: None,
+                codigo_componente: None,
             }];
             criar_movimento(&mut conn, movimento_base(armazem_id, usuario_id, itens)).unwrap();
         }
@@ -1252,6 +1419,7 @@ mod tests {
                 quantidade: 1,
                 observacao: None,
                 quantidade_enviada: None,
+                codigo_componente: None,
             }]
         };
 
@@ -1287,6 +1455,7 @@ mod tests {
                 quantidade: 1,
                 observacao: None,
                 quantidade_enviada: None,
+                codigo_componente: None,
             },
             MovimentoItemInput {
                 categoria: "peca".into(),
@@ -1296,6 +1465,7 @@ mod tests {
                 quantidade: 1,
                 observacao: None,
                 quantidade_enviada: None,
+                codigo_componente: None,
             },
         ];
         criar_movimento(&mut conn, movimento_base(armazem_id, usuario_id, itens)).unwrap();
@@ -1313,6 +1483,7 @@ mod tests {
             quantidade: 1,
             observacao: None,
             quantidade_enviada: None,
+            codigo_componente: None,
         }]
     }
 
@@ -1396,6 +1567,7 @@ mod tests {
             quantidade: 1,
             observacao: None,
             quantidade_enviada: None,
+            codigo_componente: None,
         }];
         let resultado = criar_movimento(&mut conn, movimento_base(armazem_id, usuario_id, itens));
         assert!(matches!(resultado, Err(AppError::Validation(_))));
@@ -1412,6 +1584,7 @@ mod tests {
             quantidade: 1,
             observacao: None,
             quantidade_enviada: None,
+            codigo_componente: None,
         }];
         let resultado = criar_movimento(&mut conn, movimento_base(armazem_id, usuario_id, itens));
         assert!(matches!(resultado, Err(AppError::Validation(_))));
@@ -1439,6 +1612,7 @@ mod tests {
             quantidade: QUANTIDADE_MAX + 1,
             observacao: None,
             quantidade_enviada: None,
+            codigo_componente: None,
         }];
         let resultado = criar_movimento(&mut conn, movimento_base(armazem_id, usuario_id, itens));
         assert!(matches!(resultado, Err(AppError::Validation(_))));
@@ -1929,6 +2103,7 @@ mod tests {
             quantidade: -5,
             observacao: None,
             quantidade_enviada: None,
+            codigo_componente: None,
         }];
         let resultado = criar_movimento(&mut conn, movimento_base(armazem_id, usuario_id, itens));
         assert!(matches!(resultado, Err(AppError::Validation(_))));
@@ -2300,6 +2475,7 @@ mod tests {
             quantidade,
             observacao: None,
             quantidade_enviada: None,
+            codigo_componente: None,
         }
     }
 
@@ -2362,6 +2538,7 @@ mod tests {
                 quantidade: 2,
                 observacao: None,
                 quantidade_enviada: None,
+                codigo_componente: None,
             }],
         );
         novo.numero_pedido = Some("500".into());
@@ -2387,6 +2564,7 @@ mod tests {
                 quantidade: 5,
                 observacao: None,
                 quantidade_enviada: None,
+                codigo_componente: None,
             }],
         );
         novo.numero_pedido = Some("501".into());
@@ -2414,6 +2592,7 @@ mod tests {
                 quantidade: 3,
                 observacao: None,
                 quantidade_enviada: None,
+                codigo_componente: None,
             }],
         );
         primeira.numero_pedido = Some("502".into());
@@ -2432,6 +2611,7 @@ mod tests {
                 quantidade: 2,
                 observacao: None,
                 quantidade_enviada: None,
+                codigo_componente: None,
             }],
         );
         complementar.numero_pedido = Some("502".into());
@@ -2442,5 +2622,167 @@ mod tests {
         let resultado =
             buscar_retirada_parcial_pendente(&conn, armazem_id, "saida_armazem", "502").unwrap();
         assert!(resultado.is_none());
+    }
+
+    fn item_reparo(codigo_componente: Option<&str>, condicao: Option<&str>) -> MovimentoItemInput {
+        MovimentoItemInput {
+            categoria: "peca".into(),
+            descricao: Some("Bateria 48V".into()),
+            montagem: None,
+            condicao: condicao.map(String::from),
+            quantidade: 1,
+            observacao: None,
+            quantidade_enviada: None,
+            codigo_componente: codigo_componente.map(String::from),
+        }
+    }
+
+    /// `tipo == "entrada"` ja vem com `condicao = "boa"` por padrao (exigida
+    /// pela validacao) - testes que precisam de outro resultado (defeito,
+    /// sucata) sobrescrevem `novo.itens[0].condicao` depois de chamar isto.
+    fn movimento_reparo(
+        armazem_id: i64,
+        usuario_id: i64,
+        tipo: &str,
+        codigo_componente: Option<&str>,
+    ) -> NovoMovimento {
+        let condicao = if tipo == "entrada" { Some("boa") } else { None };
+        let mut novo = movimento_base(
+            armazem_id,
+            usuario_id,
+            vec![item_reparo(codigo_componente, condicao)],
+        );
+        novo.fluxo = "reparo_externo".into();
+        novo.tipo = tipo.into();
+        novo.numero_pedido = None;
+        novo.contraparte = Some("Tecnico Joao - Eletronica Silva".into());
+        novo.quem_retirou = None;
+        novo
+    }
+
+    #[test]
+    fn rejeita_reparo_externo_sem_codigo_componente() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let novo = movimento_reparo(armazem_id, usuario_id, "saida", None);
+        let resultado = criar_movimento(&mut conn, novo);
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn reparo_externo_ciclo_completo_fecha_a_pendencia() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+
+        let saida = movimento_reparo(armazem_id, usuario_id, "saida", Some("BAT-001"));
+        criar_movimento(&mut conn, saida).unwrap();
+
+        let abertos = buscar_reparos_em_aberto(&conn, armazem_id).unwrap();
+        assert_eq!(abertos.len(), 1);
+        assert_eq!(abertos[0].codigo_componente, "BAT-001");
+
+        let mut entrada = movimento_reparo(armazem_id, usuario_id, "entrada", Some("BAT-001"));
+        entrada.hora = "15:00".into();
+        criar_movimento(&mut conn, entrada).unwrap();
+
+        let abertos = buscar_reparos_em_aberto(&conn, armazem_id).unwrap();
+        assert!(abertos.is_empty());
+    }
+
+    #[test]
+    fn reparo_externo_estorno_da_saida_tira_da_lista_de_abertos() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+
+        let saida = movimento_reparo(armazem_id, usuario_id, "saida", Some("BAT-002"));
+        let criado = criar_movimento(&mut conn, saida).unwrap();
+        assert_eq!(
+            buscar_reparos_em_aberto(&conn, armazem_id).unwrap().len(),
+            1
+        );
+
+        estornar_movimento(&mut conn, criado.id, usuario_id, "saiu por engano").unwrap();
+        assert!(buscar_reparos_em_aberto(&conn, armazem_id)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn reparo_externo_entrada_com_codigo_diferente_nao_fecha_a_pendencia_original() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+
+        let saida = movimento_reparo(armazem_id, usuario_id, "saida", Some("BAT-003"));
+        criar_movimento(&mut conn, saida).unwrap();
+
+        let mut entrada = movimento_reparo(armazem_id, usuario_id, "entrada", Some("BAT-999"));
+        entrada.hora = "15:00".into();
+        criar_movimento(&mut conn, entrada).unwrap();
+
+        let abertos = buscar_reparos_em_aberto(&conn, armazem_id).unwrap();
+        assert_eq!(abertos.len(), 1);
+        assert_eq!(abertos[0].codigo_componente, "BAT-003");
+    }
+
+    #[test]
+    fn rejeita_reparo_externo_entrada_sem_condicao() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let saida = movimento_reparo(armazem_id, usuario_id, "saida", Some("BAT-010"));
+        criar_movimento(&mut conn, saida).unwrap();
+
+        let mut entrada = movimento_reparo(armazem_id, usuario_id, "entrada", Some("BAT-010"));
+        entrada.hora = "15:00".into();
+        entrada.itens[0].condicao = None;
+        let resultado = criar_movimento(&mut conn, entrada);
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn reparos_concluidos_lista_so_entrada_com_condicao_boa_dentro_do_periodo() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+
+        // Consertado dentro do periodo - deve aparecer.
+        let saida1 = movimento_reparo(armazem_id, usuario_id, "saida", Some("BAT-020"));
+        criar_movimento(&mut conn, saida1).unwrap();
+        let mut entrada1 = movimento_reparo(armazem_id, usuario_id, "entrada", Some("BAT-020"));
+        entrada1.data = "2026-08-20".into();
+        entrada1.hora = "15:00".into();
+        criar_movimento(&mut conn, entrada1).unwrap();
+
+        // Sem conserto (condicao != boa) - nao deve aparecer, mesmo dentro do periodo.
+        let saida2 = movimento_reparo(armazem_id, usuario_id, "saida", Some("BAT-021"));
+        criar_movimento(&mut conn, saida2).unwrap();
+        let mut entrada2 = movimento_reparo(armazem_id, usuario_id, "entrada", Some("BAT-021"));
+        entrada2.data = "2026-08-21".into();
+        entrada2.hora = "15:00".into();
+        entrada2.itens[0].condicao = Some("defeito".into());
+        criar_movimento(&mut conn, entrada2).unwrap();
+
+        // Consertado fora do periodo pedido - nao deve aparecer.
+        let saida3 = movimento_reparo(armazem_id, usuario_id, "saida", Some("BAT-022"));
+        criar_movimento(&mut conn, saida3).unwrap();
+        let mut entrada3 = movimento_reparo(armazem_id, usuario_id, "entrada", Some("BAT-022"));
+        entrada3.data = "2026-09-01".into();
+        entrada3.hora = "15:00".into();
+        criar_movimento(&mut conn, entrada3).unwrap();
+
+        let concluidos =
+            buscar_reparos_concluidos(&conn, armazem_id, "2026-08-01", "2026-08-31").unwrap();
+        assert_eq!(concluidos.len(), 1);
+        assert_eq!(concluidos[0].codigo_componente, "BAT-020");
+        assert_eq!(concluidos[0].data_entrada, "2026-08-20");
+    }
+
+    #[test]
+    fn reparos_concluidos_ignora_saida_estornada() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+
+        let saida = movimento_reparo(armazem_id, usuario_id, "saida", Some("BAT-030"));
+        let criado = criar_movimento(&mut conn, saida).unwrap();
+        estornar_movimento(&mut conn, criado.id, usuario_id, "saiu por engano").unwrap();
+
+        let mut entrada = movimento_reparo(armazem_id, usuario_id, "entrada", Some("BAT-030"));
+        entrada.hora = "15:00".into();
+        criar_movimento(&mut conn, entrada).unwrap();
+
+        let concluidos =
+            buscar_reparos_concluidos(&conn, armazem_id, "2026-08-01", "2026-08-31").unwrap();
+        assert!(concluidos.is_empty());
     }
 }

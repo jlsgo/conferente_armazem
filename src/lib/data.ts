@@ -37,3 +37,28 @@ export function agoraLocalTexto(): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
+
+/**
+ * Intervalo (AAAA-MM-DD, inclusive dos dois lados) de uma quinzena de
+ * pagamento: dia 1-15, ou dia 16 ate o ultimo dia do mes. `mesAno` vem no
+ * formato de `<input type="month">` ("AAAA-MM"). O ultimo dia do mes usa o
+ * truque `new Date(ano, mes, 0)` (dia 0 do mes seguinte = ultimo dia deste).
+ */
+export function intervaloQuinzena(
+  mesAno: string,
+  metade: 1 | 2
+): { inicio: string; fim: string } {
+  const [anoTexto, mesTexto] = mesAno.split('-');
+  const ano = Number(anoTexto);
+  const mes = Number(mesTexto);
+  const pad = (n: number) => String(n).padStart(2, '0');
+
+  if (metade === 1) {
+    return { inicio: `${anoTexto}-${mesTexto}-01`, fim: `${anoTexto}-${mesTexto}-15` };
+  }
+  const ultimoDia = new Date(ano, mes, 0).getDate();
+  return {
+    inicio: `${anoTexto}-${mesTexto}-16`,
+    fim: `${anoTexto}-${mesTexto}-${pad(ultimoDia)}`,
+  };
+}

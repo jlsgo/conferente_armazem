@@ -5,9 +5,10 @@ import AuthCard from '../components/AuthCard';
 
 interface Props {
   onLogin: (usuario: Usuario) => void;
+  versao?: string;
 }
 
-export default function Login({ onLogin }: Props) {
+export default function Login({ onLogin, versao }: Props) {
   const [login, setLogin] = useState('');
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState('');
@@ -32,6 +33,7 @@ export default function Login({ onLogin }: Props) {
     <AuthCard
       titulo="Ecoviva"
       subtitulo="Controle de entradas e saidas do armazem"
+      versao={versao}
       erro={erro}
       enviando={enviando}
       textoBotao="Entrar"

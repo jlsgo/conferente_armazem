@@ -45,6 +45,9 @@
   --cor-usuarios: #0d9488;
   --cor-usuarios-escuro: #0f766e;
   --cor-usuarios-claro: #e3f6f4;
+  --cor-reparo: #db2777;
+  --cor-reparo-escuro: #9d174d;
+  --cor-reparo-claro: #fce7f3;
 
   --raio-sm: 8px;
   --raio-md: 12px;
@@ -127,6 +130,71 @@ h3 {
   margin-top: 0;
   margin-bottom: 20px;
   font-size: 14px;
+}
+
+/* Selo de versao, sempre visivel (Setup/Login/Dashboard) - neutro de
+   proposito (nao reaproveita .badge, que e colorido pra sinalizar
+   situacao/alerta): so precisa deixar claro, de relance, se este PC esta na
+   mesma versao que o outro armazem. */
+.pilula-versao {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--borda);
+  color: var(--texto-suave);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* Easter egg (cobrinha) - ver CobrinhaSecreta.tsx / useCliquesSecretos.ts.
+   Deliberadamente simples, sem tema elaborado. */
+.cobrinha-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.cobrinha-cartao {
+  background: var(--superficie);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.cobrinha-grade {
+  display: grid;
+  gap: 1px;
+  background: var(--borda);
+  border: 1px solid var(--borda);
+  width: min(80vw, 384px);
+  aspect-ratio: 1;
+  margin: 10px auto;
+}
+
+.cobrinha-celula {
+  background: var(--fundo);
+}
+
+.cobrinha-cabeca {
+  background: var(--verde-escuro);
+}
+
+.cobrinha-corpo {
+  background: var(--verde);
+}
+
+.cobrinha-comida {
+  background: var(--erro);
+  border-radius: 50%;
+}
+
+.cobrinha-fim {
+  margin-top: 8px;
 }
 
 label {
@@ -405,6 +473,18 @@ button.info:hover:not(:disabled) {
   background: var(--cor-usuarios-escuro);
 }
 
+.abas button.aba-reparo:hover:not(:disabled) {
+  background: var(--cor-reparo-claro);
+  color: var(--cor-reparo-escuro);
+}
+.abas button.aba-reparo.ativo {
+  background: var(--cor-reparo);
+  border-color: var(--cor-reparo);
+}
+.abas button.aba-reparo.ativo:hover:not(:disabled) {
+  background: var(--cor-reparo-escuro);
+}
+
 /* Alternador de saida/entrada dentro do formulario (Lancamentos, Montagem,
    SAC) - cores fixas por tipo (nao so "qual esta ativo agora"), pra dar pra
    reconhecer de relance qual lado esta selecionado sem precisar ler o
@@ -449,6 +529,9 @@ button.info:hover:not(:disabled) {
 }
 .conteudo-aba-usuarios .cartao:first-of-type {
   border-top: 4px solid var(--cor-usuarios);
+}
+.conteudo-aba-reparo_externo .cartao:first-of-type {
+  border-top: 4px solid var(--cor-reparo);
 }
 
 .tabela-scroll {
@@ -606,6 +689,13 @@ tbody tr:last-child td {
    categoria e "peca" e o campo de montagem não aparece (ver Montagem.tsx). */
 .linha-item-peca {
   grid-template-columns: 140px minmax(170px, 1fr) 140px 130px minmax(160px, 1fr) 100px auto;
+}
+
+/* categoria | descricao | codigo/serie (bem mais largo que o normal - numero
+   de serie costuma ter ate ~20 digitos) | resultado (ou placeholder vazio) |
+   observacao | quantidade | remover (ver ReparoExterno.tsx). */
+.linha-item-reparo {
+  grid-template-columns: 140px minmax(170px, 1fr) 220px 130px minmax(160px, 1fr) 100px auto;
 }
 
 .sucesso {
