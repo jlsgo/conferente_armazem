@@ -78,26 +78,37 @@ actually build and run for local testing.
   released from warehouse B2 to assembly at A4 — condition boa/defeito/sucata required
   per item, validated in `domain::movimentos::validar_novo_movimento`), and
   `src/pages/Sac.tsx` (warranty/sale part returns, both directions: `tipo=entrada` for
-  the customer's return — `motivo` required garantia/venda, `valor_centavos` required
-  only when venda — and `tipo=saida` for what happens to the part afterward — `motivo`
-  required entregue/descarte, no other fields since there's no "returned to
-  manufacturer" case today). `domain::movimentos::validar_novo_movimento` picks the
-  valid `motivo` set based on `tipo` (`MOTIVOS_SAC_ENTRADA_VALIDOS` vs
-  `MOTIVOS_SAC_SAIDA_VALIDOS`) — a `saida` with a `entrada`-only motivo like `garantia`
-  is rejected, and vice versa. All three screens share `commands/movimento_commands.rs`
+  the customer's return — `motivo` required garantia/venda/outro, `valor_centavos`
+  required only when venda — and `tipo=saida` for what happens to the part afterward —
+  `motivo` required entregue/descarte/garantia/venda/outro). `domain::movimentos::
+  validar_novo_movimento` picks the valid `motivo` set based on `tipo`
+  (`MOTIVOS_SAC_ENTRADA_VALIDOS` vs `MOTIVOS_SAC_SAIDA_VALIDOS`) — a `saida` with a
+  `entrada`-only motivo like `garantia` is rejected, and vice versa; that whole
+  motivo/valor_centavos block is skipped when `recebido_de_armazem_codigo` is set (see
+  cross-warehouse transfer below), since that entrada is a physical receipt, not a
+  customer return. `Sac.tsx`'s `saida` form also gained a "Transferir para {outro
+  armazem}" destino toggle — for a part whose next stop is being boxed with a vehicle
+  shipment already leaving from the other armazem, to share the freight instead of
+  paying for a second one; `motivo` is still required in that case (it still describes
+  what ultimately happens to the part — typically `entregue` — the toggle only changes
+  the physical routing, not the disposition). All three screens share `commands/movimento_commands.rs`
   and `commands/fechamento_commands.rs` — the domain layer was already generic per
   `fluxo` before these screens existed. All three also support a manual `tipo=entrada`
   and `tipo=saida` in their form (Montagem's manual entrada was briefly missing after
   the cross-warehouse transfer work below replaced its old tipo toggle with a
   destino-only saida form — restored, tipo and destino are independent toggles now).
 - **Cross-warehouse transfer + receipt confirmation (A4 ↔ B2)**: implemented, and generic
-  across `fluxo` — a `saida` with `armazem_destino_id` set (either `saida_armazem` for
-  vehicles, from `Lancamentos.tsx`, or `peca_montagem` for loose parts, from
-  `Montagem.tsx`) is a pending transfer; each screen's `<TransferenciasChegando>`
+  across `fluxo` — a `saida` with `armazem_destino_id` set (`saida_armazem` for
+  vehicles, from `Lancamentos.tsx`; `peca_montagem` for loose parts, from
+  `Montagem.tsx`; or `sac` for a part being routed through the other armazem to catch
+  an existing shipment, from `Sac.tsx`) is a pending transfer — `db::sync::
+  SQL_PENDENTES_RECEBIMENTO` allowlists exactly these three `fluxo` values, so a new
+  transferable fluxo needs a line added there too, not just `armazem_destino_id` wired
+  up on the frontend. Each screen's `<TransferenciasChegando>`
   component (`src/components/TransferenciasChegando.tsx`) polls
   `buscar_transferencias_pendentes`/`confirmar_recebimento` and filters the result to its
-  own `fluxo` client-side, so a vehicle transfer is confirmed from Saida de Armazem and a
-  part transfer from Montagem. `transferencia_origem_id` (in the schema since the start)
+  own `fluxo` client-side, so a vehicle transfer is confirmed from Saida de Armazem, a
+  part transfer from Montagem, and a SAC part transfer from SAC. `transferencia_origem_id` (in the schema since the start)
   turned out not to fit: it's an FK to a row in the *local* table, but the original send
   lives on the other armazem's PC. The real mechanism uses `recebido_de_armazem_codigo`/
   `recebido_de_id_origem` (migration `0004_transferencias.sql`, no FK — a composite key

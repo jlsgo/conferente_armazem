@@ -436,13 +436,14 @@ pub async fn tentar_sincronizar_uma_vez(app_handle: &tauri::AppHandle, url: &str
     }
 }
 
-/// Um envio (`saida` de `peca_montagem` OU `saida_armazem` com
+/// Um envio (`saida` de `peca_montagem`, `saida_armazem` ou `sac` com
 /// `armazem_destino_codigo` preenchido) visto do lado de quem vai receber -
 /// vem direto do Turso, nunca do banco local (o envio original vive no PC do
 /// outro armazem). O fluxo viaja junto pra `confirmar_recebimento` gravar a
 /// entrada de confirmacao no mesmo fluxo do envio original (uma transferencia
-/// de veiculo confirmada em Saida de Armazem, uma de peca solta em Montagem)
-/// e pra cada tela filtrar so as pendencias do seu proprio fluxo.
+/// de veiculo confirmada em Saida de Armazem, uma de peca solta em Montagem,
+/// uma peca de SAC no SAC) e pra cada tela filtrar so as pendencias do seu
+/// proprio fluxo.
 #[derive(Debug, Serialize)]
 pub struct TransferenciaPendente {
     pub armazem_origem_codigo: String,
@@ -489,10 +490,11 @@ const SQL_PENDENTES_RECEBIMENTO: &str = "
     FROM movimentos_consolidados m
     WHERE armazem_destino_codigo = ?1
       -- Fluxos que suportam transferencia fisica entre A4 e B2: veiculos
-      -- (saida_armazem) e peca solta (peca_montagem). SAC fica de fora: nao
-      -- faz sentido de negocio transferir uma devolucao de garantia entre
-      -- armazens.
-      AND fluxo IN ('peca_montagem', 'saida_armazem')
+      -- (saida_armazem), peca solta (peca_montagem) e SAC (sac) - por
+      -- exemplo uma peca de garantia que precisa ser embutida numa caixa de
+      -- scooter que ja vai sair por transportadora, aproveitando o mesmo
+      -- frete em vez de pagar dois.
+      AND fluxo IN ('peca_montagem', 'saida_armazem', 'sac')
       AND tipo = 'saida'
       AND estornado_de IS NULL
       AND NOT EXISTS (

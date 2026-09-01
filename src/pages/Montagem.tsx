@@ -335,6 +335,7 @@ export default function Montagem({ usuario, armazem, armazens, onTransferenciaCo
         </section>
         <FechamentoImpressao
           armazem={armazem}
+          armazens={armazens}
           data={data}
           fechamento={fechamento}
           lancamentos={lancamentos}

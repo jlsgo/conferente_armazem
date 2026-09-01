@@ -197,7 +197,12 @@ fn validar_novo_movimento(novo: &NovoMovimento) -> AppResult<()> {
     validar_texto_livre("Motivo", novo.motivo.as_deref())?;
     validar_texto_livre("Observacoes", novo.observacoes.as_deref())?;
 
-    if novo.fluxo == "sac" {
+    // Entrada de confirmacao de transferencia (`confirmar_recebimento`) nunca
+    // manda motivo - nao e uma devolucao de cliente, e so o recebimento
+    // fisico do que uma saida de "sac" (com `armazem_destino_id`) ja
+    // registrou do outro lado, entao as regras de motivo abaixo nao se
+    // aplicam.
+    if novo.fluxo == "sac" && novo.recebido_de_armazem_codigo.is_none() {
         // Entrada = devolucao do cliente (garantia/venda); saida = destino da
         // peca depois do atendimento (entregue de volta ao cliente ou
         // descartada) - cada tipo tem seu proprio conjunto de motivos, nao
@@ -1741,6 +1746,18 @@ mod tests {
             criar_movimento(&mut conn, novo),
             Err(AppError::Validation(_))
         ));
+    }
+
+    #[test]
+    fn aceita_sac_entrada_de_confirmacao_de_transferencia_sem_motivo() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.fluxo = "sac".into();
+        novo.tipo = "entrada".into();
+        novo.motivo = None;
+        novo.recebido_de_armazem_codigo = Some("A4".into());
+        novo.recebido_de_id_origem = Some(1);
+        assert!(criar_movimento(&mut conn, novo).is_ok());
     }
 
     #[test]

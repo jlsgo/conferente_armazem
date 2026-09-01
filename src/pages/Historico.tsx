@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import type { Armazem, Fluxo, Movimento, Usuario } from '../types';
 import { buscarFechamentoDoDia, buscarHistorico, estornarMovimento } from '../lib/api';
-import { motivoSacTexto, situacaoInfo } from '../lib/situacao';
+import { colunaColeta, motivoSacTexto, situacaoInfo } from '../lib/situacao';
 import { baixarCsv, paraCsv } from '../lib/csv';
 import { baixarXlsx } from '../lib/xlsx';
 import { agoraLocalTexto, formatarData, formatarDataArquivo, formatarDataHora } from '../lib/data';
@@ -12,6 +12,7 @@ import RelatorioPagamentoReparo from '../components/RelatorioPagamentoReparo';
 interface Props {
   usuario: Usuario;
   armazem: Armazem | undefined;
+  armazens: Armazem[];
 }
 
 const ABAS: { valor: Fluxo; rotulo: string }[] = [
@@ -62,7 +63,7 @@ function direcaoTexto(m: Movimento): string {
   return m.tipo === 'saida' ? 'Saida B2' : 'Entrada B2';
 }
 
-export default function Historico({ usuario, armazem }: Props) {
+export default function Historico({ usuario, armazem, armazens }: Props) {
   const armazemId = usuario.armazem_id as number;
 
   const [fluxo, setFluxo] = useState<Fluxo>('saida_armazem');
@@ -175,7 +176,7 @@ export default function Historico({ usuario, armazem }: Props) {
           formatarData(m.data),
           m.hora,
           pedidoTexto(m),
-          m.contraparte || '-',
+          colunaColeta(m, armazens),
           itensResumo(m),
           String(qtdTotal(m)),
           m.quem_retirou || '-',
@@ -235,7 +236,7 @@ export default function Historico({ usuario, armazem }: Props) {
           formatarData(m.data),
           m.hora,
           m.numero_pedido || '-',
-          m.contraparte || '-',
+          colunaColeta(m, armazens),
           itensResumo(m),
           String(qtdTotal(m)),
           motivoSacTexto(m),
@@ -447,14 +448,14 @@ export default function Historico({ usuario, armazem }: Props) {
                       {fluxo === 'saida_armazem' && (
                         <>
                           <td>{pedidoTexto(m)}</td>
-                          <td>{m.contraparte || '-'}</td>
+                          <td>{colunaColeta(m, armazens)}</td>
                         </>
                       )}
                       {fluxo === 'peca_montagem' && <td>{direcaoTexto(m)}</td>}
                       {fluxo === 'sac' && (
                         <>
                           <td>{m.numero_pedido || '-'}</td>
-                          <td>{m.contraparte || '-'}</td>
+                          <td>{colunaColeta(m, armazens)}</td>
                         </>
                       )}
                       {fluxo === 'reparo_externo' && <td>{m.contraparte || '-'}</td>}

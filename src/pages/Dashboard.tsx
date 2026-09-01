@@ -189,6 +189,11 @@ export default function Dashboard({ usuario, armazem, armazens, versao, onSair }
         >
           <IconChat size={15} />
           SAC
+          {!!pendentesPorFluxo.sac && (
+            <span className="badge badge-notificacao" title="Transferencias aguardando confirmacao">
+              {pendentesPorFluxo.sac}
+            </span>
+          )}
         </button>
         <button
           className={`aba-reparo${aba === 'reparo_externo' ? ' ativo' : ''}`}
@@ -240,11 +245,18 @@ export default function Dashboard({ usuario, armazem, armazens, versao, onSair }
             onTransferenciaConfirmada={atualizarPendentes}
           />
         )}
-        {aba === 'sac' && <Sac usuario={usuario} armazem={armazem} />}
+        {aba === 'sac' && (
+          <Sac
+            usuario={usuario}
+            armazem={armazem}
+            armazens={armazens}
+            onTransferenciaConfirmada={atualizarPendentes}
+          />
+        )}
         {aba === 'reparo_externo' && (
           <ReparoExterno usuario={usuario} armazem={armazem} onReparoAtualizado={atualizarReparosEmAberto} />
         )}
-        {aba === 'historico' && <Historico usuario={usuario} armazem={armazem} />}
+        {aba === 'historico' && <Historico usuario={usuario} armazem={armazem} armazens={armazens} />}
         {aba === 'usuarios' && ehGestor && <Usuarios armazens={armazens} />}
       </main>
       {cobrinha.ativo && <CobrinhaSecreta onFechar={cobrinha.fechar} />}

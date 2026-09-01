@@ -1,4 +1,4 @@
-import type { Movimento } from '../types';
+import type { Armazem, Movimento } from '../types';
 
 /** Texto e classe CSS do badge de situacao, usado em toda tabela/impressao de movimentos. */
 export function situacaoInfo(m: Pick<Movimento, 'tipo' | 'estornado_de'>): {
@@ -26,6 +26,26 @@ export function motivoSacTexto(m: Pick<Movimento, 'motivo' | 'valor_centavos' | 
     default:
       return '-';
   }
+}
+
+/**
+ * Coluna "Coleta" de Saida de Armazem e SAC (as duas telas com o mesmo
+ * significado pro campo: pra quem/onde a peca foi - Correios/cliente por
+ * padrao, ou o outro armazem quando e uma transferencia). Antes duplicada
+ * (quase) identica em `Lancamentos.tsx` e `Sac.tsx`; extraida pra um lugar so
+ * ao estender pra `FechamentoImpressao.tsx`/`exportFechamento.ts`/
+ * `Historico.tsx`, que mostravam so `contraparte` cru e perdiam a direcao da
+ * transferencia no documento impresso/exportado.
+ */
+export function colunaColeta(
+  m: Pick<Movimento, 'armazem_destino_id' | 'recebido_de_armazem_codigo' | 'contraparte'>,
+  armazens: Pick<Armazem, 'id' | 'codigo'>[]
+): string {
+  if (m.armazem_destino_id != null) {
+    return `Enviado para ${armazens.find((a) => a.id === m.armazem_destino_id)?.codigo ?? '?'}`;
+  }
+  if (m.recebido_de_armazem_codigo) return `Recebido de ${m.recebido_de_armazem_codigo}`;
+  return m.contraparte || '-';
 }
 
 export interface ResumoMovimentos {

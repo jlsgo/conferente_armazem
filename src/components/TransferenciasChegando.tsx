@@ -23,9 +23,10 @@ function horaAtual(): string {
 
 /**
  * Secao "transferencias aguardando confirmacao" compartilhada entre
- * Lancamentos (fluxo saida_armazem) e Montagem (fluxo peca_montagem) - a
- * lista que vem de `buscarTransferenciasPendentes` mistura os dois fluxos
- * (mesmo armazem de destino), entao cada tela filtra so a sua parte.
+ * Lancamentos (fluxo saida_armazem), Montagem (fluxo peca_montagem) e Sac
+ * (fluxo sac) - a lista que vem de `buscarTransferenciasPendentes` mistura
+ * os tres fluxos (mesmo armazem de destino), entao cada tela filtra so a sua
+ * parte.
  */
 export default function TransferenciasChegando({ fluxo, outroArmazem, onConfirmado }: Props) {
   const [pendentes, setPendentes] = useState<TransferenciaPendente[]>([]);

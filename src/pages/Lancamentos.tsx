@@ -13,7 +13,7 @@ import FechamentoImpressao from '../components/FechamentoImpressao';
 import Carregando from '../components/Carregando';
 import TransferenciasChegando from '../components/TransferenciasChegando';
 import ResumoDoDia from '../components/ResumoDoDia';
-import { situacaoInfo } from '../lib/situacao';
+import { colunaColeta, situacaoInfo } from '../lib/situacao';
 import { formatarData } from '../lib/data';
 import { algumCampoEhOutro } from '../lib/outro';
 import { useToast } from '../lib/toast';
@@ -277,17 +277,6 @@ export default function Lancamentos({ usuario, armazem, armazens, onTransferenci
 
   const paraOutroArmazemNoForm = tipo === 'saida' && destino === 'armazem';
 
-  function nomeArmazemPorId(id: number | null): string {
-    if (id == null) return '-';
-    return armazens.find((a) => a.id === id)?.codigo ?? '-';
-  }
-
-  function colunaColeta(m: Movimento): string {
-    if (m.armazem_destino_id) return `Enviado para ${nomeArmazemPorId(m.armazem_destino_id)}`;
-    if (m.recebido_de_armazem_codigo) return `Recebido de ${m.recebido_de_armazem_codigo}`;
-    return m.contraparte || '-';
-  }
-
   if (carregandoLista) {
     return <Carregando />;
   }
@@ -347,7 +336,13 @@ export default function Lancamentos({ usuario, armazem, armazens, onTransferenci
             </tbody>
           </table>
         </section>
-        <FechamentoImpressao armazem={armazem} data={data} fechamento={fechamento} lancamentos={lancamentos} />
+        <FechamentoImpressao
+          armazem={armazem}
+          armazens={armazens}
+          data={data}
+          fechamento={fechamento}
+          lancamentos={lancamentos}
+        />
       </div>
     );
   }
@@ -571,7 +566,7 @@ export default function Lancamentos({ usuario, armazem, armazens, onTransferenci
                   {m.numero_pedido || '-'}
                   {!m.retirada_completa && <span className="badge badge-parcial"> parcial</span>}
                 </td>
-                <td>{colunaColeta(m)}</td>
+                <td>{colunaColeta(m, armazens)}</td>
                 <td>
                   {m.itens
                     .map(

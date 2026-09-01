@@ -10,19 +10,24 @@ import {
 } from '../lib/api';
 import FechamentoImpressao from '../components/FechamentoImpressao';
 import Carregando from '../components/Carregando';
+import TransferenciasChegando from '../components/TransferenciasChegando';
 import ResumoDoDia from '../components/ResumoDoDia';
-import { motivoSacTexto, situacaoInfo } from '../lib/situacao';
+import { colunaColeta, motivoSacTexto, situacaoInfo } from '../lib/situacao';
 import { formatarData } from '../lib/data';
 import { useToast } from '../lib/toast';
 
 interface Props {
   usuario: Usuario;
   armazem: Armazem | undefined;
+  armazens: Armazem[];
+  /** Avisa o Dashboard pra atualizar o contador de pendentes nas abas na hora, sem esperar o polling de 60s. */
+  onTransferenciaConfirmada?: () => void;
 }
 
 type MotivoEntrada = 'garantia' | 'venda' | 'outro';
 type MotivoSaida = 'entregue' | 'descarte' | 'garantia' | 'venda' | 'outro';
 type Motivo = MotivoEntrada | MotivoSaida;
+type Destino = 'cliente' | 'armazem';
 
 interface ItemForm {
   descricao: string;
@@ -46,9 +51,10 @@ function novoItemVazio(): ItemForm {
   return { descricao: '', quantidade: 1 };
 }
 
-export default function Sac({ usuario, armazem }: Props) {
+export default function Sac({ usuario, armazem, armazens, onTransferenciaConfirmada }: Props) {
   const armazemId = usuario.armazem_id as number;
   const data = dataDeHoje();
+  const outroArmazem = armazens.find((a) => a.id !== armazem?.id);
 
   const [lancamentos, setLancamentos] = useState<Movimento[]>([]);
   const [fechamento, setFechamento] = useState<Fechamento | null>(null);
@@ -62,6 +68,7 @@ export default function Sac({ usuario, armazem }: Props) {
   // SAC do que entrada (devolucao do cliente) - vem primeiro e ja comeca
   // selecionado, pra poupar um clique na maioria dos lancamentos.
   const [tipo, setTipo] = useState<TipoMovimento>('saida');
+  const [destino, setDestino] = useState<Destino>('cliente');
   const [protocolo, setProtocolo] = useState('');
   const [coleta, setColeta] = useState('');
   const [motivo, setMotivo] = useState<Motivo | ''>('');
@@ -120,6 +127,8 @@ export default function Sac({ usuario, armazem }: Props) {
     setItens([novoItemVazio()]);
   }
 
+  const paraOutroArmazem = tipo === 'saida' && destino === 'armazem';
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setErro('');
@@ -162,13 +171,14 @@ export default function Sac({ usuario, armazem }: Props) {
     setEnviando(true);
     const resultado = await criarMovimento({
       armazem_id: armazemId,
+      armazem_destino_id: paraOutroArmazem ? (outroArmazem?.id ?? null) : null,
       fluxo: 'sac',
       tipo,
       data,
       hora,
       turno: 'diurno',
       numero_pedido: protocolo || null,
-      contraparte: coleta || null,
+      contraparte: paraOutroArmazem ? null : coleta || null,
       motivo,
       valor_centavos: valorCentavos,
       observacoes: observacoes.trim() || null,
@@ -186,6 +196,7 @@ export default function Sac({ usuario, armazem }: Props) {
     setMotivo('');
     setValorReais('');
     setObservacoes('');
+    setDestino('cliente');
     limparFormulario();
     await carregarTudo();
   }
@@ -298,6 +309,7 @@ export default function Sac({ usuario, armazem }: Props) {
         </section>
         <FechamentoImpressao
           armazem={armazem}
+          armazens={armazens}
           data={data}
           fechamento={fechamento}
           lancamentos={lancamentos}
@@ -310,6 +322,15 @@ export default function Sac({ usuario, armazem }: Props) {
   return (
     <div>
       <ResumoDoDia lancamentos={lancamentos} />
+      <TransferenciasChegando
+        fluxo="sac"
+        outroArmazem={outroArmazem}
+        onConfirmado={async () => {
+          await carregarTudo();
+          onTransferenciaConfirmada?.();
+        }}
+      />
+
       <section className="cartao">
         <h2>Registrar atendimento SAC</h2>
         <p className="subtitulo">
@@ -334,11 +355,23 @@ export default function Sac({ usuario, armazem }: Props) {
               onClick={() => {
                 setTipo('entrada');
                 setMotivo('');
+                setDestino('cliente');
               }}
             >
               Entrada (devolucao do cliente)
             </button>
           </div>
+
+          {tipo === 'saida' && outroArmazem && (
+            <div className="abas" style={{ marginBottom: 20 }}>
+              <button type="button" className={destino === 'cliente' ? 'ativo' : ''} onClick={() => setDestino('cliente')}>
+                Cliente / coleta
+              </button>
+              <button type="button" className={destino === 'armazem' ? 'ativo' : ''} onClick={() => setDestino('armazem')}>
+                Transferir para {outroArmazem.codigo}
+              </button>
+            </div>
+          )}
 
           <div className="grade-formulario">
             <label>
@@ -356,10 +389,12 @@ export default function Sac({ usuario, armazem }: Props) {
               <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} required />
             </label>
 
-            <label>
-              Coleta (Correios / cliente)
-              <input value={coleta} onChange={(e) => setColeta(e.target.value)} />
-            </label>
+            {!paraOutroArmazem && (
+              <label>
+                Coleta (Correios / cliente)
+                <input value={coleta} onChange={(e) => setColeta(e.target.value)} />
+              </label>
+            )}
 
             <label>
               {tipo === 'entrada' ? 'Garantia ou venda' : 'Motivo da saida'}
@@ -486,7 +521,7 @@ export default function Sac({ usuario, armazem }: Props) {
                 <td>{m.numero}</td>
                 <td>{m.hora}</td>
                 <td>{m.numero_pedido || '-'}</td>
-                <td>{m.contraparte || '-'}</td>
+                <td>{colunaColeta(m, armazens)}</td>
                 <td>
                   {m.itens
                     .map((it) => `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`)

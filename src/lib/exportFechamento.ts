@@ -1,6 +1,6 @@
-import type { Fechamento, Movimento, VarianteFechamento } from '../types';
+import type { Armazem, Fechamento, Movimento, VarianteFechamento } from '../types';
 import { agoraLocalTexto, formatarDataHora } from './data';
-import { motivoSacTexto, situacaoInfo } from './situacao';
+import { colunaColeta, motivoSacTexto, situacaoInfo } from './situacao';
 
 type Variante = VarianteFechamento;
 
@@ -36,7 +36,10 @@ export function resultadoReparoTexto(m: Movimento): string {
  * `FechamentoImpressao.tsx` renderiza por variante - usado pra gerar CSV/XLSX
  * com o mesmo conteudo da versao impressa.
  */
-export function colunasFechamento(variante: Variante): {
+export function colunasFechamento(
+  variante: Variante,
+  armazens: Armazem[]
+): {
   cabecalhos: string[];
   linha: (m: Movimento) => string[];
 } {
@@ -58,7 +61,7 @@ export function colunasFechamento(variante: Variante): {
         String(m.numero),
         m.hora,
         (m.numero_pedido || '-') + (!m.retirada_completa ? ' (parcial)' : ''),
-        m.contraparte || '-',
+        colunaColeta(m, armazens),
         itensTexto(m),
         String(qtdTotal(m)),
         m.quem_retirou || '-',
@@ -107,7 +110,7 @@ export function colunasFechamento(variante: Variante): {
       String(m.numero),
       m.hora,
       m.numero_pedido || '-',
-      m.contraparte || '-',
+      colunaColeta(m, armazens),
       itensTexto(m),
       String(qtdTotal(m)),
       motivoSacTexto(m),

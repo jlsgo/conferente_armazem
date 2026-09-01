@@ -1010,6 +1010,56 @@ B2, substituindo as planilhas. Junta:
 e redistribuir pro pendrive (`~/Downloads/PARA-O-PENDRIVE-ECOVIVA`), atualizando o
 `LEIA-ME.txt` - nao foi feito nesta sessao (precisa rodar no CI/numa maquina Windows).
 
+## Versao 2.1.0 - SAC ganha transferencia entre armazens
+
+Pedido do usuario: as vezes uma peca do SAC (ex. garantia) nao vai direto por
+Correios/cliente/disk - e direcionada pro outro armazem pra ser embutida numa caixa de
+scooter que ja vai sair de la por transportadora, aproveitando o frete do pedido de
+veiculo em vez de pagar dois fretes separados. Pedido pra registrar isso de forma
+confiavel ("enviado"/"recebido"), testar bem e avaliar maturidade antes de liberar.
+
+- **`armazem_destino_id` estendido pro fluxo `sac`**: mesmo mecanismo generico ja usado
+  por `saida_armazem` (Lancamentos) e `peca_montagem` (Montagem) - `Sac.tsx` ganhou o
+  mesmo seletor "Cliente/coleta" vs "Transferir para {outro armazem}" na saida, e
+  `<TransferenciasChegando fluxo="sac">` no topo da tela do lado que recebe. `motivo`
+  continua obrigatorio mesmo transferindo (ainda descreve o destino final da peca,
+  normalmente `entregue` - o seletor so muda o roteamento fisico, nao a razao).
+- **Bug real encontrado e corrigido**: `db::sync::SQL_PENDENTES_RECEBIMENTO` excluia
+  `sac` de proposito (comentario antigo: "nao faz sentido de negocio transferir devolucao
+  de garantia entre armazens" - verdade antes deste pedido). Sem esse ajuste a
+  transferencia teria sido registrada e sincronizada mas nunca apareceria como pendente
+  do lado de quem recebe - achado por leitura cuidadosa do `db/sync.rs`, nao por teste
+  automatizado (a query roda contra o Turso remoto via HTTP, fora do alcance dos testes
+  de dominio em SQLite em memoria).
+- **Segundo bug real corrigido**: `confirmar_recebimento` sempre manda `motivo: None` pra
+  entrada de confirmacao, mas `validar_novo_movimento` exigia motivo pra toda entrada de
+  `sac`. `domain::movimentos::validar_novo_movimento` agora pula essa exigencia quando
+  `recebido_de_armazem_codigo` esta preenchido (entrada de confirmacao fisica, nao
+  devolucao de cliente) - novo teste
+  `aceita_sac_entrada_de_confirmacao_de_transferencia_sem_motivo`.
+- **Terceiro bug real corrigido, pre-existente (achado pela rodada `/code-review` desta
+  sessao, nao introduzido por ela)**: a coluna Coleta do fechamento impresso, dos
+  exports CSV/XLSX (`exportFechamento.ts`, `FechamentoImpressao.tsx`) e do Historico
+  mostrava so `contraparte` cru, perdendo a direcao "Enviado para X"/"Recebido de X" que
+  a tela ao vivo (`colunaColeta`, ate entao duplicada em `Lancamentos.tsx` e `Sac.tsx`)
+  ja mostrava - ja afetava transferencias de `saida_armazem`, e passaria a afetar `sac`
+  tambem. Extraida pra `colunaColeta` compartilhada em `src/lib/situacao.ts` (recebe
+  `armazens` pra resolver `armazem_destino_id` -> codigo), usada agora pelas 5 telas/
+  modulos - o documento oficial de fechamento e o Historico voltam a mostrar a
+  transferencia corretamente pra `saida_armazem` e `sac`.
+- **Verificado**: 136 testes Rust, `clippy --all-targets --all-features -- -D warnings`,
+  `fmt --check`, `tsc --noEmit` e `vite build` limpos; revisao `/code-review` (nivel
+  high, 5 agentes em paralelo) rodada sobre o diff antes do bump de versao. A
+  confirmacao de recebimento de ponta a ponta contra o Turso real (uma transferencia SAC
+  de A4 pra B2 de fato aparecendo como pendente e sendo confirmada do outro lado) **nao**
+  foi verificada nesta sessao - a maquina de desenvolvimento usada aqui tem um
+  `turso.txt` apontando pro Turso real de producao (mesmo banco que A4/B2 usam), e criar
+  uma transferencia de teste ali sincronizaria e apareceria como pendente de verdade pro
+  time - o usuario preferiu fazer esse teste manualmente depois de instalar, em vez de
+  arriscar dado de teste no Turso compartilhado.
+- Bump de `2.0.0` pra `2.1.0` (`package.json`, `Cargo.toml`, `tauri.conf.json` +
+  lockfiles regenerados via `npm install`/`cargo check`).
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um

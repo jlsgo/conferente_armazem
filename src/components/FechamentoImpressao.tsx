@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Armazem, Fechamento, Movimento, VarianteFechamento } from '../types';
-import { motivoSacTexto, resumoMovimentos, situacaoInfo } from '../lib/situacao';
+import { colunaColeta, motivoSacTexto, resumoMovimentos, situacaoInfo } from '../lib/situacao';
 import { agoraLocalTexto, formatarData, formatarDataArquivo, formatarDataHora } from '../lib/data';
 import { paraCsv, baixarCsv } from '../lib/csv';
 import { baixarXlsx } from '../lib/xlsx';
@@ -11,6 +11,9 @@ type Variante = VarianteFechamento;
 
 interface Props {
   armazem: Armazem | undefined;
+  /** So usado pelas variantes 'armazem'/'sac' (Coleta pode ser uma transferencia pro
+   * outro armazem) - Reparo Externo nao suporta transferencia, pode omitir. */
+  armazens?: Armazem[];
   data: string;
   fechamento: Fechamento;
   lancamentos: Movimento[];
@@ -46,6 +49,7 @@ const LARGURAS_COLUNAS: Record<Variante, number[]> = {
 
 export default function FechamentoImpressao({
   armazem,
+  armazens = [],
   data,
   fechamento,
   lancamentos,
@@ -73,7 +77,7 @@ export default function FechamentoImpressao({
   }
 
   function handleExportarCsv() {
-    const { cabecalhos, linha } = colunasFechamento(variante);
+    const { cabecalhos, linha } = colunasFechamento(variante, armazens);
     const linhas = lancamentos.map(linha);
     const rodape = rodapeAuditoria(fechamento);
     const linhasComRodape = [...linhas, [], ...rodape.map((r) => [r.rotulo, r.valor])];
@@ -83,7 +87,7 @@ export default function FechamentoImpressao({
   async function handleExportarXlsx() {
     setExportandoXlsx(true);
     try {
-      const { cabecalhos, linha } = colunasFechamento(variante);
+      const { cabecalhos, linha } = colunasFechamento(variante, armazens);
       const linhas = lancamentos.map(linha);
       const rodape = rodapeAuditoria(fechamento);
       await baixarXlsx(nomeBase('xlsx'), [
@@ -171,14 +175,14 @@ export default function FechamentoImpressao({
                     {m.numero_pedido || '-'}
                     {!m.retirada_completa && ' (parcial)'}
                   </td>
-                  <td>{m.contraparte || '-'}</td>
+                  <td>{colunaColeta(m, armazens)}</td>
                 </>
               )}
               {variante === 'montagem' && <td>{m.tipo === 'saida' ? 'Saida B2' : 'Entrada B2'}</td>}
               {variante === 'sac' && (
                 <>
                   <td>{m.numero_pedido || '-'}</td>
-                  <td>{m.contraparte || '-'}</td>
+                  <td>{colunaColeta(m, armazens)}</td>
                 </>
               )}
               {variante === 'reparo_externo' && <td>{m.contraparte || '-'}</td>}
