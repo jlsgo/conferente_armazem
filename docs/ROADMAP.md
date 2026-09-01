@@ -1060,6 +1060,29 @@ confiavel ("enviado"/"recebido"), testar bem e avaliar maturidade antes de liber
 - Bump de `2.0.0` pra `2.1.0` (`package.json`, `Cargo.toml`, `tauri.conf.json` +
   lockfiles regenerados via `npm install`/`cargo check`).
 
+## Painel: `reparo_externo` estava totalmente ausente, `sac` faltava nos pendentes
+
+Pedido do usuario: revisar o `painel/index.html` procurando melhorias. Achado real:
+`reparo_externo` (fluxo adicionado na v2.0.0, 2026-08-31) nunca foi portado pro painel -
+`ROTULO_FLUXO_IDIOMA`, o `<select>` de filtro e `CORES_FLUXO` só tinham os 3 fluxos
+originais. Na pratica os dados ja apareciam em "Todos" (a consulta principal nao
+filtra fluxo por padrao) e os totais agregados já estavam certos, mas: nao dava pra
+filtrar só por Reparo Externo, a coluna Fluxo mostrava a string crua `reparo_externo`
+em vez de "Reparo Externo" (`rotuloFluxo` cai pro valor cru quando nao encontra no
+mapa), e o grafico "Por fluxo" mostrava a barra em `var(--verde)` (fallback de
+`svgBarraHorizontal`) em vez de uma cor propria do `CORES_FLUXO`. Corrigido: `reparo_externo`
+adicionado ao `<select>` de filtro (+ chave `fluxoReparoExterno` em `TRADUCOES.pt`/`.zh`),
+`ROTULO_FLUXO_IDIOMA` e `CORES_FLUXO` (`var(--grafico-8)`, unico ainda livre no mapa de
+fluxo). Tambem corrigido `buscarPendentesGlobal` - o `WHERE fluxo IN (...)` (copia manual
+do `db::sync::SQL_PENDENTES_RECEBIMENTO` do app, ja que o painel nao compartilha codigo
+com o Rust) ainda so tinha `peca_montagem`/`saida_armazem`, ficou defasado assim que o
+`sac` ganhou transferencia entre armazens nesta mesma sessao - sem o fix, uma
+transferencia de SAC apareceria certo no app mas nunca no painel. `reparo_externo`
+fica de fora desse `IN` de proposito (nao suporta `armazem_destino_id`). Verificado:
+`node --check` no bloco `<script>`, e um smoke test local (servidor HTTP local +
+Chrome headless, sem senha real do painel) confirmando as 4 opcoes no filtro e zero
+erro de console no carregamento.
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um

@@ -310,6 +310,7 @@
           <option value="saida_armazem" data-i18n="fluxoSaidaArmazem">Saida de Armazem</option>
           <option value="peca_montagem" data-i18n="fluxoMontagem">Montagem</option>
           <option value="sac" data-i18n="fluxoSac">SAC</option>
+          <option value="reparo_externo" data-i18n="fluxoReparoExterno">Reparo Externo</option>
         </select>
       </label>
       <label><span data-i18n="filtroDeLabel">De</span>
@@ -470,6 +471,7 @@
       fluxoSaidaArmazem: "Saida de Armazem",
       fluxoMontagem: "Montagem",
       fluxoSac: "SAC",
+      fluxoReparoExterno: "Reparo Externo",
       filtroDeLabel: "De",
       filtroAteLabel: "Ate",
       atalhoHoje: "Hoje",
@@ -538,6 +540,7 @@
       fluxoSaidaArmazem: "仓库出库",
       fluxoMontagem: "组装",
       fluxoSac: "客服(SAC)",
+      fluxoReparoExterno: "外部维修",
       filtroDeLabel: "从",
       filtroAteLabel: "至",
       atalhoHoje: "今天",
@@ -591,8 +594,8 @@
   };
 
   var ROTULO_FLUXO_IDIOMA = {
-    pt: { saida_armazem: "Saida de Armazem", peca_montagem: "Montagem", sac: "SAC" },
-    zh: { saida_armazem: "仓库出库", peca_montagem: "组装", sac: "客服(SAC)" }
+    pt: { saida_armazem: "Saida de Armazem", peca_montagem: "Montagem", sac: "SAC", reparo_externo: "Reparo Externo" },
+    zh: { saida_armazem: "仓库出库", peca_montagem: "组装", sac: "客服(SAC)", reparo_externo: "外部维修" }
   };
   // Categorias fixas de item (ver domain::movimentos no app - scooter/
   // triciclo/patinete/peca/outro, sem catalogo aberto).
@@ -832,10 +835,13 @@
   // `db::sync::SQL_PENDENTES_RECEBIMENTO` no app (2 NOT EXISTS: nao
   // confirmada, nao estornada do lado de quem enviou) - replicada aqui em
   // SQL, nao em JS, pra nao arriscar divergir da fonte da verdade real nem
-  // depender do recorte de outra consulta pra estar completa.
+  // depender do recorte de outra consulta pra estar completa. O `fluxo IN
+  // (...)` tem que ser mantido igual ao allowlist do lado Rust a mao -
+  // reparo_externo fica de fora de proposito (nao suporta armazem_destino,
+  // so tecnico externo).
   async function buscarPendentesGlobal() {
     var sql = "SELECT " + COLUNAS_MOVIMENTO + " FROM movimentos_consolidados m " +
-      "WHERE fluxo IN ('peca_montagem', 'saida_armazem') " +
+      "WHERE fluxo IN ('peca_montagem', 'saida_armazem', 'sac') " +
       "AND tipo = 'saida' " +
       "AND estornado_de IS NULL " +
       "AND armazem_destino_codigo IS NOT NULL " +
@@ -1092,7 +1098,8 @@
   var CORES_FLUXO = {
     saida_armazem: "var(--grafico-1)",
     peca_montagem: "var(--grafico-4)",
-    sac: "var(--grafico-6)"
+    sac: "var(--grafico-6)",
+    reparo_externo: "var(--grafico-8)"
   };
   var CORES_CATEGORIA = {
     scooter: "var(--grafico-2)",
