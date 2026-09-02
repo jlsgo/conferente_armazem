@@ -155,12 +155,31 @@ nos itens que o frontend mandar de volta — e confere que ela estava mesmo ende
 armazem de quem esta confirmando antes de aceitar.
 
 `db::sync::ler_config_turso`/`movimentos_pendentes`/`marcar_sincronizado` e a logica pura
-de parsing (`linha_para_transferencia`) sao cobertas por teste automatizado. O passo de
-rede em si (`enviar_para_turso`, `buscar_pendentes_recebimento`, `buscar_transferencia`)
-so pode ser validado de ponta a ponta com uma conta/banco Turso real — foi verificado
-manualmente simulando os dois PCs (dois bancos SQLite em memoria separados) contra o
-Turso real: envio de B2, confirmacao em A4, e o caso de um envio estornado em B2 nao
-aparecer mais como pendente em A4.
+de parsing (`linha_para_transferencia`) sao cobertas por teste automatizado. As strings
+SQL usadas contra o Turso (`SQL_UPSERT`, `SQL_PENDENTES_RECEBIMENTO`,
+`SQL_BUSCAR_TRANSFERENCIA_POR_CHAVE`) tambem sao testadas — SQLite generico, nada
+especifico de libsql, entao rodam contra um `rusqlite` em memoria dentro de
+`db::sync::tests` sem precisar de conta Turso real (foi assim que se pegou o bug do
+`numero_pedido` perdido na v2.1.1 — SELECT esquecendo uma coluna que so um teste que
+roda o SQL de verdade pega). O que so pode ser validado de ponta a ponta e a camada de
+rede/autenticacao em si (`Builder::new_remote`, HTTP, credenciais) — `tests/
+sync_turso_real_test.rs` cobre isso, `#[ignore]` por padrao (a CI nunca toca rede),
+rodado manualmente contra um banco Turso descartavel:
+
+```bash
+turso db create ecoviva-armazem-teste          # uma vez so
+turso db tokens create ecoviva-armazem-teste    # gera um token novo quando precisar
+
+TURSO_TESTE_URL=libsql://... TURSO_TESTE_TOKEN=... \
+  cargo test --test sync_turso_real_test -- --ignored
+```
+
+**Nunca aponte isso pro banco de producao** (`ecoviva-armazem`) — o teste escreve dados
+fabricados. Use sempre um banco `-teste` separado, criado com o mesmo `turso db create`.
+Antes da v2.1.1, esse passo so dava pra fazer manualmente simulando os dois PCs contra
+o Turso real (envio de B2, confirmacao em A4, estorno em B2 sumindo do pendente em A4) —
+agora e um teste repetivel, e serve de base pra validar qualquer feature nova de sync
+(ex.: recusa de recebimento) sem arriscar dado de teste no Turso de producao.
 
 ### Fila de sincronizacao com retry (Sprint 7)
 

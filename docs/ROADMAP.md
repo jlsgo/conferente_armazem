@@ -1126,6 +1126,55 @@ regressao for reintroduzida.
 
 Bump de `2.1.0` pra `2.1.1` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
 
+## Sprint 8 — Turso de teste (infra pra validar sync com seguranca)
+
+Ate a v2.1.1, validar a camada de rede do `db::sync` de ponta a ponta so dava pra fazer
+manualmente contra o Turso de producao (`ecoviva-armazem`) — arriscado, ja usado
+tambem pelo painel administrativo e pelos dois armazens de verdade. Criado um banco
+Turso descartavel (`ecoviva-armazem-teste`, `turso db create`) e
+`tests/sync_turso_real_test.rs` (`#[ignore]` por padrao, roda so com
+`TURSO_TESTE_URL`/`TURSO_TESTE_TOKEN` setados e `-- --ignored`) — confirma que
+`enviar_para_turso`/`buscar_pendentes_recebimento`/`buscar_transferencia` funcionam de
+verdade contra rede/autenticacao Turso reais, incluindo o `numero_pedido` corrigido na
+v2.1.1. Rodado manualmente uma vez contra o banco de teste, passou. Detalhes de como
+gerar um token novo em `docs/ARQUITETURA.md`. Essa infra e a base pra validar a
+proxima feature (recusa de recebimento) sem tocar no Turso de producao.
+
+## Proxima sprint (planejada) — Recusa de recebimento entre armazens
+
+Pedido do usuario: alem de "Confirmar recebimento", o armazem que recebe poder
+"Recusar recebimento" (peca/caixa errada, avariada, etc.) com justificativa
+obrigatoria — e isso deveria voltar um aviso automatico pro armazem que enviou, sem
+esperar que alguem descubra sozinho olhando o Historico.
+
+Desenho proposto (reaproveitando o maximo do mecanismo ja existente, sem tabela nova
+nem mudanca de schema):
+
+- Novo `status = 'recusado'` em `movimentos` (a coluna ja aceita qualquer texto, sem
+  `CHECK` — mesmo padrao ja usado por `status = 'estorno'` em `estornar_movimento`).
+  Gravado como uma linha nova no armazem que recebe, ligada a transferencia original
+  via `recebido_de_armazem_codigo`/`recebido_de_id_origem` — os mesmos campos que
+  `confirmar_recebimento` ja usa. `observacoes` (obrigatorio) guarda o motivo da
+  recusa, mesmo padrao ja usado em toda parte pro caso `outro`.
+- `SQL_PENDENTES_RECEBIMENTO` **nao precisa mudar** — o `NOT EXISTS` que ja existe la
+  (`recebido_de_armazem_codigo`/`recebido_de_id_origem`) nao olha pro `status`, entao
+  uma recusa ja some da lista de pendentes de quem recebeu, de graca.
+- Nova consulta espelhada (`SQL_MINHAS_TRANSFERENCIAS_RECUSADAS` ou nome parecido) pro
+  lado de quem enviou: `movimentos_consolidados` onde `recebido_de_armazem_codigo` =
+  meu codigo E `status = 'recusado'` E ainda nao estornei o lancamento original (mesmo
+  `NOT EXISTS` de `estornado_de` que ja existe). Sem essa segunda parte, o aviso nunca
+  some.
+- Novo componente no frontend (espelho do `<TransferenciasChegando>`, ex.
+  `<TransferenciasRecusadas>`) nas telas de quem envia, mostrando "Fulano recusou seu
+  envio de tal dia: motivo X" — a acao natural e usar o botao **Estornar que ja
+  existe** no lancamento original, que ja exige justificativa e ja e auditado; assim
+  que estornar, o aviso some sozinho (via o `NOT EXISTS` acima).
+- Botao "Recusar recebimento" ao lado do "Confirmar recebimento" existente em
+  `<TransferenciasChegando>`, com campo de motivo obrigatorio.
+
+Validar com `tests/sync_turso_real_test.rs` (Sprint 8) contra `ecoviva-armazem-teste`
+antes de considerar pronto pra instalar nos PCs reais.
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um
