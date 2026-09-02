@@ -1083,6 +1083,49 @@ fica de fora desse `IN` de proposito (nao suporta `armazem_destino_id`). Verific
 Chrome headless, sem senha real do painel) confirmando as 4 opcoes no filtro e zero
 erro de console no carregamento.
 
+## Versao 2.1.1 - numero_pedido perdido na transferencia recebida + sync mais rapido
+
+Relato do usuario: apos confirmar o recebimento de uma transferencia entre armazens, o
+fechamento do dia frequentemente mostrava a coluna Pedido vazia - so a descricao/
+observacao do item aparecia. Tambem reclamou que a sincronizacao entre A4 e B2 estava
+demorando.
+
+**Causa raiz do numero_pedido**: `numero_pedido` e um campo do cabecalho do
+`movimentos` e ia certinho pro Turso (`movimentos_consolidados.numero_pedido`,
+gravado por `SQL_UPSERT`), mas `SQL_PENDENTES_RECEBIMENTO` e a busca por chave em
+`buscar_transferencia` nunca selecionavam essa coluna, `TransferenciaPendente` nao
+tinha campo pra ela, e `confirmar_recebimento` gravava a entrada local sempre com
+`numero_pedido: None`. Ou seja, nao era um problema de exibicao com fallback - o dado
+era descartado antes de chegar no banco local de quem recebia. Corrigido em `db::sync`
+(as duas queries + o struct) e `commands::sync_commands::confirmar_recebimento` (usa
+`transferencia.numero_pedido` em vez de `None`). So corrige transferencias *futuras* -
+as ja confirmadas com numero de pedido perdido nao tem como ser recuperadas. A coluna
+"Pedido" tambem foi adicionada em `<TransferenciasChegando>` pra aparecer ja na lista
+de pendencias, antes mesmo de confirmar.
+
+**Sync mais rapido**: o loop de fundo em `lib.rs` so empurrava pro Turso a cada 5
+minutos (so envio - quem recebe busca ao vivo, mas so enquanto a tela fica aberta,
+repolando a cada 60s). Reduzido pra 1 minuto, cortando o pior caso de propagacao de
+~6 minutos pra ~2.
+
+**Testes novos** (o bug do numero_pedido so existia porque as strings SQL usadas
+contra o Turso nunca eram exercitadas por teste automatizado - so a leitura local
+tinha cobertura): como `SQL_CRIAR_TABELA_REMOTA`/`SQL_UPSERT`/
+`SQL_PENDENTES_RECEBIMENTO` sao SQLite generico (nada especifico de libsql), da pra
+rodar o ciclo completo envio->consolidado->busca contra um `rusqlite` em memoria (ja
+usado no resto da suite) sem precisar de conta Turso real - `libsql::Builder::
+new_local` foi tentado primeiro mas descartado: seu SQLite vendorizado e o SQLite
+bundled do rusqlite disputam a configuracao global de threading no mesmo processo de
+teste, causando panics intermitentes. Novos testes cobrem numero_pedido sobrevivendo
+ao ciclo completo (valor presente e ausente), a busca por chave que
+`confirmar_recebimento` usa de verdade, o filtro `NOT EXISTS` que tira transferencias
+ja confirmadas da lista de pendentes, e uma checagem direta de que as duas queries de
+leitura selecionam as mesmas colunas na mesma ordem - o guarda-corpo mais direto
+contra essa classe de bug. Confirmado manualmente que o teste principal falha se a
+regressao for reintroduzida.
+
+Bump de `2.1.0` pra `2.1.1` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um
