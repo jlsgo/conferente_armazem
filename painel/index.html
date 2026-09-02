@@ -215,6 +215,7 @@
   .badge-pendente { background: var(--aviso-claro); color: var(--aviso); }
   .badge-divergencia { background: var(--divergencia-claro); color: var(--divergencia); }
   .badge-estorno { background: var(--erro-claro); color: var(--erro); }
+  .badge-recusado { background: var(--aviso-claro); color: var(--aviso); }
   .col-pedido { width: 10%; }
   td.col-pedido { font-weight: 700; color: var(--verde-escuro); }
   .col-itens { width: 20%; white-space: normal; }
@@ -344,6 +345,7 @@
           <option value="entrada" data-i18n="tipoEntrada">Entrada</option>
           <option value="baixa" data-i18n="situacaoBaixa">Baixa</option>
           <option value="estorno" data-i18n="situacaoEstorno">Estorno</option>
+          <option value="recusado" data-i18n="situacaoRecusado">Recusado</option>
         </select>
       </label>
       <label><span data-i18n="filtroBuscaLabel">Busca</span>
@@ -484,6 +486,7 @@
       filtroSituacaoLabel: "Situacao",
       situacaoBaixa: "Baixa",
       situacaoEstorno: "Estorno",
+      situacaoRecusado: "Recusado",
       filtroBuscaLabel: "Busca",
       filtroBuscaPlaceholder: "Nome ou item",
       botaoAtualizar: "Atualizar agora",
@@ -515,11 +518,13 @@
       statTileMovimentos: "Movimentos",
       statTileUnidades: "Unidades",
       statTilePendentes: "Transferencias pendentes",
+      statTileRecusados: "Recebimentos recusados",
       statTileTaxaEstorno: "Taxa de estorno",
       semDadosPeriodo: "Sem dados no periodo.",
       situacaoEstornoBadge: "ESTORNO",
       situacaoBaixaBadge: "BAIXA",
       situacaoEntradaBadge: "ENTRADA",
+      situacaoRecusadoBadge: "RECUSADO",
       divergenciaBadge: "divergencia"
     },
     zh: {
@@ -553,6 +558,7 @@
       filtroSituacaoLabel: "状态",
       situacaoBaixa: "出库",
       situacaoEstorno: "冲销",
+      situacaoRecusado: "拒收",
       filtroBuscaLabel: "搜索",
       filtroBuscaPlaceholder: "姓名或物品",
       botaoAtualizar: "立即刷新",
@@ -584,11 +590,13 @@
       statTileMovimentos: "记录数",
       statTileUnidades: "件数",
       statTilePendentes: "待确认转运",
+      statTileRecusados: "被拒收次数",
       statTileTaxaEstorno: "冲销率",
       semDadosPeriodo: "该时段无数据。",
       situacaoEstornoBadge: "冲销",
       situacaoBaixaBadge: "出库",
       situacaoEntradaBadge: "入库",
+      situacaoRecusadoBadge: "拒收",
       divergenciaBadge: "差异"
     }
   };
@@ -673,9 +681,14 @@
   // chamada (virava `LIMIT NaN`/`SELECT undefined` na consulta - bug real,
   // pego testando contra o Turso de verdade antes de commitar).
   var LIMITE_LINHAS = 2000;
+  // `motivo` foi acrescentada no fim de proposito (nao reordenada junto das
+  // outras) pra minimizar o diff nos indices posicionais que
+  // `linhaParaMovimento` ja usava - ver o comentario la sobre o bug que
+  // `motivo` faltando aqui causou (recusa de recebimento invisivel no
+  // painel, badge sempre caindo pro caso generico "ENTRADA").
   var COLUNAS_MOVIMENTO = "armazem_codigo, id_origem, fluxo, tipo, data, hora, usuario_nome, " +
     "numero_pedido, status, estornado_de, itens_json, armazem_destino_codigo, " +
-    "recebido_de_armazem_codigo, recebido_de_id_origem, enviado_em";
+    "recebido_de_armazem_codigo, recebido_de_id_origem, enviado_em, motivo";
   var ultimosFiltrados = [];
   var intervaloAtualizacao = null;
 
@@ -772,8 +785,17 @@
       armazem_destino_codigo: v(11),
       recebido_de_armazem_codigo: v(12),
       recebido_de_id_origem: v(13) != null ? Number(v(13)) : null,
-      enviado_em: v(14)
+      enviado_em: v(14),
+      motivo: v(15)
     };
+  }
+
+  // Sentinela gravado por `domain::movimentos::recusar_recebimento` no app -
+  // ver `MOTIVO_RECUSA_RECEBIMENTO` la. So faz sentido junto com
+  // `recebido_de_armazem_codigo` preenchido (senao colidiria com um motivo
+  // real de SAC, ex.: `garantia`/`venda`, que tambem passa por este campo).
+  function ehRecusaDeRecebimento(m) {
+    return m.motivo === "recusado" && m.recebido_de_armazem_codigo != null;
   }
 
   function lerFiltrosDaTela() {
@@ -809,8 +831,15 @@
       condicoes.push("estornado_de IS NOT NULL");
     } else if (filtros.situacao === "baixa") {
       condicoes.push("tipo = 'saida' AND estornado_de IS NULL");
+    } else if (filtros.situacao === "recusado") {
+      condicoes.push("motivo = 'recusado' AND recebido_de_armazem_codigo IS NOT NULL AND estornado_de IS NULL");
     } else if (filtros.situacao === "entrada") {
-      condicoes.push("tipo = 'entrada' AND estornado_de IS NULL");
+      // Exclui recusa de recebimento (tambem tipo='entrada') - ela tem sua
+      // propria opcao de filtro/badge, nao deve aparecer como "Entrada" generica.
+      condicoes.push(
+        "tipo = 'entrada' AND estornado_de IS NULL " +
+        "AND NOT (motivo = 'recusado' AND recebido_de_armazem_codigo IS NOT NULL)"
+      );
     }
     if (filtros.responsavel) { condicoes.push("usuario_nome = ?"); args.push(filtros.responsavel); }
     return { where: condicoes.length ? " WHERE " + condicoes.join(" AND ") : "", args: args };
@@ -979,16 +1008,18 @@
   // nao e o vocabulario ENTRADA/BAIXA/ESTORNO usado no resto do app.
   function situacaoValor(m) {
     if (m.estornado_de != null) return "estorno";
+    if (ehRecusaDeRecebimento(m)) return "recusado";
     return m.tipo === "saida" ? "baixa" : "entrada";
   }
 
-  // Mesmas 3 classes/cores de badge usadas em src/styles/global.css
-  // (.badge-entrada/.badge-baixa/.badge-estorno) - o painel espelha o app,
-  // entao usa o mesmo vocabulario visual pra quem olha os dois.
+  // Mesmas 4 classes/cores de badge usadas em src/styles/global.css
+  // (.badge-entrada/.badge-baixa/.badge-estorno/.badge-recusado) - o painel
+  // espelha o app, entao usa o mesmo vocabulario visual pra quem olha os dois.
   function situacaoBadge(m) {
     var valor = situacaoValor(m);
     if (valor === "estorno") return '<span class="badge badge-estorno">' + t("situacaoEstornoBadge") + '</span>';
     if (valor === "baixa") return '<span class="badge badge-baixa">' + t("situacaoBaixaBadge") + '</span>';
+    if (valor === "recusado") return '<span class="badge badge-recusado">' + t("situacaoRecusadoBadge") + '</span>';
     return '<span class="badge badge-entrada">' + t("situacaoEntradaBadge") + '</span>';
   }
 
@@ -1059,7 +1090,7 @@
 
   function calcularInsights(filtrados, pendentesCount) {
     var porDia = {}, porCategoria = {}, porArmazem = {}, porFluxo = {};
-    var totalEstorno = 0, totalUnidades = 0, totalEntrada = 0, totalSaida = 0;
+    var totalEstorno = 0, totalRecusado = 0, totalUnidades = 0, totalEntrada = 0, totalSaida = 0;
     filtrados.forEach(function (m) {
       var qtd = totalItens(m.itens);
       totalUnidades += qtd;
@@ -1068,6 +1099,10 @@
       porFluxo[m.fluxo] = (porFluxo[m.fluxo] || 0) + qtd;
       if (m.estornado_de != null) {
         totalEstorno += 1;
+      } else if (ehRecusaDeRecebimento(m)) {
+        // Nao entra em totalEntrada - conta separado, senao "Entrada" fica
+        // inflado com recusas (que nao sao um recebimento de verdade).
+        totalRecusado += 1;
       } else if (m.tipo === "saida") {
         totalSaida += qtd;
       } else {
@@ -1086,6 +1121,7 @@
       totalUnidades: totalUnidades,
       totalEntrada: totalEntrada,
       totalSaida: totalSaida,
+      totalRecusado: totalRecusado,
       taxaEstorno: filtrados.length ? (totalEstorno / filtrados.length) : 0,
       pendentesCount: pendentesCount
     };
@@ -1125,6 +1161,7 @@
       [t("tipoEntrada"), dados.totalEntrada],
       [t("tipoSaida"), dados.totalSaida],
       [t("statTilePendentes"), dados.pendentesCount],
+      [t("statTileRecusados"), dados.totalRecusado],
       [t("statTileTaxaEstorno"), (dados.taxaEstorno * 100).toFixed(1) + "%"]
     ].map(function (item) {
       return '<div class="stat-tile"><div class="valor">' + item[1] + '</div><div class="rotulo">' + item[0] + '</div></div>';

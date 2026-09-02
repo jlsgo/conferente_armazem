@@ -1202,6 +1202,35 @@ seguidas pra confirmar idempotencia.
 
 Bump de `2.1.1` pra `2.1.2` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
 
+## Painel: recusa de recebimento (v2.1.2) invisivel - mesmo padrao de bug de novo
+
+Planejamento pedido pelo usuario: melhorar visualizacao/insights/UX do painel
+(`https://jlsgo.github.io/conferente_armazem/`). Levantamento completo (P0-P3) feito
+e discutido - ver a resposta desta sessao pro plano inteiro. Implementado so o P0
+por pedido explicito do usuario ("so o P0 primeiro"), o resto fica pra proxima sprint.
+
+**P0 - achado real, nao so planejado**: o sentinela `motivo = 'recusado'` que
+`recusar_recebimento` passou a gravar (v2.1.2, ver secao "Versao 2.1.2" acima) nunca
+chegava no painel - `COLUNAS_MOVIMENTO` (a query manual que o painel roda direto
+contra o Turso, sem compartilhar codigo com o Rust/TS) nao selecionava `motivo` de
+jeito nenhum. Terceira vez que esse exato padrao de bug aparece no painel (depois de
+`reparo_externo` faltando no filtro e `sac` faltando no `buscarPendentesGlobal`, ambos
+na v2.1.0/v2.1.1) - toda vez que o app ganha um fluxo/status/campo novo, o painel
+precisa ser atualizado manualmente, e ninguem lembra de fazer isso na hora.
+
+Corrigido: `motivo` acrescentada no fim de `COLUNAS_MOVIMENTO`/`linhaParaMovimento`
+(indice novo no fim de proposito, pra nao reordenar os indices posicionais
+existentes). Nova funcao `ehRecusaDeRecebimento(m)` (mesma logica do
+`MOTIVO_RECUSA_RECEBIMENTO` do app) alimenta: `situacaoValor`/`situacaoBadge` (novo
+badge "RECUSADO", cor de aviso - mesma classe `.badge-recusado` do app),
+`montarFiltroSql` (nova opcao "Recusado" no filtro de Situacao, e a opcao "Entrada"
+existente passou a excluir recusas pra nao ficar contada duas vezes), e
+`calcularInsights` (recusas saem de "Entrada" pra um stat tile proprio "Recebimentos
+recusados", senao o total de Entrada ficava inflado com recusas que nao sao
+recebimento de verdade). Traduzido pros dois idiomas (pt/zh). Verificado: `node
+--check` no bloco `<script>`, e smoke test local (servidor HTTP local + Chrome
+headless) confirmando a opcao "Recusado" no DOM e zero erro de console.
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um
