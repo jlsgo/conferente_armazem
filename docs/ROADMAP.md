@@ -1231,6 +1231,38 @@ recebimento de verdade). Traduzido pros dois idiomas (pt/zh). Verificado: `node
 --check` no bloco `<script>`, e smoke test local (servidor HTTP local + Chrome
 headless) confirmando a opcao "Recusado" no DOM e zero erro de console.
 
+**P3 ganhou um item concreto: visualizacao no celular.** Pedido explicito do usuario
+("boa visualizacao no celular"). Hoje o painel nao tem **nenhum** `@media` de
+largura (so o de `prefers-color-scheme`) - nunca foi desenhado pra tela estreita.
+Confirmado com um preview local em viewport de 390px (iPhone-ish, gate contornado so
+localmente pra screenshot, nunca commitado):
+
+- **Cabecalho da tabela "Movimentos recentes" ja trunca pra letras soltas** ("A..
+  F... D... P... ITENS Q R... S... S...") so com o layout, antes de qualquer dado -
+  a tabela tem 9 colunas fixas com `overflow-x: auto` como unica estrategia, o que
+  em tela de celular vira ilegivel de cara, nao so "aperta um pouco". Precisa de um
+  layout alternativo em tela estreita (cada linha vira um cartao com os campos
+  empilhados label:valor, padrao comum de "tabela responsiva" - ou pelo menos
+  esconder as colunas menos criticas tipo "Sincronizado" e deixar so no scroll).
+- **Cabecalho quebra em 2 linhas e espreme o seletor de idioma** (PT/中文 viram
+  circulos pequenos ao lado do titulo) - o `header` e um `flex` sem nenhum ajuste
+  pra largura estreita.
+- **Campo de data mostra `mm/dd/yyyy`** (formato americano) em vez do formato
+  brasileiro esperado - o `<input type="date">` usa o locale do sistema/navegador,
+  vale confirmar como renderiza num Android/iPhone de verdade (o preview foi Chrome
+  headless em Linux, pode nao refletir o locale real de um celular configurado em
+  pt-BR).
+- Grade de filtros (9 campos) ja quebra em linhas via `flex-wrap`, o que ajuda, mas
+  o agrupamento fica um pouco arbitrario (ex.: "Hoje/7 dias/30 dias" + "Responsavel"
+  dividindo a mesma linha por acaso).
+- Os graficos de barra (SVG com `viewBox`/`preserveAspectRatio`) devem escalar bem
+  em largura, mas isso **nao foi confirmado com dado real** (o preview local nao
+  tinha acesso ao Turso) - verificar rotulos/legendas nao cortando quando os
+  proximos itens de insight forem implementados.
+
+Constraint: nenhuma lib de CSS framework nova, so `@media (max-width: ...)` no
+`<style>` que ja existe, mesma filosofia "sem build step" do resto do arquivo.
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um
