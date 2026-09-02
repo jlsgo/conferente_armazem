@@ -461,6 +461,13 @@ pub struct TransferenciaPendente {
     /// confirmando, nao so a quem sabia o `(armazem_codigo, id_origem)`.
     pub armazem_destino_codigo: Option<String>,
     pub numero_pedido: Option<String>,
+    /// Observacao do MOVIMENTO (nao do item - ver `MovimentoItem::observacao`
+    /// dentro de `itens`). Ficou faltando aqui na v2.1.1, mesma classe de bug
+    /// do `numero_pedido`: um campo que existe no envio original e chega
+    /// certinho no Turso, mas que a query de quem recebe esquecia de
+    /// selecionar - o conferente que confirma nunca via instrucoes/detalhes
+    /// importantes que o remetente escreveu ali.
+    pub observacoes: Option<String>,
     pub itens: Vec<MovimentoItem>,
 }
 
@@ -473,6 +480,7 @@ fn linha_para_transferencia(
     hora: String,
     armazem_destino_codigo: Option<String>,
     numero_pedido: Option<String>,
+    observacoes: Option<String>,
     itens_json: String,
 ) -> AppResult<TransferenciaPendente> {
     let itens: Vec<MovimentoItem> = serde_json::from_str(&itens_json).map_err(|e| {
@@ -488,12 +496,14 @@ fn linha_para_transferencia(
         hora,
         armazem_destino_codigo,
         numero_pedido,
+        observacoes,
         itens,
     })
 }
 
 const SQL_PENDENTES_RECEBIMENTO: &str = "
-    SELECT armazem_codigo, id_origem, fluxo, data, hora, armazem_destino_codigo, numero_pedido, itens_json
+    SELECT armazem_codigo, id_origem, fluxo, data, hora, armazem_destino_codigo, numero_pedido,
+           observacoes, itens_json
     FROM movimentos_consolidados m
     WHERE armazem_destino_codigo = ?1
       -- Fluxos que suportam transferencia fisica entre A4 e B2: veiculos
@@ -524,7 +534,8 @@ const SQL_PENDENTES_RECEBIMENTO: &str = "
 /// transferencia confirmar e so precisa reler os dados de verdade (nunca
 /// confiar no que o frontend mandar de volta).
 const SQL_BUSCAR_TRANSFERENCIA_POR_CHAVE: &str = "
-    SELECT armazem_codigo, id_origem, fluxo, data, hora, armazem_destino_codigo, numero_pedido, itens_json
+    SELECT armazem_codigo, id_origem, fluxo, data, hora, armazem_destino_codigo, numero_pedido,
+           observacoes, itens_json
     FROM movimentos_consolidados WHERE armazem_codigo = ?1 AND id_origem = ?2
 ";
 
@@ -586,8 +597,11 @@ pub async fn buscar_pendentes_recebimento(
         let numero_pedido: Option<String> = row
             .get(6)
             .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
-        let itens_json: String = row
+        let observacoes: Option<String> = row
             .get(7)
+            .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
+        let itens_json: String = row
+            .get(8)
             .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
         resultado.push(linha_para_transferencia(
             armazem_origem_codigo,
@@ -597,6 +611,7 @@ pub async fn buscar_pendentes_recebimento(
             hora,
             armazem_destino_codigo,
             numero_pedido,
+            observacoes,
             itens_json,
         )?);
     }
@@ -659,8 +674,11 @@ pub async fn buscar_transferencia(
     let numero_pedido: Option<String> = row
         .get(6)
         .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
-    let itens_json: String = row
+    let observacoes: Option<String> = row
         .get(7)
+        .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
+    let itens_json: String = row
+        .get(8)
         .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
 
     Ok(Some(linha_para_transferencia(
@@ -671,8 +689,152 @@ pub async fn buscar_transferencia(
         hora,
         armazem_destino_codigo,
         numero_pedido,
+        observacoes,
         itens_json,
     )?))
+}
+
+/// Uma transferencia que EU enviei e que o outro armazem recusou
+/// (`domain::movimentos::recusar_recebimento`), vista do meu lado - o
+/// espelho de `TransferenciaPendente`, mas pra quem enviou em vez de quem
+/// recebe. `meu_movimento_id` e o id do MEU lancamento original (na minha
+/// tabela `movimentos` local, nao no Turso) - a acao natural ao ver isso e
+/// abrir esse lancamento na minha propria lista e usar o botao Estornar que
+/// ja existe (com justificativa, ja auditado); assim que eu estornar, o
+/// aviso some sozinho (ver `SQL_MINHAS_TRANSFERENCIAS_RECUSADAS`).
+#[derive(Debug, Serialize)]
+pub struct TransferenciaRecusada {
+    pub armazem_que_recusou_codigo: String,
+    pub meu_movimento_id: i64,
+    pub fluxo: String,
+    pub data: String,
+    pub hora: String,
+    pub numero_pedido: Option<String>,
+    pub justificativa: Option<String>,
+    pub itens: Vec<MovimentoItem>,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn linha_para_transferencia_recusada(
+    armazem_que_recusou_codigo: String,
+    meu_movimento_id: i64,
+    fluxo: String,
+    data: String,
+    hora: String,
+    numero_pedido: Option<String>,
+    justificativa: Option<String>,
+    itens_json: String,
+) -> AppResult<TransferenciaRecusada> {
+    let itens: Vec<MovimentoItem> = serde_json::from_str(&itens_json).map_err(|e| {
+        AppError::Interno(format!(
+            "Nao foi possivel ler os itens da transferencia recusada: {e}"
+        ))
+    })?;
+    Ok(TransferenciaRecusada {
+        armazem_que_recusou_codigo,
+        meu_movimento_id,
+        fluxo,
+        data,
+        hora,
+        numero_pedido,
+        justificativa,
+        itens,
+    })
+}
+
+/// Mesma ideia de `SQL_PENDENTES_RECEBIMENTO`, mas espelhada: em vez de "o
+/// que foi enviado pra mim e ainda nao foi confirmado", aqui e "o que EU
+/// enviei e que o outro lado recusou, e eu ainda nao corrigi (estornei) o
+/// lancamento original". `c.recebido_de_id_origem` e o id do MEU lancamento
+/// original (a chave que uso pra achar e estornar ele). O `NOT EXISTS` final
+/// e o mesmo padrao ja usado em `SQL_PENDENTES_RECEBIMENTO` pra sumir um
+/// envio ja estornado - sem ele, um aviso de recusa nunca sumiria mesmo
+/// depois de corrigido.
+const SQL_MINHAS_TRANSFERENCIAS_RECUSADAS: &str = "
+    SELECT c.armazem_codigo, c.recebido_de_id_origem, c.fluxo, c.data, c.hora,
+           c.numero_pedido, c.observacoes, c.itens_json
+    FROM movimentos_consolidados c
+    WHERE c.recebido_de_armazem_codigo = ?1
+      AND c.motivo = 'recusado'
+      AND NOT EXISTS (
+        SELECT 1 FROM movimentos_consolidados x
+        WHERE x.armazem_codigo = ?1 AND x.estornado_de = c.recebido_de_id_origem
+      )
+    ORDER BY c.data DESC, c.hora DESC
+";
+
+/// Busca no Turso as transferencias que EU enviei e que foram recusadas do
+/// outro lado - ver `TransferenciaRecusada`. Mesmo padrao de
+/// `buscar_pendentes_recebimento`: nunca falha por sincronizacao nao
+/// configurada, so devolve vazio (quem chama trata isso).
+pub async fn buscar_minhas_transferencias_recusadas(
+    url: &str,
+    token: &str,
+    meu_armazem_codigo: &str,
+) -> AppResult<Vec<TransferenciaRecusada>> {
+    let banco = libsql::Builder::new_remote(url.to_string(), token.to_string())
+        .build()
+        .await
+        .map_err(|e| AppError::Interno(format!("Nao foi possivel conectar ao Turso: {e}")))?;
+    let remoto = banco
+        .connect()
+        .map_err(|e| AppError::Interno(format!("Nao foi possivel abrir a conexao remota: {e}")))?;
+
+    let mut rows = remoto
+        .query(
+            SQL_MINHAS_TRANSFERENCIAS_RECUSADAS,
+            libsql::params![meu_armazem_codigo],
+        )
+        .await
+        .map_err(|e| {
+            AppError::Interno(format!(
+                "Nao foi possivel buscar transferencias recusadas: {e}"
+            ))
+        })?;
+
+    let mut resultado = Vec::new();
+    while let Some(row) = rows
+        .next()
+        .await
+        .map_err(|e| AppError::Interno(format!("Erro lendo transferencias recusadas: {e}")))?
+    {
+        let armazem_que_recusou_codigo: String = row
+            .get(0)
+            .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
+        let meu_movimento_id: i64 = row
+            .get(1)
+            .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
+        let fluxo: String = row
+            .get(2)
+            .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
+        let data: String = row
+            .get(3)
+            .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
+        let hora: String = row
+            .get(4)
+            .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
+        let numero_pedido: Option<String> = row
+            .get(5)
+            .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
+        let justificativa: Option<String> = row
+            .get(6)
+            .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
+        let itens_json: String = row
+            .get(7)
+            .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
+        resultado.push(linha_para_transferencia_recusada(
+            armazem_que_recusou_codigo,
+            meu_movimento_id,
+            fluxo,
+            data,
+            hora,
+            numero_pedido,
+            justificativa,
+            itens_json,
+        )?);
+    }
+
+    Ok(resultado)
 }
 
 #[cfg(test)]
@@ -933,6 +1095,7 @@ mod tests {
             "09:00".into(),
             Some("A4".into()),
             Some("1603".into()),
+            Some("Frete ja pago, so descarregar".into()),
             itens_json,
         )
         .unwrap();
@@ -942,6 +1105,10 @@ mod tests {
         assert_eq!(transferencia.fluxo, "peca_montagem");
         assert_eq!(transferencia.armazem_destino_codigo.as_deref(), Some("A4"));
         assert_eq!(transferencia.numero_pedido.as_deref(), Some("1603"));
+        assert_eq!(
+            transferencia.observacoes.as_deref(),
+            Some("Frete ja pago, so descarregar")
+        );
         assert_eq!(transferencia.itens.len(), 1);
         assert_eq!(transferencia.itens[0].quantidade, 3);
         assert_eq!(transferencia.itens[0].observacao.as_deref(), Some("SN-123"));
@@ -956,6 +1123,7 @@ mod tests {
             "2026-08-25".into(),
             "10:00".into(),
             Some("B2".into()),
+            None,
             None,
             "[]".into(),
         )
@@ -973,6 +1141,7 @@ mod tests {
             "2026-08-25".into(),
             "09:00".into(),
             Some("A4".into()),
+            None,
             None,
             "nao e json".into(),
         );
@@ -1115,12 +1284,15 @@ mod tests {
                 row.get::<_, String>(4)?,
                 row.get::<_, Option<String>>(5)?,
                 row.get::<_, Option<String>>(6)?,
-                row.get::<_, String>(7)?,
+                row.get::<_, Option<String>>(7)?,
+                row.get::<_, String>(8)?,
             ))
         })
         .unwrap()
         .map(|linha| linha.unwrap())
-        .map(|(a, b, c, d, e, f, g, h)| linha_para_transferencia(a, b, c, d, e, f, g, h).unwrap())
+        .map(|(a, b, c, d, e, f, g, h, i)| {
+            linha_para_transferencia(a, b, c, d, e, f, g, h, i).unwrap()
+        })
         .collect()
     }
 
@@ -1141,13 +1313,16 @@ mod tests {
                     row.get::<_, String>(4)?,
                     row.get::<_, Option<String>>(5)?,
                     row.get::<_, Option<String>>(6)?,
-                    row.get::<_, String>(7)?,
+                    row.get::<_, Option<String>>(7)?,
+                    row.get::<_, String>(8)?,
                 ))
             },
         )
         .optional()
         .unwrap()
-        .map(|(a, b, c, d, e, f, g, h)| linha_para_transferencia(a, b, c, d, e, f, g, h).unwrap())
+        .map(|(a, b, c, d, e, f, g, h, i)| {
+            linha_para_transferencia(a, b, c, d, e, f, g, h, i).unwrap()
+        })
     }
 
     fn linha_pendente_de_transferencia(
@@ -1246,6 +1421,34 @@ mod tests {
         let pendentes = buscar_pendentes_via_sql(&conn, "A4");
         assert_eq!(pendentes.len(), 1);
         assert_eq!(pendentes[0].numero_pedido, None);
+    }
+
+    /// Mesma classe de bug do `numero_pedido` (regressao pega logo depois,
+    /// na mesma sessao): `observacoes` do movimento tambem nao era
+    /// selecionada por `SQL_PENDENTES_RECEBIMENTO`/`SQL_BUSCAR_TRANSFERENCIA_
+    /// POR_CHAVE`, entao instrucoes/detalhes que quem enviou escreveu no
+    /// campo Observacao nunca chegavam pra quem recebia decidir se confirma
+    /// ou recusa.
+    #[test]
+    fn sql_pendentes_recebimento_traz_observacoes_do_envio() {
+        let conn = conexao_remota_de_teste();
+        let mut linha = linha_pendente_de_transferencia(1588, "B2", "A4", Some("1588"));
+        linha.movimento.observacoes = Some("Caixa fragil, nao empilhar".into());
+        inserir_na_tabela_remota(&conn, &linha, "2026-09-02 14:28:00");
+
+        let pendentes = buscar_pendentes_via_sql(&conn, "A4");
+        assert_eq!(pendentes.len(), 1);
+        assert_eq!(
+            pendentes[0].observacoes.as_deref(),
+            Some("Caixa fragil, nao empilhar")
+        );
+
+        let transferencia = buscar_transferencia_via_sql(&conn, "B2", 1588)
+            .expect("a transferencia deveria ser encontrada");
+        assert_eq!(
+            transferencia.observacoes.as_deref(),
+            Some("Caixa fragil, nao empilhar")
+        );
     }
 
     /// Cobertura do filtro `NOT EXISTS` de `SQL_PENDENTES_RECEBIMENTO`: uma

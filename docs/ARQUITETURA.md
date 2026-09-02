@@ -154,14 +154,58 @@ confirmado quanto o que foi estornado do lado de quem enviou (dois `NOT EXISTS`)
 nos itens que o frontend mandar de volta — e confere que ela estava mesmo endereçada ao
 armazem de quem esta confirmando antes de aceitar.
 
+### Recusa de recebimento (v2.1.2)
+
+Alem de "Confirmar recebimento", `<TransferenciasChegando>` tambem oferece "Recusar
+recebimento" (peca errada, avariada, etc.), com justificativa obrigatoria. Desenhada
+pra reaproveitar ao maximo o mecanismo de confirmacao existente, sem tabela nova nem
+mudanca de schema:
+
+- `domain::movimentos::recusar_recebimento` grava uma entrada normal via
+  `criar_movimento` (mesma cadeia de hash, checagem de dia fechado, autorizacao — ao
+  contrario do estorno, que bypassa a trava de dia fechado de proposito por corrigir o
+  passado, uma recusa e um evento novo acontecendo hoje, entao nao ganha esse passe
+  livre), marcada com `motivo = MOTIVO_RECUSA_RECEBIMENTO` ("recusado") — um sentinela
+  interno, nao um motivo de SAC de verdade. So faz sentido junto com
+  `recebido_de_armazem_codigo` preenchido, que ja pula a validacao de motivo do SAC
+  (mesma regra que ja existia pra `confirmar_recebimento`), entao nunca colide com um
+  motivo real. A justificativa fica em `observacoes`, mesmo padrao de
+  `estornar_movimento`.
+- `SQL_PENDENTES_RECEBIMENTO` **nao precisou mudar**: o `NOT EXISTS` que ja existia
+  (`recebido_de_armazem_codigo`/`recebido_de_id_origem`) nao olha pro `status`/`motivo`,
+  entao uma recusa ja some da lista de pendentes de quem recebeu de graca.
+- `db::sync::SQL_MINHAS_TRANSFERENCIAS_RECUSADAS`/`buscar_minhas_transferencias_recusadas`
+  e o espelho pro lado de quem enviou: busca `movimentos_consolidados` onde
+  `recebido_de_armazem_codigo` = meu codigo, `motivo = 'recusado'`, e eu ainda nao
+  estornei o lancamento original (mesmo `NOT EXISTS` de `estornado_de` de
+  `SQL_PENDENTES_RECEBIMENTO`) — sem essa ultima parte, o aviso nunca sumiria mesmo
+  depois de corrigido. `<TransferenciasRecusadas>` (espelho de
+  `<TransferenciasChegando>`, mas nas telas de quem envia) mostra isso; a acao e usar o
+  botao **Estornar que ja existe** no lancamento original (ja exige justificativa, ja
+  auditado) — nao ha um botao "corrigir" dedicado, de proposito, pra nao duplicar
+  logica de correcao ja existente.
+- `situacaoInfo` (`src/lib/situacao.ts`) ganhou um badge "RECUSADO" (`motivo ===
+  'recusado' && recebido_de_armazem_codigo`), mesma cor de aviso de `.badge-parcial` —
+  aparece na propria lista de lancamentos do dia de quem recusou, ja que a entrada de
+  recusa e um lancamento normal como qualquer outro.
+
+### Bug do `numero_pedido`/`observacoes` perdidos (v2.1.1/v2.1.2)
+
 `db::sync::ler_config_turso`/`movimentos_pendentes`/`marcar_sincronizado` e a logica pura
 de parsing (`linha_para_transferencia`) sao cobertas por teste automatizado. As strings
 SQL usadas contra o Turso (`SQL_UPSERT`, `SQL_PENDENTES_RECEBIMENTO`,
 `SQL_BUSCAR_TRANSFERENCIA_POR_CHAVE`) tambem sao testadas — SQLite generico, nada
 especifico de libsql, entao rodam contra um `rusqlite` em memoria dentro de
-`db::sync::tests` sem precisar de conta Turso real (foi assim que se pegou o bug do
-`numero_pedido` perdido na v2.1.1 — SELECT esquecendo uma coluna que so um teste que
-roda o SQL de verdade pega). O que so pode ser validado de ponta a ponta e a camada de
+`db::sync::tests` sem precisar de conta Turso real. Foi assim que se pegou dois bugs
+reais da mesma classe: `numero_pedido` (v2.1.1) e depois `observacoes` do movimento
+(v2.1.2) — os dois eram gravados certinho no envio, mas `SQL_PENDENTES_RECEBIMENTO`/
+`SQL_BUSCAR_TRANSFERENCIA_POR_CHAVE` esqueciam de selecionar a coluna, entao quem
+recebia nunca via o dado (nem no `numero_pedido` do pedido, nem nas instrucoes
+importantes que quem envia as vezes escreve em Observacoes) — so um teste que roda o
+SQL de verdade pega esse tipo de erro. `confirmar_recebimento` tambem passou a anexar
+a observacao original na entrada confirmada (`"Recebido de X. Observacao de quem
+enviou: ..."`), pra ela sobreviver no historico de quem recebeu, nao so ficar visivel
+enquanto a transferencia estava pendente. O que so pode ser validado de ponta a ponta e a camada de
 rede/autenticacao em si (`Builder::new_remote`, HTTP, credenciais) — `tests/
 sync_turso_real_test.rs` cobre isso, `#[ignore]` por padrao (a CI nunca toca rede),
 rodado manualmente contra um banco Turso descartavel:

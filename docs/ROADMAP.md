@@ -1140,40 +1140,67 @@ v2.1.1. Rodado manualmente uma vez contra o banco de teste, passou. Detalhes de 
 gerar um token novo em `docs/ARQUITETURA.md`. Essa infra e a base pra validar a
 proxima feature (recusa de recebimento) sem tocar no Turso de producao.
 
-## Proxima sprint (planejada) — Recusa de recebimento entre armazens
+## Versao 2.1.2 — Recusa de recebimento + observacoes perdida na transferencia (Feito)
 
-Pedido do usuario: alem de "Confirmar recebimento", o armazem que recebe poder
+Duas frentes na mesma sessao: a feature planejada de recusa de recebimento (design
+abaixo, ajustado durante a implementacao), e um segundo bug real reportado pelo
+usuario no meio do trabalho — mesma classe do `numero_pedido` da v2.1.1.
+
+**Recusa de recebimento**: alem de "Confirmar recebimento", o armazem que recebe pode
 "Recusar recebimento" (peca/caixa errada, avariada, etc.) com justificativa
-obrigatoria — e isso deveria voltar um aviso automatico pro armazem que enviou, sem
-esperar que alguem descubra sozinho olhando o Historico.
+obrigatoria, e isso avisa automaticamente o armazem que enviou. Reaproveita ao maximo
+o mecanismo ja existente, sem tabela nova nem mudanca de schema:
 
-Desenho proposto (reaproveitando o maximo do mecanismo ja existente, sem tabela nova
-nem mudanca de schema):
+- `domain::movimentos::recusar_recebimento` — diferente do design original planejado
+  (`status = 'recusado'`), a implementacao usa `motivo = MOTIVO_RECUSA_RECEBIMENTO`
+  ("recusado") como sentinela: `criar_movimento` grava `status` como um literal SQL
+  fixo ('aberto'), entao mudar isso exigiria adicionar um campo `status` opcional a
+  `NovoMovimento` e tocar as ~19 construcoes de struct existentes (testes, exemplos,
+  `sync_commands.rs`) so pra um valor que ja tem outro lugar livre pra viver.
+  `motivo` ja e pulado pela validacao de SAC quando `recebido_de_armazem_codigo` esta
+  preenchido (mesma regra que ja existia pra `confirmar_recebimento`), entao nunca
+  colide com um motivo real — zero call sites existentes precisaram mudar. Passa pelo
+  `criar_movimento` normal (cadeia de hash, checagem de dia fechado, autorizacao) —
+  ao contrario do estorno, que bypassa a trava de dia fechado de proposito (corrige o
+  passado), uma recusa e um evento novo acontecendo hoje, entao nao ganha esse passe
+  livre (testado: `recusar_recebimento_respeita_dia_fechado`).
+- `SQL_PENDENTES_RECEBIMENTO` nao precisou mudar — o `NOT EXISTS` que ja existia
+  (`recebido_de_armazem_codigo`/`recebido_de_id_origem`) nao olha pro `status`/`motivo`,
+  entao uma recusa ja some da lista de pendentes de quem recebeu de graca.
+- `db::sync::SQL_MINHAS_TRANSFERENCIAS_RECUSADAS`/`buscar_minhas_transferencias_recusadas`
+  — consulta espelhada pro lado de quem enviou, com o mesmo `NOT EXISTS` de
+  `estornado_de` pra sumir sozinha quando o lancamento original e corrigido.
+  `<TransferenciasRecusadas>` (espelho de `<TransferenciasChegando>`, nas telas de
+  quem envia) mostra o aviso; a correcao usa o botao **Estornar que ja existe**, sem
+  botao dedicado novo, de proposito.
+- `<TransferenciasChegando>` ganhou o botao "Recusar recebimento" com um formulario
+  inline (motivo obrigatorio) ao lado do "Confirmar recebimento" existente.
+  `situacaoInfo` ganhou o badge "RECUSADO" (mesma cor de `.badge-parcial`).
+- Validado contra `ecoviva-armazem-teste` (Sprint 8) via
+  `tests/sync_turso_real_test.rs::recusa_de_recebimento_aparece_para_quem_enviou_contra_turso_real`
+  — envio + recusa fabricados, busca confirmada do lado de quem enviou.
 
-- Novo `status = 'recusado'` em `movimentos` (a coluna ja aceita qualquer texto, sem
-  `CHECK` — mesmo padrao ja usado por `status = 'estorno'` em `estornar_movimento`).
-  Gravado como uma linha nova no armazem que recebe, ligada a transferencia original
-  via `recebido_de_armazem_codigo`/`recebido_de_id_origem` — os mesmos campos que
-  `confirmar_recebimento` ja usa. `observacoes` (obrigatorio) guarda o motivo da
-  recusa, mesmo padrao ja usado em toda parte pro caso `outro`.
-- `SQL_PENDENTES_RECEBIMENTO` **nao precisa mudar** — o `NOT EXISTS` que ja existe la
-  (`recebido_de_armazem_codigo`/`recebido_de_id_origem`) nao olha pro `status`, entao
-  uma recusa ja some da lista de pendentes de quem recebeu, de graca.
-- Nova consulta espelhada (`SQL_MINHAS_TRANSFERENCIAS_RECUSADAS` ou nome parecido) pro
-  lado de quem enviou: `movimentos_consolidados` onde `recebido_de_armazem_codigo` =
-  meu codigo E `status = 'recusado'` E ainda nao estornei o lancamento original (mesmo
-  `NOT EXISTS` de `estornado_de` que ja existe). Sem essa segunda parte, o aviso nunca
-  some.
-- Novo componente no frontend (espelho do `<TransferenciasChegando>`, ex.
-  `<TransferenciasRecusadas>`) nas telas de quem envia, mostrando "Fulano recusou seu
-  envio de tal dia: motivo X" — a acao natural e usar o botao **Estornar que ja
-  existe** no lancamento original, que ja exige justificativa e ja e auditado; assim
-  que estornar, o aviso some sozinho (via o `NOT EXISTS` acima).
-- Botao "Recusar recebimento" ao lado do "Confirmar recebimento" existente em
-  `<TransferenciasChegando>`, com campo de motivo obrigatorio.
+**Bug real achado no meio do trabalho** (reportado pelo usuario, mesma classe do
+`numero_pedido` da v2.1.1): a `observacoes` do movimento (nao a do item) tambem nao
+era selecionada por `SQL_PENDENTES_RECEBIMENTO`/`SQL_BUSCAR_TRANSFERENCIA_POR_CHAVE` —
+instrucoes/detalhes importantes que quem envia escreve nesse campo nunca chegavam pra
+quem recebe decidir se confirma ou recusa. Corrigido nas duas queries + struct
+`TransferenciaPendente`, com um teste de regressao no mesmo padrao dos testes de
+`numero_pedido` (`sql_pendentes_recebimento_traz_observacoes_do_envio`) e cobertura
+contra Turso real (`numero_pedido_e_itens_sobrevivem_ao_ciclo_completo_contra_turso_real`
+estendido). `<TransferenciasChegando>` ganhou uma coluna "Observacoes" destacada
+(cor de aviso) e passou a mostrar tambem a observacao de cada item
+(`it.observacao`, ja chegava no `itens_json` mas nunca era renderizada). Bonus:
+`confirmar_recebimento` agora anexa a observacao original na entrada confirmada
+("Recebido de X. Observacao de quem enviou: ..."), pra ela sobreviver no historico de
+quem recebeu, nao so ficar visivel enquanto a transferencia estava pendente.
 
-Validar com `tests/sync_turso_real_test.rs` (Sprint 8) contra `ecoviva-armazem-teste`
-antes de considerar pronto pra instalar nos PCs reais.
+**Verificado**: 144 testes Rust (140 -> 144), clippy/fmt/tsc/vite build limpos, os dois
+testes `#[ignore]` de `tests/sync_turso_real_test.rs` rodados contra
+`ecoviva-armazem-teste` (Sprint 8) e passando de verdade, incluindo rodar duas vezes
+seguidas pra confirmar idempotencia.
+
+Bump de `2.1.1` pra `2.1.2` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
 
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 

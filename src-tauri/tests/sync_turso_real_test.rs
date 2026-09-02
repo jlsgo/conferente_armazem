@@ -19,7 +19,8 @@
 //! `(armazem_codigo, id_origem)`) e nao precisa de limpeza entre execucoes.
 
 use app_lib::db::sync::{
-    buscar_pendentes_recebimento, buscar_transferencia, enviar_para_turso, LinhaPendente,
+    buscar_minhas_transferencias_recusadas, buscar_pendentes_recebimento, buscar_transferencia,
+    enviar_para_turso, LinhaPendente,
 };
 use app_lib::domain::movimentos::{Movimento, MovimentoItem};
 
@@ -32,7 +33,7 @@ fn credenciais_de_teste() -> Option<(String, String)> {
 fn linha_pendente_de_teste() -> LinhaPendente {
     LinhaPendente {
         movimento: Movimento {
-            id: 999_001,
+            id: 999_101,
             numero: 0,
             armazem_id: 1,
             armazem_destino_id: None,
@@ -49,7 +50,7 @@ fn linha_pendente_de_teste() -> LinhaPendente {
             quem_retirou: None,
             motivo: None,
             valor_centavos: None,
-            observacoes: None,
+            observacoes: Some("Caixa fragil, nao empilhar (teste e2e)".into()),
             status: "aberto".into(),
             estornado_de: None,
             recebido_de_armazem_codigo: None,
@@ -74,6 +75,65 @@ fn linha_pendente_de_teste() -> LinhaPendente {
     }
 }
 
+/// O envio original (999_003) e a recusa correspondente (999_004,
+/// `motivo = "recusado"`, `recebido_de_*` apontando pra 999_003) - o que
+/// `recusar_recebimento` gravaria do lado de quem recusou. IDs proprios,
+/// separados dos usados por `linha_pendente_de_teste` (999_101): os testes
+/// deste arquivo compartilham um banco Turso persistente entre execucoes
+/// (nao um SQLite em memoria descartado a cada teste), entao uma recusa
+/// referenciando o id de outro teste faria aquele id "desaparecer" da lista
+/// de pendentes dele (o `NOT EXISTS` de `SQL_PENDENTES_RECEBIMENTO` correto
+/// fazendo exatamente o que devia) e quebraria o outro teste por acidente.
+fn linhas_recusa_de_teste() -> (LinhaPendente, LinhaPendente) {
+    let mut envio = linha_pendente_de_teste();
+    envio.movimento.id = 999_003;
+
+    let recusa = LinhaPendente {
+        movimento: Movimento {
+            id: 999_004,
+            numero: 0,
+            armazem_id: 1,
+            armazem_destino_id: None,
+            fluxo: "peca_montagem".into(),
+            tipo: "entrada".into(),
+            data: "2026-09-02".into(),
+            hora: "10:05".into(),
+            turno: "diurno".into(),
+            usuario_id: 1,
+            usuario_nome: "Teste E2E".into(),
+            numero_pedido: Some("PEDIDO-E2E-1".into()),
+            codigo_rastreio: None,
+            contraparte: None,
+            quem_retirou: None,
+            motivo: Some("recusado".into()),
+            valor_centavos: None,
+            observacoes: Some("RECUSADO - capacete errado (teste e2e)".into()),
+            status: "aberto".into(),
+            estornado_de: None,
+            recebido_de_armazem_codigo: Some("B2".into()),
+            recebido_de_id_origem: Some(999_003),
+            retirada_completa: true,
+            hash_integridade: "hash-de-teste-recusa".into(),
+            itens: Vec::new(),
+        },
+        armazem_codigo: "A4".into(),
+        armazem_destino_codigo: None,
+        itens: vec![MovimentoItem {
+            id: 0,
+            categoria: "peca".into(),
+            descricao: Some("CAPACETE PRETO (teste e2e)".into()),
+            montagem: None,
+            condicao: Some("boa".into()),
+            quantidade: 3,
+            observacao: None,
+            quantidade_enviada: Some(3),
+            codigo_componente: None,
+        }],
+    };
+
+    (envio, recusa)
+}
+
 /// Envia uma transferencia fabricada, busca ela de volta pela lista de
 /// pendentes e pela chave exata, e confere que tudo (numero_pedido incluido -
 /// o campo que motivou este teste existir) sobrevive ao ciclo completo contra
@@ -92,7 +152,7 @@ async fn numero_pedido_e_itens_sobrevivem_ao_ciclo_completo_contra_turso_real() 
     let resultado = enviar_para_turso(&url, &token, &[linha], "2026-09-02 10:00:00")
         .await
         .expect("enviar_para_turso nao deveria falhar com credenciais validas");
-    assert_eq!(resultado.enviados, vec![999_001]);
+    assert_eq!(resultado.enviados, vec![999_101]);
     assert!(resultado.falhas.is_empty());
 
     let pendentes = buscar_pendentes_recebimento(&url, &token, "A4")
@@ -100,15 +160,63 @@ async fn numero_pedido_e_itens_sobrevivem_ao_ciclo_completo_contra_turso_real() 
         .expect("buscar_pendentes_recebimento nao deveria falhar");
     let transferencia = pendentes
         .iter()
-        .find(|t| t.armazem_origem_codigo == "B2" && t.id_origem == 999_001)
+        .find(|t| t.armazem_origem_codigo == "B2" && t.id_origem == 999_101)
         .expect("a transferencia de teste deveria aparecer na lista de pendentes");
     assert_eq!(transferencia.numero_pedido.as_deref(), Some("PEDIDO-E2E-1"));
+    assert_eq!(
+        transferencia.observacoes.as_deref(),
+        Some("Caixa fragil, nao empilhar (teste e2e)")
+    );
     assert_eq!(transferencia.itens.len(), 1);
     assert_eq!(transferencia.itens[0].quantidade, 3);
 
-    let por_chave = buscar_transferencia(&url, &token, "B2", 999_001)
+    let por_chave = buscar_transferencia(&url, &token, "B2", 999_101)
         .await
         .expect("buscar_transferencia nao deveria falhar")
         .expect("a transferencia deveria ser encontrada pela chave");
     assert_eq!(por_chave.numero_pedido.as_deref(), Some("PEDIDO-E2E-1"));
+    assert_eq!(
+        por_chave.observacoes.as_deref(),
+        Some("Caixa fragil, nao empilhar (teste e2e)")
+    );
+}
+
+/// Envia uma transferencia e a recusa correspondente (fabricada, mesma forma
+/// que `recusar_recebimento` gravaria), e confere que
+/// `buscar_minhas_transferencias_recusadas` traz o aviso pro lado de quem
+/// enviou - o caminho novo da feature de recusa de recebimento.
+#[tokio::test]
+#[ignore = "precisa de TURSO_TESTE_URL/TURSO_TESTE_TOKEN - ver o modulo doc"]
+async fn recusa_de_recebimento_aparece_para_quem_enviou_contra_turso_real() {
+    let Some((url, token)) = credenciais_de_teste() else {
+        panic!(
+            "defina TURSO_TESTE_URL e TURSO_TESTE_TOKEN (banco Turso descartavel, \
+             nunca o de producao) - ver o comentario no topo deste arquivo"
+        );
+    };
+
+    let (envio, recusa) = linhas_recusa_de_teste();
+    let resultado = enviar_para_turso(&url, &token, &[envio, recusa], "2026-09-02 10:05:00")
+        .await
+        .expect("enviar_para_turso nao deveria falhar com credenciais validas");
+    assert_eq!(resultado.enviados, vec![999_003, 999_004]);
+    assert!(resultado.falhas.is_empty());
+
+    let recusadas = buscar_minhas_transferencias_recusadas(&url, &token, "B2")
+        .await
+        .expect("buscar_minhas_transferencias_recusadas nao deveria falhar");
+    let recusa_encontrada = recusadas
+        .iter()
+        .find(|t| t.meu_movimento_id == 999_003)
+        .expect("a recusa de teste deveria aparecer pra quem enviou (B2)");
+    assert_eq!(recusa_encontrada.armazem_que_recusou_codigo, "A4");
+    assert_eq!(
+        recusa_encontrada.numero_pedido.as_deref(),
+        Some("PEDIDO-E2E-1")
+    );
+    assert_eq!(
+        recusa_encontrada.justificativa.as_deref(),
+        Some("RECUSADO - capacete errado (teste e2e)")
+    );
+    assert_eq!(recusa_encontrada.itens.len(), 1);
 }

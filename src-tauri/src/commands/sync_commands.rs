@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection, OptionalExtension};
 use tauri::{Manager, State};
 
-use crate::db::sync::{self, StatusSincronizacao, TransferenciaPendente};
+use crate::db::sync::{self, StatusSincronizacao, TransferenciaPendente, TransferenciaRecusada};
 use crate::domain::auth::buscar_usuario_ativo;
 use crate::domain::errors::{AppError, AppResult};
 use crate::domain::movimentos::{self, validar_quantidades_recebidas, Movimento, NovoMovimento};
@@ -193,6 +193,17 @@ pub async fn confirmar_recebimento(
     let itens = validar_quantidades_recebidas(&transferencia.itens, &quantidades_recebidas)?;
     let fluxo = transferencia.fluxo.clone();
     let numero_pedido = transferencia.numero_pedido.clone();
+    // A observacao que quem enviou escreveu no movimento original nao pode
+    // se perder na confirmacao - ficava so visivel enquanto a transferencia
+    // estava pendente (`TransferenciasChegando`), sumindo do registro depois
+    // de confirmado. Anexada aqui, ela sobrevive no historico/fechamento de
+    // quem recebeu tambem.
+    let observacoes = match transferencia.observacoes.as_deref() {
+        Some(nota) if !nota.trim().is_empty() => format!(
+            "Recebido de {origem_armazem_codigo} (envio #{origem_id}). Observacao de quem enviou: {nota}"
+        ),
+        _ => format!("Recebido de {origem_armazem_codigo} (envio #{origem_id})"),
+    };
 
     let movimento_confirmado = {
         let mut conn = state.conn()?;
@@ -214,9 +225,7 @@ pub async fn confirmar_recebimento(
                 quem_retirou: None,
                 motivo: None,
                 valor_centavos: None,
-                observacoes: Some(format!(
-                    "Recebido de {origem_armazem_codigo} (envio #{origem_id})"
-                )),
+                observacoes: Some(observacoes),
                 recebido_de_armazem_codigo: Some(origem_armazem_codigo),
                 recebido_de_id_origem: Some(origem_id),
                 retirada_completa: true,
@@ -249,4 +258,136 @@ pub async fn confirmar_recebimento(
     }
 
     Ok(movimento_confirmado)
+}
+
+/// Recusa o recebimento de uma transferencia vinda do outro armazem (peca
+/// errada, avariada, etc.) em vez de confirmar - busca de novo a linha certa
+/// no Turso (mesma checagem de endereçamento de `confirmar_recebimento`,
+/// nunca confia no frontend), registra localmente uma entrada marcada como
+/// recusa (`domain::movimentos::recusar_recebimento`) e sincroniza so esse
+/// lancamento de volta pro Turso na hora, igual `confirmar_recebimento`.
+/// Qualquer usuario logado do armazem de destino pode recusar (mesma regra
+/// de quem pode confirmar).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn recusar_recebimento(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    origem_armazem_codigo: String,
+    origem_id: i64,
+    hora: String,
+    motivo: String,
+) -> AppResult<Movimento> {
+    let usuario_id = state.usuario_logado()?;
+
+    let (armazem_id, meu_armazem_codigo) = {
+        let conn = state.conn()?;
+        let usuario = buscar_usuario_ativo(&conn, usuario_id)?;
+        let armazem_id = usuario.armazem_id.ok_or_else(|| {
+            AppError::Validation("Seu usuario nao esta associado a um armazem.".into())
+        })?;
+        let codigo = armazem_codigo_do_usuario(&conn, Some(armazem_id))?
+            .ok_or_else(|| AppError::Validation("Armazem do usuario nao encontrado.".into()))?;
+        (armazem_id, codigo)
+    };
+
+    let diretorio_dados = app.path().app_data_dir().map_err(|e| {
+        AppError::Interno(format!("Nao foi possivel localizar a pasta de dados: {e}"))
+    })?;
+    let Some((url, token)) = sync::ler_config_turso(&diretorio_dados) else {
+        return Err(AppError::Validation(
+            "Sincronizacao nao configurada nesta maquina.".into(),
+        ));
+    };
+
+    let transferencia = sync::buscar_transferencia(&url, &token, &origem_armazem_codigo, origem_id)
+        .await?
+        .ok_or_else(|| {
+            AppError::Validation(
+                "Essa transferencia nao foi encontrada (ja pode ter sido confirmada ou recusada por outra pessoa).".into(),
+            )
+        })?;
+
+    // Nunca confia que o comando foi chamado com a chave certa so porque o
+    // frontend mandou - confere que a transferencia buscada de fato estava
+    // endereçada ao armazem de quem esta recusando.
+    if transferencia.armazem_destino_codigo.as_deref() != Some(meu_armazem_codigo.as_str()) {
+        return Err(AppError::Validation(
+            "Essa transferencia nao esta endereçada ao seu armazem.".into(),
+        ));
+    }
+
+    let movimento_recusado = {
+        let mut conn = state.conn()?;
+        let data: String = conn.query_row("SELECT date('now')", [], |r| r.get(0))?;
+        movimentos::recusar_recebimento(
+            &mut conn,
+            armazem_id,
+            usuario_id,
+            transferencia.fluxo.clone(),
+            data,
+            hora,
+            transferencia.numero_pedido.clone(),
+            &motivo,
+            origem_armazem_codigo,
+            origem_id,
+            &transferencia.itens,
+        )?
+    };
+
+    // Sincroniza na hora (mesma logica de `confirmar_recebimento`) pra que
+    // quem enviou veja o aviso de recusa sem esperar o proximo sync
+    // automatico - nao trata falha aqui como erro da recusa em si, que ja
+    // aconteceu localmente com sucesso: so avisa no log e o proximo sync
+    // tenta de novo.
+    let (pendentes, agora_local) = {
+        let conn = state.conn()?;
+        (
+            sync::movimentos_pendentes(&conn)?,
+            sync::agora_local(&conn)?,
+        )
+    };
+    match sync::enviar_para_turso(&url, &token, &pendentes, &agora_local).await {
+        Ok(resultado) => {
+            let conn = state.conn()?;
+            sync::marcar_sincronizado(&conn, &resultado.enviados)?;
+            sync::marcar_falha_sincronizacao(&conn, &resultado.falhas)?;
+        }
+        Err(e) => log::warn!(
+            "Recusa de recebimento #{} salva localmente, mas falhou ao sincronizar agora: {e}",
+            movimento_recusado.id
+        ),
+    }
+
+    Ok(movimento_recusado)
+}
+
+/// Busca no Turso as transferencias que o armazem do usuario logado enviou e
+/// que foram recusadas do outro lado, e cujo lancamento original aqui ainda
+/// nao foi estornado - ver `db::sync::TransferenciaRecusada`. Mesmo padrao de
+/// `buscar_transferencias_pendentes`: nunca falha por sincronizacao nao
+/// configurada, so devolve lista vazia.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn buscar_transferencias_recusadas(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<TransferenciaRecusada>> {
+    let usuario_id = state.usuario_logado()?;
+
+    let meu_armazem_codigo = {
+        let conn = state.conn()?;
+        let usuario = buscar_usuario_ativo(&conn, usuario_id)?;
+        armazem_codigo_do_usuario(&conn, usuario.armazem_id)?
+    };
+    let Some(meu_armazem_codigo) = meu_armazem_codigo else {
+        return Ok(Vec::new());
+    };
+
+    let diretorio_dados = app.path().app_data_dir().map_err(|e| {
+        AppError::Interno(format!("Nao foi possivel localizar a pasta de dados: {e}"))
+    })?;
+    let Some((url, token)) = sync::ler_config_turso(&diretorio_dados) else {
+        return Ok(Vec::new());
+    };
+
+    sync::buscar_minhas_transferencias_recusadas(&url, &token, &meu_armazem_codigo).await
 }

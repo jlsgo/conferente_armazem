@@ -1,11 +1,19 @@
 import type { Armazem, Movimento } from '../types';
 
 /** Texto e classe CSS do badge de situacao, usado em toda tabela/impressao de movimentos. */
-export function situacaoInfo(m: Pick<Movimento, 'tipo' | 'estornado_de'>): {
+export function situacaoInfo(
+  m: Pick<Movimento, 'tipo' | 'estornado_de' | 'motivo' | 'recebido_de_armazem_codigo'>
+): {
   texto: string;
   classe: string;
 } {
   if (m.estornado_de) return { texto: 'ESTORNO', classe: 'badge badge-estorno' };
+  // Sentinela gravado por `recusar_recebimento` (ver MOTIVO_RECUSA_RECEBIMENTO
+  // no backend) - so faz sentido junto com `recebido_de_armazem_codigo`
+  // preenchido, entao nunca colide com um motivo de SAC de verdade.
+  if (m.motivo === 'recusado' && m.recebido_de_armazem_codigo) {
+    return { texto: 'RECUSADO', classe: 'badge badge-recusado' };
+  }
   if (m.tipo === 'saida') return { texto: 'BAIXA', classe: 'badge badge-saida' };
   return { texto: 'ENTRADA', classe: 'badge badge-entrada' };
 }

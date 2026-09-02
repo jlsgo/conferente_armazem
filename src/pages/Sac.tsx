@@ -11,6 +11,7 @@ import {
 import FechamentoImpressao from '../components/FechamentoImpressao';
 import Carregando from '../components/Carregando';
 import TransferenciasChegando from '../components/TransferenciasChegando';
+import TransferenciasRecusadas from '../components/TransferenciasRecusadas';
 import ResumoDoDia from '../components/ResumoDoDia';
 import { colunaColeta, motivoSacTexto, situacaoInfo } from '../lib/situacao';
 import { formatarData } from '../lib/data';
@@ -330,6 +331,7 @@ export default function Sac({ usuario, armazem, armazens, onTransferenciaConfirm
           onTransferenciaConfirmada?.();
         }}
       />
+      <TransferenciasRecusadas fluxo="sac" outroArmazem={outroArmazem} />
 
       <section className="cartao">
         <h2>Registrar atendimento SAC</h2>

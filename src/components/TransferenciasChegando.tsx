@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Armazem, Fluxo, TransferenciaPendente } from '../types';
-import { buscarTransferenciasPendentes, confirmarRecebimento } from '../lib/api';
+import { buscarTransferenciasPendentes, confirmarRecebimento, recusarRecebimento } from '../lib/api';
 import { formatarData } from '../lib/data';
 import { useToast } from '../lib/toast';
 
@@ -34,6 +34,9 @@ export default function TransferenciasChegando({ fluxo, outroArmazem, onConfirma
   const [erro, setErro] = useState('');
   const [confirmando, setConfirmando] = useState<string | null>(null);
   const [quantidadesRecebidas, setQuantidadesRecebidas] = useState<Record<string, number[]>>({});
+  const [recusandoChave, setRecusandoChave] = useState<string | null>(null);
+  const [motivosRecusa, setMotivosRecusa] = useState<Record<string, string>>({});
+  const [enviandoRecusa, setEnviandoRecusa] = useState<string | null>(null);
   const { notificar } = useToast();
 
   async function carregar() {
@@ -103,6 +106,35 @@ export default function TransferenciasChegando({ fluxo, outroArmazem, onConfirma
     onConfirmado();
   }
 
+  async function handleRecusar(t: TransferenciaPendente) {
+    const chave = chaveTransferencia(t);
+    const motivo = (motivosRecusa[chave] ?? '').trim();
+    if (!motivo) {
+      notificar('Informe o motivo da recusa.', 'erro');
+      return;
+    }
+    setEnviandoRecusa(chave);
+    const resultado = await recusarRecebimento(t.armazem_origem_codigo, t.id_origem, horaAtual(), motivo);
+    setEnviandoRecusa(null);
+
+    if (!resultado.ok) {
+      notificar(resultado.error ?? 'Nao foi possivel recusar o recebimento.', 'erro');
+      return;
+    }
+
+    setRecusandoChave(null);
+    setMotivosRecusa((atual) => {
+      const { [chave]: _removido, ...resto } = atual;
+      return resto;
+    });
+    notificar(
+      `Recusa registrada. Avise o armazem que enviou - o aviso tambem vai aparecer la.`,
+      'sucesso'
+    );
+    await carregar();
+    onConfirmado();
+  }
+
   if (erro) {
     return (
       <section className="cartao somente-tela">
@@ -129,6 +161,7 @@ export default function TransferenciasChegando({ fluxo, outroArmazem, onConfirma
             <tr>
               <th>Data do envio</th>
               <th>Pedido</th>
+              <th>Observacoes</th>
               <th>Itens (enviado / recebido)</th>
               <th className="somente-tela">Acoes</th>
             </tr>
@@ -143,6 +176,24 @@ export default function TransferenciasChegando({ fluxo, outroArmazem, onConfirma
                   </td>
                   <td>{t.numero_pedido ?? '-'}</td>
                   <td>
+                    {t.observacoes ? (
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          background: 'var(--aviso-claro)',
+                          color: 'var(--aviso-escuro)',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {t.observacoes}
+                      </span>
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                  <td>
                     {t.itens.map((it, indice) => (
                       <div
                         key={indice}
@@ -150,7 +201,8 @@ export default function TransferenciasChegando({ fluxo, outroArmazem, onConfirma
                       >
                         <span>
                           {it.categoria}
-                          {it.descricao ? ` (${it.descricao})` : ''} - enviado {it.quantidade}:
+                          {it.descricao ? ` (${it.descricao})` : ''} - enviado {it.quantidade}
+                          {it.observacao ? ` (obs: ${it.observacao})` : ''}:
                         </span>
                         <input
                           type="number"
@@ -171,13 +223,54 @@ export default function TransferenciasChegando({ fluxo, outroArmazem, onConfirma
                     ))}
                   </td>
                   <td className="somente-tela">
-                    <button
-                      type="button"
-                      onClick={() => handleConfirmar(t)}
-                      disabled={confirmando === chave}
-                    >
-                      {confirmando === chave ? 'Confirmando...' : 'Confirmar recebimento'}
-                    </button>
+                    {recusandoChave === chave ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 220 }}>
+                        <textarea
+                          rows={2}
+                          placeholder="Motivo da recusa (obrigatorio)"
+                          aria-label="Motivo da recusa"
+                          value={motivosRecusa[chave] ?? ''}
+                          onChange={(e) =>
+                            setMotivosRecusa((atual) => ({ ...atual, [chave]: e.target.value }))
+                          }
+                          style={{ width: '100%' }}
+                        />
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button
+                            type="button"
+                            onClick={() => handleRecusar(t)}
+                            disabled={enviandoRecusa === chave}
+                          >
+                            {enviandoRecusa === chave ? 'Enviando...' : 'Confirmar recusa'}
+                          </button>
+                          <button
+                            type="button"
+                            className="secundario"
+                            onClick={() => setRecusandoChave(null)}
+                            disabled={enviandoRecusa === chave}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <button
+                          type="button"
+                          onClick={() => handleConfirmar(t)}
+                          disabled={confirmando === chave}
+                        >
+                          {confirmando === chave ? 'Confirmando...' : 'Confirmar recebimento'}
+                        </button>
+                        <button
+                          type="button"
+                          className="secundario"
+                          onClick={() => setRecusandoChave(chave)}
+                        >
+                          Recusar recebimento
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               );

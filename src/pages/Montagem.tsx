@@ -21,6 +21,7 @@ import {
 import FechamentoImpressao from '../components/FechamentoImpressao';
 import Carregando from '../components/Carregando';
 import TransferenciasChegando from '../components/TransferenciasChegando';
+import TransferenciasRecusadas from '../components/TransferenciasRecusadas';
 import ResumoDoDia from '../components/ResumoDoDia';
 import { situacaoInfo } from '../lib/situacao';
 import { formatarData } from '../lib/data';
@@ -356,6 +357,7 @@ export default function Montagem({ usuario, armazem, armazens, onTransferenciaCo
           onTransferenciaConfirmada?.();
         }}
       />
+      <TransferenciasRecusadas fluxo="peca_montagem" outroArmazem={outroArmazem} />
 
       <section className="cartao">
         <h2>Registrar {tipo === 'saida' ? 'saida' : 'entrada'} do galpao</h2>

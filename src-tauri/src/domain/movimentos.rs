@@ -23,6 +23,14 @@ const MOTIVOS_SAC_ENTRADA_VALIDOS: [&str; 3] = ["garantia", "venda", "outro"];
 const MOTIVOS_SAC_SAIDA_VALIDOS: [&str; 5] = ["entregue", "descarte", "garantia", "venda", "outro"];
 const TEXTO_LIVRE_MAX: usize = 500;
 const QUANTIDADE_MAX: i64 = 100_000;
+/// Sentinela interno gravado em `motivo` pra distinguir uma entrada de
+/// `recusar_recebimento` de uma confirmacao normal (`confirmar_recebimento`,
+/// que sempre manda `motivo: None`) - ver `recusar_recebimento`. So faz
+/// sentido junto com `recebido_de_armazem_codigo` preenchido, entao nunca
+/// colide com o motivo de verdade de uma entrada SAC normal (a validacao de
+/// motivo do SAC ja e pulada quando `recebido_de_armazem_codigo` esta
+/// preenchido - ver `validar_novo_movimento`).
+pub const MOTIVO_RECUSA_RECEBIMENTO: &str = "recusado";
 
 #[derive(Debug, Deserialize)]
 pub struct MovimentoItemInput {
@@ -343,6 +351,84 @@ pub fn validar_quantidades_recebidas(
             })
         })
         .collect()
+}
+
+/// Registra que o armazem que ia receber uma transferencia recusou o
+/// recebimento (peca errada, avariada, etc.) em vez de confirmar. Ao
+/// contrario de `confirmar_recebimento`, que aceita e cria uma entrada
+/// normal, aqui a entrada e marcada com `motivo = MOTIVO_RECUSA_RECEBIMENTO`,
+/// um sentinela interno, nao um motivo de SAC de verdade (ver o comentario
+/// na constante). A justificativa exigida do conferente fica em
+/// `observacoes`, mesmo padrao usado por `estornar_movimento`.
+///
+/// Passa pelo `criar_movimento` normal (cadeia de hash, checagem de dia
+/// fechado, autorizacao) — nao ha motivo pra uma recusa pular essas
+/// checagens, ao contrario do estorno (que corrige o passado e por isso
+/// bypassa a trava de dia fechado de proposito). `recebido_de_armazem_codigo`/
+/// `recebido_de_id_origem` ligam esta linha a transferencia original, os
+/// mesmos campos que `confirmar_recebimento` ja usa — isso basta pra a
+/// transferencia sumir da lista de pendentes de quem recebeu
+/// (`SQL_PENDENTES_RECEBIMENTO` nao olha pro `status`/`motivo`, so pra essa
+/// ligacao existir) e pra quem enviou enxergar a recusa (ver
+/// `db::sync::buscar_minhas_transferencias_recusadas`).
+#[allow(clippy::too_many_arguments)]
+pub fn recusar_recebimento(
+    conn: &mut Connection,
+    armazem_id: i64,
+    usuario_id: i64,
+    fluxo: String,
+    data: String,
+    hora: String,
+    numero_pedido: Option<String>,
+    justificativa: &str,
+    recebido_de_armazem_codigo: String,
+    recebido_de_id_origem: i64,
+    itens_recusados: &[MovimentoItem],
+) -> AppResult<Movimento> {
+    let justificativa = justificativa.trim();
+    if justificativa.is_empty() {
+        return Err(AppError::Validation("Informe o motivo da recusa.".into()));
+    }
+    validar_texto_livre("Motivo da recusa", Some(justificativa))?;
+
+    let itens = itens_recusados
+        .iter()
+        .map(|item| MovimentoItemInput {
+            categoria: item.categoria.clone(),
+            descricao: item.descricao.clone(),
+            montagem: item.montagem.clone(),
+            condicao: item.condicao.clone(),
+            quantidade: item.quantidade,
+            observacao: item.observacao.clone(),
+            quantidade_enviada: Some(item.quantidade),
+            codigo_componente: item.codigo_componente.clone(),
+        })
+        .collect();
+
+    criar_movimento(
+        conn,
+        NovoMovimento {
+            armazem_id,
+            armazem_destino_id: None,
+            fluxo,
+            tipo: "entrada".into(),
+            data,
+            hora,
+            turno: "diurno".into(),
+            usuario_id,
+            numero_pedido,
+            codigo_rastreio: None,
+            contraparte: None,
+            quem_retirou: None,
+            motivo: Some(MOTIVO_RECUSA_RECEBIMENTO.into()),
+            valor_centavos: None,
+            observacoes: Some(format!("RECUSADO - {justificativa}")),
+            recebido_de_armazem_codigo: Some(recebido_de_armazem_codigo),
+            recebido_de_id_origem: Some(recebido_de_id_origem),
+            retirada_completa: true,
+            itens,
+        },
+    )
 }
 
 fn buscar_armazem_ativo(conn: &Connection, armazem_id: i64) -> AppResult<()> {
@@ -2577,6 +2663,117 @@ mod tests {
     fn validar_quantidades_recebidas_rejeita_tamanho_diferente() {
         let enviados = vec![item_enviado(5), item_enviado(2)];
         let resultado = validar_quantidades_recebidas(&enviados, &[5]);
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn recusar_recebimento_exige_justificativa() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let resultado = recusar_recebimento(
+            &mut conn,
+            armazem_id,
+            usuario_id,
+            "peca_montagem".into(),
+            "2026-09-02".into(),
+            "10:00".into(),
+            None,
+            "   ",
+            "A4".into(),
+            7,
+            &[item_enviado(3)],
+        );
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn recusar_recebimento_grava_entrada_marcada_e_liga_a_transferencia_original() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let recusado = recusar_recebimento(
+            &mut conn,
+            armazem_id,
+            usuario_id,
+            "peca_montagem".into(),
+            "2026-09-02".into(),
+            "10:00".into(),
+            Some("1603".into()),
+            "Capacete errado, pedimos preto e veio branco",
+            "A4".into(),
+            7,
+            &[item_enviado(3)],
+        )
+        .unwrap();
+
+        assert_eq!(recusado.tipo, "entrada");
+        assert_eq!(recusado.status, "aberto");
+        assert_eq!(recusado.motivo.as_deref(), Some(MOTIVO_RECUSA_RECEBIMENTO));
+        assert_eq!(recusado.numero_pedido.as_deref(), Some("1603"));
+        assert_eq!(recusado.recebido_de_armazem_codigo.as_deref(), Some("A4"));
+        assert_eq!(recusado.recebido_de_id_origem, Some(7));
+        assert!(recusado
+            .observacoes
+            .as_deref()
+            .unwrap()
+            .contains("Capacete errado"));
+        assert_eq!(recusado.itens.len(), 1);
+        assert_eq!(recusado.itens[0].quantidade, 3);
+        assert_eq!(recusado.itens[0].quantidade_enviada, Some(3));
+    }
+
+    /// Ao contrario do estorno (que corrige o passado e por isso bypassa a
+    /// trava de dia fechado de proposito), uma recusa e um evento novo
+    /// acontecendo hoje - se o dia de hoje pra esse armazem/fluxo ja foi
+    /// fechado, `recusar_recebimento` deve falhar como qualquer outro
+    /// `criar_movimento`, nao ter um passe livre como o estorno tem.
+    #[test]
+    fn recusar_recebimento_respeita_dia_fechado() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let gestor_id = criar_gestor(&conn, Some(armazem_id));
+
+        // `fechar_dia` exige que exista pelo menos um lancamento no dia -
+        // fecha o dia de peca_montagem de hoje pra esse armazem primeiro.
+        let mut fechamento_base = movimento_base(
+            armazem_id,
+            usuario_id,
+            vec![MovimentoItemInput {
+                categoria: "peca".into(),
+                descricao: None,
+                montagem: None,
+                condicao: Some("boa".into()),
+                quantidade: 1,
+                observacao: None,
+                quantidade_enviada: None,
+                codigo_componente: None,
+            }],
+        );
+        fechamento_base.fluxo = "peca_montagem".into();
+        fechamento_base.data = "2026-09-02".into();
+        fechamento_base.numero_pedido = None;
+        fechamento_base.contraparte = None;
+        fechamento_base.quem_retirou = None;
+        criar_movimento(&mut conn, fechamento_base).unwrap();
+
+        crate::domain::fechamentos::fechar_dia(
+            &mut conn,
+            armazem_id,
+            "peca_montagem",
+            "2026-09-02",
+            gestor_id,
+        )
+        .unwrap();
+
+        let resultado = recusar_recebimento(
+            &mut conn,
+            armazem_id,
+            usuario_id,
+            "peca_montagem".into(),
+            "2026-09-02".into(),
+            "10:00".into(),
+            None,
+            "Peca avariada",
+            "A4".into(),
+            7,
+            &[item_enviado(3)],
+        );
         assert!(matches!(resultado, Err(AppError::Validation(_))));
     }
 

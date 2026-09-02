@@ -114,6 +114,22 @@ export interface TransferenciaPendente {
   hora: string;
   armazem_destino_codigo: string | null;
   numero_pedido: string | null;
+  observacoes: string | null;
+  itens: MovimentoItem[];
+}
+
+/** Uma transferencia que EU enviei e que o outro armazem recusou - ver
+ * `recusarRecebimento`/`buscarTransferenciasRecusadas`. `meu_movimento_id` e
+ * o id do MEU lancamento original (nao um id do Turso) - usado pra abrir e
+ * estornar ele na minha propria lista. */
+export interface TransferenciaRecusada {
+  armazem_que_recusou_codigo: string;
+  meu_movimento_id: number;
+  fluxo: Fluxo;
+  data: string;
+  hora: string;
+  numero_pedido: string | null;
+  justificativa: string | null;
   itens: MovimentoItem[];
 }
 

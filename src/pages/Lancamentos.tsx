@@ -12,6 +12,7 @@ import {
 import FechamentoImpressao from '../components/FechamentoImpressao';
 import Carregando from '../components/Carregando';
 import TransferenciasChegando from '../components/TransferenciasChegando';
+import TransferenciasRecusadas from '../components/TransferenciasRecusadas';
 import ResumoDoDia from '../components/ResumoDoDia';
 import { colunaColeta, situacaoInfo } from '../lib/situacao';
 import { formatarData } from '../lib/data';
@@ -358,6 +359,7 @@ export default function Lancamentos({ usuario, armazem, armazens, onTransferenci
           onTransferenciaConfirmada?.();
         }}
       />
+      <TransferenciasRecusadas fluxo="saida_armazem" outroArmazem={outroArmazem} />
 
       <section className="cartao">
         <h2>Registrar {tipo === 'saida' ? 'saida' : 'entrada'} do armazem</h2>

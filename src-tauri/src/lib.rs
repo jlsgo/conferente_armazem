@@ -84,6 +84,8 @@ pub fn run() {
             commands::sync_commands::status_sincronizacao,
             commands::sync_commands::buscar_transferencias_pendentes,
             commands::sync_commands::confirmar_recebimento,
+            commands::sync_commands::recusar_recebimento,
+            commands::sync_commands::buscar_transferencias_recusadas,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

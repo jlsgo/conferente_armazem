@@ -629,6 +629,11 @@ tbody tr:last-child td {
   color: var(--aviso-escuro);
 }
 
+.badge-recusado {
+  background: var(--aviso-claro);
+  color: var(--aviso-escuro);
+}
+
 /* Contador de transferencias pendentes de confirmacao nas abas do menu
    (Dashboard.tsx) - precisa chamar atencao (mesma cor de "aviso") pra nao
    passar despercebido, ja que antes so aparecia dentro da propria aba. */

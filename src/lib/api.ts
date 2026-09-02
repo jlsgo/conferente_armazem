@@ -12,6 +12,7 @@ import type {
   ResultadoHistorico,
   StatusSincronizacao,
   TransferenciaPendente,
+  TransferenciaRecusada,
   Usuario,
 } from '../types';
 
@@ -224,4 +225,34 @@ export async function confirmarRecebimento(
   } catch (err) {
     return { ok: false, error: erroParaTexto(err) };
   }
+}
+
+export interface RecusarRecebimentoResult extends OkResult {
+  movimento?: Movimento;
+}
+
+export async function recusarRecebimento(
+  origemArmazemCodigo: string,
+  origemId: number,
+  hora: string,
+  motivo: string
+): Promise<RecusarRecebimentoResult> {
+  try {
+    const movimento = await invoke<Movimento>('recusar_recebimento', {
+      origem_armazem_codigo: origemArmazemCodigo,
+      origem_id: origemId,
+      hora,
+      motivo,
+    });
+    return { ok: true, movimento };
+  } catch (err) {
+    return { ok: false, error: erroParaTexto(err) };
+  }
+}
+
+export function buscarTransferenciasRecusadas(): Promise<TransferenciaRecusada[]> {
+  // Mesmo padrao de buscarTransferenciasPendentes: "sem sync configurado" ja
+  // volta Ok([]) do lado do Rust, so chega aqui como rejeicao uma falha de
+  // verdade (rede/IPC).
+  return invoke<TransferenciaRecusada[]>('buscar_transferencias_recusadas');
 }
