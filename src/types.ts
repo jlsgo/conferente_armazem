@@ -113,6 +113,7 @@ export interface TransferenciaPendente {
   data: string;
   hora: string;
   armazem_destino_codigo: string | null;
+  numero_pedido: string | null;
   itens: MovimentoItem[];
 }
 

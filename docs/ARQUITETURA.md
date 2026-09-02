@@ -94,7 +94,7 @@ novos (`movimentos.sincronizado_em IS NULL`) para uma tabela consolidada
 nuvem, free tier), chaveada por `(armazem_codigo, id_origem)` — um upsert idempotente,
 seguro se a rede cair no meio do envio. Isso acontece:
 - **Automaticamente, em loop de segundo plano** (`lib.rs`, `tauri::async_runtime::spawn`
-  dentro de `.setup()`): tenta uma vez na abertura do app e depois a cada 5 minutos,
+  dentro de `.setup()`): tenta uma vez na abertura do app e depois a cada 1 minuto,
   pela vida inteira do processo, chamando `db::sync::tentar_sincronizar_uma_vez`. Isto
   **nao depende de sessao/login nem de papel** — roda igual com um conferente logado,
   com ninguem logado (tela de login), ou com um gestor — de proposito: antes, o retry

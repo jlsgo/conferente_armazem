@@ -456,6 +456,7 @@ pub struct TransferenciaPendente {
     /// transferencia buscada por chave realmente era endereçada a quem esta
     /// confirmando, nao so a quem sabia o `(armazem_codigo, id_origem)`.
     pub armazem_destino_codigo: Option<String>,
+    pub numero_pedido: Option<String>,
     pub itens: Vec<MovimentoItem>,
 }
 
@@ -467,6 +468,7 @@ fn linha_para_transferencia(
     data: String,
     hora: String,
     armazem_destino_codigo: Option<String>,
+    numero_pedido: Option<String>,
     itens_json: String,
 ) -> AppResult<TransferenciaPendente> {
     let itens: Vec<MovimentoItem> = serde_json::from_str(&itens_json).map_err(|e| {
@@ -481,12 +483,13 @@ fn linha_para_transferencia(
         data,
         hora,
         armazem_destino_codigo,
+        numero_pedido,
         itens,
     })
 }
 
 const SQL_PENDENTES_RECEBIMENTO: &str = "
-    SELECT armazem_codigo, id_origem, fluxo, data, hora, armazem_destino_codigo, itens_json
+    SELECT armazem_codigo, id_origem, fluxo, data, hora, armazem_destino_codigo, numero_pedido, itens_json
     FROM movimentos_consolidados m
     WHERE armazem_destino_codigo = ?1
       -- Fluxos que suportam transferencia fisica entre A4 e B2: veiculos
@@ -561,8 +564,11 @@ pub async fn buscar_pendentes_recebimento(
         let armazem_destino_codigo: Option<String> = row
             .get(5)
             .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
-        let itens_json: String = row
+        let numero_pedido: Option<String> = row
             .get(6)
+            .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
+        let itens_json: String = row
+            .get(7)
             .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
         resultado.push(linha_para_transferencia(
             armazem_origem_codigo,
@@ -571,6 +577,7 @@ pub async fn buscar_pendentes_recebimento(
             data,
             hora,
             armazem_destino_codigo,
+            numero_pedido,
             itens_json,
         )?);
     }
@@ -598,7 +605,7 @@ pub async fn buscar_transferencia(
 
     let mut rows = remoto
         .query(
-            "SELECT armazem_codigo, id_origem, fluxo, data, hora, armazem_destino_codigo, itens_json
+            "SELECT armazem_codigo, id_origem, fluxo, data, hora, armazem_destino_codigo, numero_pedido, itens_json
              FROM movimentos_consolidados WHERE armazem_codigo = ?1 AND id_origem = ?2",
             libsql::params![armazem_origem_codigo, id_origem],
         )
@@ -631,8 +638,11 @@ pub async fn buscar_transferencia(
     let armazem_destino_codigo: Option<String> = row
         .get(5)
         .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
-    let itens_json: String = row
+    let numero_pedido: Option<String> = row
         .get(6)
+        .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
+    let itens_json: String = row
+        .get(7)
         .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
 
     Ok(Some(linha_para_transferencia(
@@ -642,6 +652,7 @@ pub async fn buscar_transferencia(
         data,
         hora,
         armazem_destino_codigo,
+        numero_pedido,
         itens_json,
     )?))
 }
@@ -903,6 +914,7 @@ mod tests {
             "2026-08-25".into(),
             "09:00".into(),
             Some("A4".into()),
+            Some("1603".into()),
             itens_json,
         )
         .unwrap();
@@ -911,6 +923,7 @@ mod tests {
         assert_eq!(transferencia.id_origem, 42);
         assert_eq!(transferencia.fluxo, "peca_montagem");
         assert_eq!(transferencia.armazem_destino_codigo.as_deref(), Some("A4"));
+        assert_eq!(transferencia.numero_pedido.as_deref(), Some("1603"));
         assert_eq!(transferencia.itens.len(), 1);
         assert_eq!(transferencia.itens[0].quantidade, 3);
         assert_eq!(transferencia.itens[0].observacao.as_deref(), Some("SN-123"));
@@ -925,6 +938,7 @@ mod tests {
             "2026-08-25".into(),
             "10:00".into(),
             Some("B2".into()),
+            None,
             "[]".into(),
         )
         .unwrap();
@@ -941,6 +955,7 @@ mod tests {
             "2026-08-25".into(),
             "09:00".into(),
             Some("A4".into()),
+            None,
             "nao e json".into(),
         );
         assert!(resultado.is_err());

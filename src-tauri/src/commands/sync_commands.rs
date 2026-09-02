@@ -192,6 +192,7 @@ pub async fn confirmar_recebimento(
 
     let itens = validar_quantidades_recebidas(&transferencia.itens, &quantidades_recebidas)?;
     let fluxo = transferencia.fluxo.clone();
+    let numero_pedido = transferencia.numero_pedido.clone();
 
     let movimento_confirmado = {
         let mut conn = state.conn()?;
@@ -207,7 +208,7 @@ pub async fn confirmar_recebimento(
                 hora,
                 turno: "diurno".into(),
                 usuario_id,
-                numero_pedido: None,
+                numero_pedido,
                 codigo_rastreio: None,
                 contraparte: None,
                 quem_retirou: None,

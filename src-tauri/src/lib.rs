@@ -49,8 +49,7 @@ pub fn run() {
             // numa maquina ja aberta passa a funcionar sem reiniciar o app.
             // Nunca trava a abertura do app se nao tiver internet ou o
             // arquivo nao existir.
-            const INTERVALO_SINCRONIZACAO: std::time::Duration =
-                std::time::Duration::from_secs(5 * 60);
+            const INTERVALO_SINCRONIZACAO: std::time::Duration = std::time::Duration::from_secs(60);
             let app_handle = app.handle().clone();
             let diretorio_dados_sync = diretorio_dados.clone();
             tauri::async_runtime::spawn(async move {

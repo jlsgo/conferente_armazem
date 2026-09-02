@@ -128,6 +128,7 @@ export default function TransferenciasChegando({ fluxo, outroArmazem, onConfirma
           <thead>
             <tr>
               <th>Data do envio</th>
+              <th>Pedido</th>
               <th>Itens (enviado / recebido)</th>
               <th className="somente-tela">Acoes</th>
             </tr>
@@ -140,6 +141,7 @@ export default function TransferenciasChegando({ fluxo, outroArmazem, onConfirma
                   <td>
                     {formatarData(t.data)} {t.hora}
                   </td>
+                  <td>{t.numero_pedido ?? '-'}</td>
                   <td>
                     {t.itens.map((it, indice) => (
                       <div
