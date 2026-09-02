@@ -272,9 +272,13 @@ const SQL_UPSERT: &str = "
 /// so entao chama isto, e reabre a conexao so no fim pra marcar como
 /// enviado - ver `commands::sync_commands::sincronizar_agora`.
 ///
-/// So o passo local (quais linhas estao pendentes, marcar como enviado) e
-/// coberto por teste automatizado - o passo de rede em si so pode ser
-/// validado com uma conta/banco Turso real (ver docs/ARQUITETURA.md).
+/// O passo local (quais linhas estao pendentes, marcar como enviado) e
+/// coberto por teste automatizado, e o SQL_UPSERT/SELECT em si tambem -
+/// contra um `rusqlite` em memoria (ver `tests::conexao_remota_de_teste`),
+/// ja que essas strings sao SQLite generico, nao especifico de libsql. So a
+/// conexao de rede propriamente dita (`Builder::new_remote`, autenticacao)
+/// so pode ser validada com uma conta/banco Turso real (ver
+/// docs/ARQUITETURA.md).
 #[derive(Debug, Default)]
 pub struct ResultadoSincronizacao {
     pub enviados: Vec<i64>,
@@ -512,9 +516,24 @@ const SQL_PENDENTES_RECEBIMENTO: &str = "
     ORDER BY data ASC, hora ASC
 ";
 
+/// Mesmas colunas de `SQL_PENDENTES_RECEBIMENTO` (`buscar_transferencia`
+/// depende da mesma ordem posicional que `linha_para_transferencia` espera -
+/// ver o teste `sql_pendentes_recebimento_e_sql_buscar_transferencia_
+/// selecionam_as_mesmas_colunas`), mas buscando por chave exata em vez do
+/// filtro de pendencia - usada por `confirmar_recebimento`, que ja sabe qual
+/// transferencia confirmar e so precisa reler os dados de verdade (nunca
+/// confiar no que o frontend mandar de volta).
+const SQL_BUSCAR_TRANSFERENCIA_POR_CHAVE: &str = "
+    SELECT armazem_codigo, id_origem, fluxo, data, hora, armazem_destino_codigo, numero_pedido, itens_json
+    FROM movimentos_consolidados WHERE armazem_codigo = ?1 AND id_origem = ?2
+";
+
 /// Busca no Turso o que foi enviado pro `meu_armazem_codigo` e ainda nao foi
-/// confirmado (nem estornado do lado de quem enviou). So pode ser testado de
-/// ponta a ponta com uma conta Turso real - ver docs/ARQUITETURA.md.
+/// confirmado (nem estornado do lado de quem enviou). O SQL em si (colunas,
+/// filtro de pendencia) e testado diretamente contra rusqlite - ver
+/// `tests::sql_pendentes_recebimento_traz_numero_pedido_do_envio` - so a
+/// conexao de rede de verdade exige uma conta Turso real (ver
+/// docs/ARQUITETURA.md).
 pub async fn buscar_pendentes_recebimento(
     url: &str,
     token: &str,
@@ -605,8 +624,7 @@ pub async fn buscar_transferencia(
 
     let mut rows = remoto
         .query(
-            "SELECT armazem_codigo, id_origem, fluxo, data, hora, armazem_destino_codigo, numero_pedido, itens_json
-             FROM movimentos_consolidados WHERE armazem_codigo = ?1 AND id_origem = ?2",
+            SQL_BUSCAR_TRANSFERENCIA_POR_CHAVE,
             libsql::params![armazem_origem_codigo, id_origem],
         )
         .await
@@ -1024,5 +1042,230 @@ mod tests {
         assert_eq!(resultado.falhas.len(), 2);
         assert_eq!(resultado.falhas[0].0, 1);
         assert_eq!(resultado.falhas[1].0, 2);
+    }
+
+    /// `SQL_CRIAR_TABELA_REMOTA`/`SQL_ALTER_TABELA_REMOTA`/`SQL_UPSERT`/
+    /// `SQL_PENDENTES_RECEBIMENTO`/`SQL_BUSCAR_TRANSFERENCIA_POR_CHAVE` sao
+    /// so texto SQLite generico (nada especifico de libsql - sem isso nao
+    /// dariam pra reusar contra o Turso de producao nem contra este SQLite
+    /// local), entao dá pra testar exatamente as mesmas strings usadas em
+    /// producao contra um `rusqlite::Connection` em memoria, sem precisar de
+    /// conta/rede Turso. Deliberadamente nao usa `libsql::Builder::new_local`
+    /// pra isso: libsql "core" (seu proprio SQLite vendorizado) e o SQLite
+    /// bundled do rusqlite (ja usado em todo o resto da suite) disputam a
+    /// configuracao global de threading do SQLite no mesmo processo de
+    /// teste, o que faz o libsql local panicar de forma intermitente.
+    fn conexao_remota_de_teste() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(SQL_CRIAR_TABELA_REMOTA, []).unwrap();
+        for alter in SQL_ALTER_TABELA_REMOTA {
+            let _ = conn.execute(alter, []);
+        }
+        conn
+    }
+
+    fn inserir_na_tabela_remota(conn: &Connection, linha: &LinhaPendente, enviado_em: &str) {
+        let itens_json = serde_json::to_string(&linha.itens).unwrap();
+        conn.execute(
+            SQL_UPSERT,
+            rusqlite::params![
+                linha.armazem_codigo,
+                linha.movimento.id,
+                linha.movimento.fluxo,
+                linha.movimento.tipo,
+                linha.movimento.data,
+                linha.movimento.hora,
+                linha.movimento.turno,
+                linha.movimento.usuario_nome,
+                linha.movimento.numero_pedido,
+                linha.movimento.codigo_rastreio,
+                linha.movimento.contraparte,
+                linha.movimento.quem_retirou,
+                linha.movimento.motivo,
+                linha.movimento.valor_centavos,
+                linha.movimento.observacoes,
+                linha.movimento.status,
+                linha.movimento.estornado_de,
+                linha.movimento.hash_integridade,
+                itens_json,
+                linha.armazem_destino_codigo,
+                linha.movimento.recebido_de_armazem_codigo,
+                linha.movimento.recebido_de_id_origem,
+                enviado_em,
+            ],
+        )
+        .unwrap();
+    }
+
+    /// Roda `SQL_PENDENTES_RECEBIMENTO` de verdade e reusa
+    /// `linha_para_transferencia` (a mesma funcao de mapeamento que
+    /// `buscar_pendentes_recebimento` chama em producao) pra montar o
+    /// resultado - so a conexao de rede em si e diferente do caminho real.
+    fn buscar_pendentes_via_sql(
+        conn: &Connection,
+        meu_armazem_codigo: &str,
+    ) -> Vec<TransferenciaPendente> {
+        let mut stmt = conn.prepare(SQL_PENDENTES_RECEBIMENTO).unwrap();
+        stmt.query_map(rusqlite::params![meu_armazem_codigo], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, String>(7)?,
+            ))
+        })
+        .unwrap()
+        .map(|linha| linha.unwrap())
+        .map(|(a, b, c, d, e, f, g, h)| linha_para_transferencia(a, b, c, d, e, f, g, h).unwrap())
+        .collect()
+    }
+
+    fn buscar_transferencia_via_sql(
+        conn: &Connection,
+        armazem_origem_codigo: &str,
+        id_origem: i64,
+    ) -> Option<TransferenciaPendente> {
+        conn.query_row(
+            SQL_BUSCAR_TRANSFERENCIA_POR_CHAVE,
+            rusqlite::params![armazem_origem_codigo, id_origem],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, String>(7)?,
+                ))
+            },
+        )
+        .optional()
+        .unwrap()
+        .map(|(a, b, c, d, e, f, g, h)| linha_para_transferencia(a, b, c, d, e, f, g, h).unwrap())
+    }
+
+    fn linha_pendente_de_transferencia(
+        id: i64,
+        armazem_codigo: &str,
+        armazem_destino_codigo: &str,
+        numero_pedido: Option<&str>,
+    ) -> LinhaPendente {
+        let mut linha = linha_pendente_de_teste(id);
+        linha.movimento.fluxo = "peca_montagem".into();
+        linha.movimento.numero_pedido = numero_pedido.map(String::from);
+        linha.armazem_codigo = armazem_codigo.into();
+        linha.armazem_destino_codigo = Some(armazem_destino_codigo.into());
+        linha.itens = vec![MovimentoItem {
+            id: 0,
+            categoria: "peca".into(),
+            descricao: Some("CAPACETE PRETO".into()),
+            montagem: None,
+            condicao: Some("boa".into()),
+            quantidade: 3,
+            observacao: None,
+            quantidade_enviada: None,
+            codigo_componente: None,
+        }];
+        linha
+    }
+
+    /// As duas queries de leitura tem que continuar selecionando as mesmas
+    /// colunas na mesma ordem - `linha_para_transferencia` espera essa ordem
+    /// posicional dos dois lados. Um guarda-corpo direto contra o tipo de
+    /// bug corrigido nesta versao (uma coluna que existe na tabela e no
+    /// struct, mas que uma das duas queries esquece de selecionar).
+    #[test]
+    fn sql_pendentes_recebimento_e_sql_buscar_transferencia_selecionam_as_mesmas_colunas() {
+        let conn = conexao_remota_de_teste();
+        let colunas_lista: Vec<String> = conn
+            .prepare(SQL_PENDENTES_RECEBIMENTO)
+            .unwrap()
+            .column_names()
+            .into_iter()
+            .map(String::from)
+            .collect();
+        let colunas_chave: Vec<String> = conn
+            .prepare(SQL_BUSCAR_TRANSFERENCIA_POR_CHAVE)
+            .unwrap()
+            .column_names()
+            .into_iter()
+            .map(String::from)
+            .collect();
+        assert_eq!(colunas_lista, colunas_chave);
+        assert!(colunas_lista.contains(&"numero_pedido".to_string()));
+    }
+
+    /// Reproduz o bug corrigido nesta versao: `numero_pedido` era gravado no
+    /// envio mas `SQL_PENDENTES_RECEBIMENTO` nao o selecionava, entao quem
+    /// recebia via `buscar_transferencias_pendentes`/`confirmar_recebimento`
+    /// sempre via o pedido como nulo. Testa o ciclo completo
+    /// envio->consolidado->busca contra o SQL de verdade usado em producao.
+    #[test]
+    fn sql_pendentes_recebimento_traz_numero_pedido_do_envio() {
+        let conn = conexao_remota_de_teste();
+        let linha = linha_pendente_de_transferencia(1603, "B2", "A4", Some("1603"));
+        inserir_na_tabela_remota(&conn, &linha, "2026-09-02 10:00:00");
+
+        let pendentes = buscar_pendentes_via_sql(&conn, "A4");
+        assert_eq!(pendentes.len(), 1);
+        assert_eq!(pendentes[0].numero_pedido.as_deref(), Some("1603"));
+        assert_eq!(pendentes[0].armazem_origem_codigo, "B2");
+    }
+
+    /// Mesma regressao que o teste acima, mas pelo caminho que
+    /// `confirmar_recebimento` realmente usa (`buscar_transferencia`, busca
+    /// por chave, nao a lista inteira).
+    #[test]
+    fn sql_buscar_transferencia_por_chave_traz_numero_pedido() {
+        let conn = conexao_remota_de_teste();
+        let linha = linha_pendente_de_transferencia(1588, "A4", "B2", Some("1588"));
+        inserir_na_tabela_remota(&conn, &linha, "2026-09-02 14:28:00");
+
+        let transferencia = buscar_transferencia_via_sql(&conn, "A4", 1588)
+            .expect("a transferencia deveria ser encontrada");
+        assert_eq!(transferencia.numero_pedido.as_deref(), Some("1588"));
+        assert_eq!(transferencia.itens.len(), 1);
+        assert_eq!(transferencia.itens[0].quantidade, 3);
+    }
+
+    /// `numero_pedido` e opcional (nem toda saida tem um pedido associado) -
+    /// confere que `NULL` tambem sobrevive ao ciclo, nao so o caso feliz com
+    /// valor preenchido.
+    #[test]
+    fn numero_pedido_ausente_continua_nulo_apos_o_ciclo() {
+        let conn = conexao_remota_de_teste();
+        let linha = linha_pendente_de_transferencia(2, "B2", "A4", None);
+        inserir_na_tabela_remota(&conn, &linha, "2026-09-02 10:00:00");
+
+        let pendentes = buscar_pendentes_via_sql(&conn, "A4");
+        assert_eq!(pendentes.len(), 1);
+        assert_eq!(pendentes[0].numero_pedido, None);
+    }
+
+    /// Cobertura do filtro `NOT EXISTS` de `SQL_PENDENTES_RECEBIMENTO`: uma
+    /// transferencia ja confirmada (existe uma linha em
+    /// `recebido_de_armazem_codigo`/`recebido_de_id_origem` apontando pra
+    /// ela) nao deve aparecer de novo na lista de pendentes - sem isso, o
+    /// mesmo envio reapareceria pra ser confirmado outra vez.
+    #[test]
+    fn transferencia_ja_confirmada_some_da_lista_de_pendentes() {
+        let conn = conexao_remota_de_teste();
+        let envio = linha_pendente_de_transferencia(7, "B2", "A4", Some("42"));
+        inserir_na_tabela_remota(&conn, &envio, "2026-09-02 10:00:00");
+
+        let mut confirmacao = linha_pendente_de_teste(1);
+        confirmacao.armazem_codigo = "A4".into();
+        confirmacao.movimento.recebido_de_armazem_codigo = Some("B2".into());
+        confirmacao.movimento.recebido_de_id_origem = Some(7);
+        inserir_na_tabela_remota(&conn, &confirmacao, "2026-09-02 10:05:00");
+
+        let pendentes = buscar_pendentes_via_sql(&conn, "A4");
+        assert!(pendentes.is_empty());
     }
 }
