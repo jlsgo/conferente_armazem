@@ -1263,6 +1263,109 @@ localmente pra screenshot, nunca commitado):
 Constraint: nenhuma lib de CSS framework nova, so `@media (max-width: ...)` no
 `<style>` que ja existe, mesma filosofia "sem build step" do resto do arquivo.
 
+## Versao 3.0.0 — auditoria final pre-pausa + continuacao das sprints do painel (Feito)
+
+Pedido do usuario: "planeje e implemente a versao final 3.0 do sistema e continue as
+sprints do site de visualizacao. Nao teremos mais atualizacao por algum tempo."
+Levantamento em 3 frentes em paralelo (backend Rust, frontend React, painel web —
+substituindo o P1/P2 do levantamento anterior que se perdeu, so P0/P3 ficaram
+documentados), achados de maior risco verificados manualmente linha a linha antes de
+implementar, nao so a partir do relatorio do agente.
+
+**Backend (`src-tauri/`)**:
+- **Bug real de fuso horario em `confirmar_recebimento`/`recusar_recebimento`**
+  (`commands/sync_commands.rs`) — as duas calculavam a `data` do movimento com `SELECT
+  date('now')` (UTC) em vez de `date('now', 'localtime')`, diferente de todo o resto
+  do codigo. Confirmar ou recusar um recebimento entre 21h e 23h59 (Brasil e UTC-3,
+  sem horario de verao) gravava a data do movimento como amanha, sumindo do
+  fechamento de hoje daquele armazem sem aviso. Mesmo bug, menor gravidade, em
+  `db::backup.rs::data_de_hoje` (so afeta o nome do arquivo de backup diario).
+- **`armazem_destino_id` sem checagem no `domain` contra o fluxo** — so convencao do
+  frontend garantia que so `saida_armazem`/`peca_montagem`/`sac` usam transferencia
+  entre armazens (a allowlist real vive em `db::sync::SQL_PENDENTES_RECEBIMENTO`).
+  `validar_novo_movimento` ganhou a mesma checagem (`FLUXOS_TRANSFERIVEIS`), rejeitando
+  `armazem_destino_id` com `reparo_externo`. Teste novo:
+  `rejeita_armazem_destino_em_fluxo_que_nao_suporta_transferencia` (145 testes Rust,
+  144 → 145).
+- **Descartado apos verificar**: o levantamento apontou `recusar_recebimento` gravando
+  `turno: "diurno"` fixo como inconsistente com o resto do app — checado o frontend
+  antes de mexer, e as 4 telas de lancamento (`Lancamentos`/`Montagem`/`Sac`/
+  `ReparoExterno`) tambem sempre mandam `turno: 'diurno'` fixo, nunca calculado. Nao e
+  bug, e o padrao real do app hoje — nada mudado ali.
+- **Nao entra nesta rodada** (grande demais pra mexer bem antes da pausa, ja
+  documentado): upgrade `rusqlite 0.32→0.40`/`rusqlite_migration 1.3→2.6`; testes
+  diretos da camada `commands/*.rs`.
+
+**Frontend (`src/`)**:
+- **Banner de "retirada parcial" ficava referenciando o pedido errado**
+  (`Lancamentos.tsx`) apos o conferente corrigir um numero digitado errado —
+  `alertaRetiradaPendente` guardava o resultado da consulta, mas o texto interpolava
+  o state atual do campo, nunca limpo numa mudanca. Corrigido limpando o alerta no
+  `onChange` do campo.
+- **Trocar de aba descartava formulario em andamento sem aviso** (`Dashboard.tsx`) —
+  cada aba e montada condicionalmente, entao sair de Lancamentos/Montagem/SAC/Reparo
+  Externo com algo digitado perdia tudo. As 4 telas agora reportam ao Dashboard (prop
+  `onSujoChange`, heuristica em `lib/formularioSujo.ts::itensPreenchidos`) se tem algo
+  preenchido; `Dashboard.tsx` passou a confirmar (`window.confirm`) antes de trocar de
+  aba nesse caso.
+- **Corrida em `Historico.tsx`** — trocar de fluxo rapido podia deixar uma resposta
+  antiga (mais lenta) sobrescrever a tabela por cima de uma mais nova. Guarda por
+  `requestId` (`useRef`) em `buscar`/`carregarMais`.
+- **Erros de formulario sem `role="alert"`** — ~22 ocorrencias de
+  `<p className="erro">` (Lancamentos/Montagem/Sac/ReparoExterno/Usuarios/Setup/
+  Login/Historico/TransferenciasChegando/App) ganharam o atributo, mesmo padrao ja
+  usado nos toasts (`role="status"`).
+
+**Painel web (`painel/index.html`)** — retomando as sprints, novo levantamento no
+lugar do P1/P2 perdido:
+- Filtro de numero do pedido tinha o mesmo bug de `LIKE` sem escape ja corrigido no
+  app (`escaparCuringaLike` + `ESCAPE '\''`, mirror de
+  `domain::movimentos::escapar_curinga_like`).
+- Transferencias pendentes agora mostram ha quanto tempo estao paradas
+  (`tempoRelativo`, ja existia pro card de sincronizacao, so nao era reusada ali).
+- Auto-refresh de 30s pausa com a aba em segundo plano (`document.hidden`/
+  `visibilitychange`), atualizando na hora ao voltar em vez de esperar o proximo ciclo.
+- `observacoes` do movimento (motivo do estorno, motivo da recusa) passou a ser
+  buscada e mostrada nas linhas ESTORNO/RECUSADO — antes o badge aparecia sem nenhuma
+  explicacao. `contraparte` tambem passou a ser buscada, alimentando uma coluna
+  "Coleta" nova (`colunaColeta`, mirror de `src/lib/situacao.ts`) que mostra
+  destino/origem de transferencia ou a contraparte (cliente/transportadora/tecnico) —
+  antes essa informacao so aparecia enquanto a transferencia estava pendente.
+- Novo stat tile "Valor total (vendas SAC)" (soma `valor_centavos` onde
+  `motivo = 'venda'`, excluindo estorno/recusa).
+- **Achado ao acrescentar `observacoes`, fora do levantamento original**: varios
+  campos de texto livre vindos do app (`descricao`, `usuario_nome`, `numero_pedido`,
+  nomes no filtro de responsavel) iam pro `innerHTML` sem escapar — um XSS armazenado
+  em potencial se algum desses campos algum dia contivesse HTML (digitado por um
+  conferente autenticado no app). Corrigido com uma funcao `escaparHtml` unica,
+  aplicada em todo ponto que insere texto livre via `innerHTML`.
+- **P3 — visualizacao no celular** (o item ja detalhado na secao anterior): so
+  esconder colunas nao bastou (confirmado contra o Turso real: mesmo com 7 das 10
+  colunas, o cabecalho de largura fixa ainda truncava). Implementado o layout "tabela
+  vira lista de cartoes" via `@media (max-width: 720px)` — cada `<tr>` vira um bloco
+  empilhado, cada celula uma linha label:valor (`td::before { content: attr(data-label)
+  }`, alimentado por um `data-label` novo em `renderizarTabela`). Cabecalho da pagina
+  ganhou `flex-wrap` (o seletor PT/中文 vai pra propria linha em vez de espremer), grade
+  de filtros empilha em coluna unica. Campo de data em formato americano (`<input
+  type="date"]`) fica **documentado como limitacao conhecida, nao corrigido** — o
+  locale desse input e do navegador/SO, sem forma confiavel de forcar via CSS/JS.
+- **Nao entra nesta rodada**: visibilidade de reparos externos em aberto no painel —
+  precisaria replicar a logica de casamento por `codigo_componente` em SQL/JS, sessao
+  propria.
+
+**Verificado**: `cargo test` (145 passando), `clippy --all-targets --all-features -- -D
+warnings`/`fmt --check` limpos, `tsc --noEmit`/`vite build` limpos. Painel testado
+contra o Turso real de producao (`scripts/painel-local-gerar.sh` + servidor HTTP local
++ Chrome headless via Puppeteer, autenticando por `sessionStorage` sem precisar saber
+a senha) nas duas variantes de idioma e em dois viewports (1300px e 390px) — zero erro
+de console, coluna Coleta e observacao de estorno confirmadas com dado real de
+producao (`ESTORNO do lancamento #147: LANCADO ERRADO`, registro anterior a este
+lancamento, formato antigo — dado novo vai sair limpo com o fix do backend acima).
+
+Bump de `2.1.2` pra `3.0.0` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
+Commit/push e geracao do instalador (`build-installer.yml`) ficam pra confirmar com o
+usuario antes, nao feitos automaticamente nesta sessao.
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um
