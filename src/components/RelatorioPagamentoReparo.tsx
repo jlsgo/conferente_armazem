@@ -153,7 +153,7 @@ export default function RelatorioPagamentoReparo({ armazemId, armazem }: Props) 
         <button type="button" onClick={gerar} disabled={carregando}>
           {carregando ? 'Gerando...' : 'Gerar relatorio'}
         </button>
-        {erro && <p className="erro">{erro}</p>}
+        {erro && <p className="erro" role="alert">{erro}</p>}
       </section>
 
       {resultados && (

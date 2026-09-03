@@ -56,6 +56,51 @@ export function colunaColeta(
   return m.contraparte || '-';
 }
 
+/**
+ * Texto "Estorno do Nº X (pedido Y) - motivo" pra uma linha de estorno, ou `null`
+ * se `m` nao for um estorno. `todos` e a lista de lancamentos onde procurar o
+ * original pelo `id` (o dia inteiro, ou o resultado de uma busca no Historico) -
+ * o `numero` exibido nas telas so existe calculado ali dentro, nao em `m.estornado_de`
+ * (que so guarda o `id` interno do banco). Se o original nao estiver em `todos`
+ * (por exemplo, paginacao do Historico separou as duas linhas), cai pra um texto
+ * generico em vez de nao mostrar nada.
+ */
+export function detalheEstorno(
+  m: Pick<Movimento, 'estornado_de' | 'observacoes'>,
+  todos: Pick<Movimento, 'id' | 'numero' | 'numero_pedido'>[]
+): string | null {
+  if (!m.estornado_de) return null;
+  const original = todos.find((o) => o.id === m.estornado_de);
+  const alvo = original
+    ? `Nº ${original.numero}${original.numero_pedido ? ` (pedido ${original.numero_pedido})` : ''}`
+    : 'um lancamento anterior';
+  return `ESTORNO do ${alvo}${m.observacoes ? ` - ${m.observacoes}` : ''}`;
+}
+
+/**
+ * Texto "2x categoria (descricao) - observacao [cod: X] [enviado: N]" por item,
+ * unido por " + ", com o detalhe do estorno (`detalheEstorno`) acrescentado no
+ * final quando `m` for um estorno - usado em toda tela/impressao/export que lista
+ * lancamentos (telas do dia, Historico, fechamento impresso, CSV/XLSX). Antes
+ * reimplementada quase-identica (e inconsistente: observacao do item sumia em
+ * algumas) em 6 lugares diferentes - consolidada aqui pelo mesmo motivo de
+ * `colunaColeta`/`motivoSacTexto`/`resultadoReparoTexto` acima. Nao inclui
+ * `condicao`/`montagem`: essas telas ja tem coluna dedicada propria pra isso
+ * (`Condicao` em Montagem/FechamentoImpressao, `resultadoReparoTexto`).
+ */
+export function itensResumoTexto(m: Movimento, todos: Movimento[]): string {
+  const itens = m.itens
+    .map((it) => {
+      const base = `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}${it.observacao ? ' - ' + it.observacao : ''}`;
+      const comCodigo = it.codigo_componente ? `${base} [cod: ${it.codigo_componente}]` : base;
+      const divergente = it.quantidade_enviada != null && it.quantidade_enviada !== it.quantidade;
+      return divergente ? `${comCodigo} [enviado: ${it.quantidade_enviada}]` : comCodigo;
+    })
+    .join(' + ');
+  const estorno = detalheEstorno(m, todos);
+  return estorno ? `${itens} | ${estorno}` : itens;
+}
+
 export interface ResumoMovimentos {
   totalLancamentos: number;
   totalUnidades: number;

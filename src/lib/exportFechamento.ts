@@ -1,23 +1,8 @@
 import type { Armazem, Fechamento, Movimento, VarianteFechamento } from '../types';
 import { agoraLocalTexto, formatarDataHora } from './data';
-import { colunaColeta, motivoSacTexto, situacaoInfo } from './situacao';
+import { colunaColeta, itensResumoTexto, motivoSacTexto, situacaoInfo } from './situacao';
 
 type Variante = VarianteFechamento;
-
-/** Texto "2x categoria (descricao) - observacao [enviado: N]" por item,
- * unido por " + " - usado tanto no fechamento impresso quanto nos exports
- * CSV/XLSX, pra nao arriscar as duas versoes mostrarem itens diferentes pro
- * mesmo fechamento. */
-export function itensTexto(m: Movimento): string {
-  return m.itens
-    .map((it) => {
-      const base = `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}${it.observacao ? ' - ' + it.observacao : ''}`;
-      const comCodigo = it.codigo_componente ? `${base} [cod: ${it.codigo_componente}]` : base;
-      const divergente = it.quantidade_enviada != null && it.quantidade_enviada !== it.quantidade;
-      return divergente ? `${comCodigo} [enviado: ${it.quantidade_enviada}]` : comCodigo;
-    })
-    .join(' + ');
-}
 
 export function qtdTotal(m: Movimento): number {
   return m.itens.reduce((s, it) => s + it.quantidade, 0);
@@ -38,7 +23,8 @@ export function resultadoReparoTexto(m: Movimento): string {
  */
 export function colunasFechamento(
   variante: Variante,
-  armazens: Armazem[]
+  armazens: Armazem[],
+  todos: Movimento[]
 ): {
   cabecalhos: string[];
   linha: (m: Movimento) => string[];
@@ -62,7 +48,7 @@ export function colunasFechamento(
         m.hora,
         (m.numero_pedido || '-') + (!m.retirada_completa ? ' (parcial)' : ''),
         colunaColeta(m, armazens),
-        itensTexto(m),
+        itensResumoTexto(m, todos),
         String(qtdTotal(m)),
         m.quem_retirou || '-',
         m.observacoes || '-',
@@ -79,7 +65,7 @@ export function colunasFechamento(
         String(m.numero),
         m.hora,
         m.tipo === 'saida' ? 'Saida B2' : 'Entrada B2',
-        itensTexto(m),
+        itensResumoTexto(m, todos),
         String(qtdTotal(m)),
         resultadoReparoTexto(m),
         m.usuario_nome,
@@ -95,7 +81,7 @@ export function colunasFechamento(
         String(m.numero),
         m.hora,
         m.contraparte || '-',
-        itensTexto(m),
+        itensResumoTexto(m, todos),
         String(qtdTotal(m)),
         resultadoReparoTexto(m),
         m.usuario_nome,
@@ -111,7 +97,7 @@ export function colunasFechamento(
       m.hora,
       m.numero_pedido || '-',
       colunaColeta(m, armazens),
-      itensTexto(m),
+      itensResumoTexto(m, todos),
       String(qtdTotal(m)),
       motivoSacTexto(m),
       m.usuario_nome,

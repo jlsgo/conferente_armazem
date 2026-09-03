@@ -138,7 +138,7 @@ export default function TransferenciasChegando({ fluxo, outroArmazem, onConfirma
   if (erro) {
     return (
       <section className="cartao somente-tela">
-        <p className="erro">{erro}</p>
+        <p className="erro" role="alert">{erro}</p>
         <button type="button" onClick={carregar}>
           Tentar novamente
         </button>
@@ -202,6 +202,9 @@ export default function TransferenciasChegando({ fluxo, outroArmazem, onConfirma
                         <span>
                           {it.categoria}
                           {it.descricao ? ` (${it.descricao})` : ''} - enviado {it.quantidade}
+                          {it.condicao ? ` [condição: ${it.condicao}]` : ''}
+                          {it.montagem ? ` [${it.montagem === 'montado' ? 'montado' : 'em caixa'}]` : ''}
+                          {it.codigo_componente ? ` [cód: ${it.codigo_componente}]` : ''}
                           {it.observacao ? ` (obs: ${it.observacao})` : ''}:
                         </span>
                         <input

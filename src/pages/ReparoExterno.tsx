@@ -23,9 +23,10 @@ import FechamentoImpressao from '../components/FechamentoImpressao';
 import Carregando from '../components/Carregando';
 import ReparosEmAberto from '../components/ReparosEmAberto';
 import ResumoDoDia from '../components/ResumoDoDia';
-import { situacaoInfo } from '../lib/situacao';
+import { itensResumoTexto, situacaoInfo } from '../lib/situacao';
 import { formatarData } from '../lib/data';
 import { algumCampoEhOutro } from '../lib/outro';
+import { itensPreenchidos } from '../lib/formularioSujo';
 import { useToast } from '../lib/toast';
 
 interface Props {
@@ -33,6 +34,8 @@ interface Props {
   armazem: Armazem | undefined;
   /** Avisa o Dashboard pra atualizar o contador de reparos em aberto na hora, sem esperar o polling de 60s. */
   onReparoAtualizado?: () => void;
+  /** Avisa o Dashboard se ha algo digitado que seria perdido ao trocar de aba. */
+  onSujoChange?: (sujo: boolean) => void;
 }
 
 interface CodigoGerado {
@@ -85,7 +88,7 @@ function novoItemVazio(): ItemForm {
   return { categoria: 'peca', descricao: '', codigoComponente: '', condicao: '', observacao: '', quantidade: 1 };
 }
 
-export default function ReparoExterno({ usuario, armazem, onReparoAtualizado }: Props) {
+export default function ReparoExterno({ usuario, armazem, onReparoAtualizado, onSujoChange }: Props) {
   const armazemId = usuario.armazem_id as number;
   const data = dataDeHoje();
 
@@ -109,6 +112,14 @@ export default function ReparoExterno({ usuario, armazem, onReparoAtualizado }: 
   const [enviando, setEnviando] = useState(false);
   const [fechando, setFechando] = useState(false);
   const [estornando, setEstornando] = useState<number | null>(null);
+
+  useEffect(() => {
+    const sujo =
+      tecnico.trim() !== '' ||
+      itens.some((it) => it.codigoComponente.trim() !== '' || it.condicao !== '') ||
+      itensPreenchidos(itens);
+    onSujoChange?.(sujo);
+  }, [tecnico, itens, onSujoChange]);
 
   async function carregarTudo() {
     setCarregandoLista(true);
@@ -309,7 +320,7 @@ export default function ReparoExterno({ usuario, armazem, onReparoAtualizado }: 
   if (erroCarregamento) {
     return (
       <div className="cartao">
-        <p className="erro">{erroCarregamento}</p>
+        <p className="erro" role="alert">{erroCarregamento}</p>
         <button type="button" onClick={carregarTudo}>
           Tentar novamente
         </button>
@@ -323,7 +334,7 @@ export default function ReparoExterno({ usuario, armazem, onReparoAtualizado }: 
         <p className="aviso-fechado">
           O dia {formatarData(data)} ja foi fechado por {fechamento.usuario_nome}. Os lancamentos abaixo sao somente leitura.
         </p>
-        {erro && <p className="erro">{erro}</p>}
+        {erro && <p className="erro" role="alert">{erro}</p>}
         <section className="cartao somente-tela">
           <h2>Corrigir um lancamento deste dia</h2>
           <p className="subtitulo">
@@ -525,7 +536,7 @@ export default function ReparoExterno({ usuario, armazem, onReparoAtualizado }: 
                   </button>
                 </div>
                 {alerta === 'nao-encontrado' && (
-                  <p className="erro" style={{ marginTop: -6, marginBottom: 10 }}>
+                  <p className="erro" role="alert" style={{ marginTop: -6, marginBottom: 10 }}>
                     Nenhuma saida em aberto com este codigo neste armazem - confira o codigo digitado.
                   </p>
                 )}
@@ -542,7 +553,7 @@ export default function ReparoExterno({ usuario, armazem, onReparoAtualizado }: 
             + adicionar item
           </button>
 
-          {erro && <p className="erro">{erro}</p>}
+          {erro && <p className="erro" role="alert">{erro}</p>}
 
           <div style={{ marginTop: 20 }}>
             <button type="submit" disabled={enviando}>
@@ -574,14 +585,7 @@ export default function ReparoExterno({ usuario, armazem, onReparoAtualizado }: 
                   <td>{m.numero}</td>
                   <td>{m.hora}</td>
                   <td>{m.contraparte || '-'}</td>
-                  <td>
-                    {m.itens
-                      .map(
-                        (it) =>
-                          `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}${it.codigo_componente ? ' [cod: ' + it.codigo_componente + ']' : ''}`
-                      )
-                      .join(' + ')}
-                  </td>
+                  <td>{itensResumoTexto(m, lancamentos)}</td>
                   <td>{m.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
                   <td>{m.usuario_nome}</td>
                   <td>

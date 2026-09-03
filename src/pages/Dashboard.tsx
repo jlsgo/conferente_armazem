@@ -46,6 +46,27 @@ export default function Dashboard({ usuario, armazem, armazens, versao, onSair }
   const { notificar } = useToast();
   const cobrinha = useCliquesSecretos();
 
+  // Trocar de aba desmonta a tela atual (cada aba e montada condicionalmente
+  // abaixo), descartando qualquer formulario em andamento sem aviso. As 4
+  // telas de lancamento avisam aqui (via `onSujoChange`) quando tem algo
+  // digitado - `irPara` confirma antes de trocar nesse caso. Reseta sozinho
+  // a cada troca de aba (o `useEffect` abaixo), pra nao vazar o estado
+  // "sujo" de uma aba pra outra.
+  const [formularioSujo, setFormularioSujo] = useState(false);
+  useEffect(() => {
+    setFormularioSujo(false);
+  }, [aba]);
+  function irPara(destino: Aba) {
+    if (
+      destino !== aba &&
+      formularioSujo &&
+      !window.confirm('Voce tem um lancamento em andamento nesta aba. Trocar de aba vai descartar esses dados. Continuar?')
+    ) {
+      return;
+    }
+    setAba(destino);
+  }
+
   async function atualizarStatusSync() {
     if (ehGestor) setStatusSync(await statusSincronizacao());
   }
@@ -158,7 +179,7 @@ export default function Dashboard({ usuario, armazem, armazens, versao, onSair }
       <nav className="abas somente-tela" style={{ marginBottom: 20 }}>
         <button
           className={`aba-lancamentos${aba === 'lancamentos' ? ' ativo' : ''}`}
-          onClick={() => setAba('lancamentos')}
+          onClick={() => irPara('lancamentos')}
           aria-current={aba === 'lancamentos' ? 'page' : undefined}
         >
           <IconCaixa size={15} />
@@ -171,7 +192,7 @@ export default function Dashboard({ usuario, armazem, armazens, versao, onSair }
         </button>
         <button
           className={`aba-montagem${aba === 'montagem' ? ' ativo' : ''}`}
-          onClick={() => setAba('montagem')}
+          onClick={() => irPara('montagem')}
           aria-current={aba === 'montagem' ? 'page' : undefined}
         >
           <IconAjuste size={15} />
@@ -184,7 +205,7 @@ export default function Dashboard({ usuario, armazem, armazens, versao, onSair }
         </button>
         <button
           className={`aba-sac${aba === 'sac' ? ' ativo' : ''}`}
-          onClick={() => setAba('sac')}
+          onClick={() => irPara('sac')}
           aria-current={aba === 'sac' ? 'page' : undefined}
         >
           <IconChat size={15} />
@@ -197,7 +218,7 @@ export default function Dashboard({ usuario, armazem, armazens, versao, onSair }
         </button>
         <button
           className={`aba-reparo${aba === 'reparo_externo' ? ' ativo' : ''}`}
-          onClick={() => setAba('reparo_externo')}
+          onClick={() => irPara('reparo_externo')}
           aria-current={aba === 'reparo_externo' ? 'page' : undefined}
         >
           <IconFerramenta size={15} />
@@ -210,7 +231,7 @@ export default function Dashboard({ usuario, armazem, armazens, versao, onSair }
         </button>
         <button
           className={`aba-historico${aba === 'historico' ? ' ativo' : ''}`}
-          onClick={() => setAba('historico')}
+          onClick={() => irPara('historico')}
           aria-current={aba === 'historico' ? 'page' : undefined}
         >
           <IconRelogio size={15} />
@@ -219,7 +240,7 @@ export default function Dashboard({ usuario, armazem, armazens, versao, onSair }
         {ehGestor && (
           <button
             className={`aba-usuarios${aba === 'usuarios' ? ' ativo' : ''}`}
-            onClick={() => setAba('usuarios')}
+            onClick={() => irPara('usuarios')}
             aria-current={aba === 'usuarios' ? 'page' : undefined}
           >
             <IconUsuarios size={15} />
@@ -235,6 +256,7 @@ export default function Dashboard({ usuario, armazem, armazens, versao, onSair }
             armazem={armazem}
             armazens={armazens}
             onTransferenciaConfirmada={atualizarPendentes}
+            onSujoChange={setFormularioSujo}
           />
         )}
         {aba === 'montagem' && (
@@ -243,6 +265,7 @@ export default function Dashboard({ usuario, armazem, armazens, versao, onSair }
             armazem={armazem}
             armazens={armazens}
             onTransferenciaConfirmada={atualizarPendentes}
+            onSujoChange={setFormularioSujo}
           />
         )}
         {aba === 'sac' && (
@@ -251,10 +274,16 @@ export default function Dashboard({ usuario, armazem, armazens, versao, onSair }
             armazem={armazem}
             armazens={armazens}
             onTransferenciaConfirmada={atualizarPendentes}
+            onSujoChange={setFormularioSujo}
           />
         )}
         {aba === 'reparo_externo' && (
-          <ReparoExterno usuario={usuario} armazem={armazem} onReparoAtualizado={atualizarReparosEmAberto} />
+          <ReparoExterno
+            usuario={usuario}
+            armazem={armazem}
+            onReparoAtualizado={atualizarReparosEmAberto}
+            onSujoChange={setFormularioSujo}
+          />
         )}
         {aba === 'historico' && <Historico usuario={usuario} armazem={armazem} armazens={armazens} />}
         {aba === 'usuarios' && ehGestor && <Usuarios armazens={armazens} />}

@@ -49,7 +49,7 @@ export default function AuthCard({
 
         {children}
 
-        {erro && <p className="erro">{erro}</p>}
+        {erro && <p className="erro" role="alert">{erro}</p>}
 
         <button type="submit" disabled={enviando}>
           {enviando ? textoBotaoEnviando : textoBotao}

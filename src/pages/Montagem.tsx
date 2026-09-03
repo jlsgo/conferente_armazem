@@ -23,9 +23,10 @@ import Carregando from '../components/Carregando';
 import TransferenciasChegando from '../components/TransferenciasChegando';
 import TransferenciasRecusadas from '../components/TransferenciasRecusadas';
 import ResumoDoDia from '../components/ResumoDoDia';
-import { situacaoInfo } from '../lib/situacao';
+import { itensResumoTexto, situacaoInfo } from '../lib/situacao';
 import { formatarData } from '../lib/data';
 import { algumCampoEhOutro } from '../lib/outro';
+import { itensPreenchidos } from '../lib/formularioSujo';
 import { useToast } from '../lib/toast';
 
 interface Props {
@@ -34,6 +35,8 @@ interface Props {
   armazens: Armazem[];
   /** Avisa o Dashboard pra atualizar o contador de pendentes nas abas na hora, sem esperar o polling de 60s. */
   onTransferenciaConfirmada?: () => void;
+  /** Avisa o Dashboard se ha algo digitado que seria perdido ao trocar de aba. */
+  onSujoChange?: (sujo: boolean) => void;
 }
 
 interface ItemForm {
@@ -81,7 +84,13 @@ function novoItemVazio(): ItemForm {
   return { categoria: 'peca', descricao: '', montagem: '', condicao: '', quantidade: 1, observacao: '' };
 }
 
-export default function Montagem({ usuario, armazem, armazens, onTransferenciaConfirmada }: Props) {
+export default function Montagem({
+  usuario,
+  armazem,
+  armazens,
+  onTransferenciaConfirmada,
+  onSujoChange,
+}: Props) {
   const armazemId = usuario.armazem_id as number;
   const data = dataDeHoje();
   const outroArmazem = armazens.find((a) => a.id !== armazem?.id);
@@ -102,6 +111,11 @@ export default function Montagem({ usuario, armazem, armazens, onTransferenciaCo
   const [enviando, setEnviando] = useState(false);
   const [fechando, setFechando] = useState(false);
   const [estornando, setEstornando] = useState<number | null>(null);
+
+  useEffect(() => {
+    const sujo = enviadoPara.trim() !== '' || itensPreenchidos(itens);
+    onSujoChange?.(sujo);
+  }, [enviadoPara, itens, onSujoChange]);
 
   async function carregarTudo() {
     setCarregandoLista(true);
@@ -284,7 +298,7 @@ export default function Montagem({ usuario, armazem, armazens, onTransferenciaCo
   if (erroCarregamento) {
     return (
       <div className="cartao">
-        <p className="erro">{erroCarregamento}</p>
+        <p className="erro" role="alert">{erroCarregamento}</p>
         <button type="button" onClick={carregarTudo}>
           Tentar novamente
         </button>
@@ -298,7 +312,7 @@ export default function Montagem({ usuario, armazem, armazens, onTransferenciaCo
         <p className="aviso-fechado">
           O dia {formatarData(data)} ja foi fechado por {fechamento.usuario_nome}. Os lancamentos abaixo sao somente leitura.
         </p>
-        {erro && <p className="erro">{erro}</p>}
+        {erro && <p className="erro" role="alert">{erro}</p>}
         <section className="cartao somente-tela">
             <h2>Corrigir um lancamento deste dia</h2>
             <p className="subtitulo">
@@ -511,7 +525,7 @@ export default function Montagem({ usuario, armazem, armazens, onTransferenciaCo
             + adicionar item
           </button>
 
-          {erro && <p className="erro">{erro}</p>}
+          {erro && <p className="erro" role="alert">{erro}</p>}
 
           <div style={{ marginTop: 20 }}>
             <button type="submit" disabled={enviando}>
@@ -544,15 +558,7 @@ export default function Montagem({ usuario, armazem, armazens, onTransferenciaCo
                 <td>{m.numero}</td>
                 <td>{m.hora}</td>
                 <td>{direcaoTexto(m)}</td>
-                <td>
-                  {m.itens
-                    .map((it) => {
-                      const base = `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`;
-                      const divergente = it.quantidade_enviada != null && it.quantidade_enviada !== it.quantidade;
-                      return divergente ? `${base} [enviado: ${it.quantidade_enviada}]` : base;
-                    })
-                    .join(' + ')}
-                </td>
+                <td>{itensResumoTexto(m, lancamentos)}</td>
                 <td>{m.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
                 <td>{m.itens.map((it) => it.condicao).filter(Boolean).join(', ') || '-'}</td>
                 <td>{m.usuario_nome}</td>

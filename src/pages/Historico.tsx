@@ -1,7 +1,7 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import type { Armazem, Fluxo, Movimento, Usuario } from '../types';
 import { buscarFechamentoDoDia, buscarHistorico, estornarMovimento } from '../lib/api';
-import { colunaColeta, motivoSacTexto, situacaoInfo } from '../lib/situacao';
+import { colunaColeta, itensResumoTexto, motivoSacTexto, situacaoInfo } from '../lib/situacao';
 import { baixarCsv, paraCsv } from '../lib/csv';
 import { baixarXlsx } from '../lib/xlsx';
 import { agoraLocalTexto, formatarData, formatarDataArquivo, formatarDataHora } from '../lib/data';
@@ -37,17 +37,6 @@ function dataHaDias(dias: number): string {
   const mes = String(agora.getMonth() + 1).padStart(2, '0');
   const dia = String(agora.getDate()).padStart(2, '0');
   return `${ano}-${mes}-${dia}`;
-}
-
-function itensResumo(m: Movimento): string {
-  return m.itens
-    .map((it) => {
-      const base = `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}`;
-      const comCodigo = it.codigo_componente ? `${base} [cod: ${it.codigo_componente}]` : base;
-      const divergente = it.quantidade_enviada != null && it.quantidade_enviada !== it.quantidade;
-      return divergente ? `${comCodigo} [enviado: ${it.quantidade_enviada}]` : comCodigo;
-    })
-    .join(' + ');
 }
 
 function pedidoTexto(m: Movimento): string {
@@ -103,31 +92,44 @@ export default function Historico({ usuario, armazem, armazens }: Props) {
     });
   }
 
+  // Guarda contra corrida: trocar de fluxo/filtro rapido dispara uma busca
+  // nova antes da anterior (mais lenta) responder - sem isso, a resposta
+  // antiga podia chegar depois e sobrescrever a tabela com dado da aba
+  // errada. So a busca mais recente (`idBusca === buscaEmAndamento.current`)
+  // tem permissao de aplicar `setResultados`.
+  const buscaEmAndamento = useRef(0);
+
   async function buscar() {
+    const idBusca = ++buscaEmAndamento.current;
     setCarregando(true);
     setErroBusca('');
     try {
       const resultado = await buscarPagina(0);
+      if (idBusca !== buscaEmAndamento.current) return;
       setResultados(resultado.movimentos);
       setTemMais(resultado.tem_mais);
     } catch (err) {
+      if (idBusca !== buscaEmAndamento.current) return;
       setErroBusca(typeof err === 'string' ? err : 'Nao foi possivel buscar o historico.');
     } finally {
-      setCarregando(false);
+      if (idBusca === buscaEmAndamento.current) setCarregando(false);
     }
   }
 
   async function carregarMais() {
+    const idBusca = ++buscaEmAndamento.current;
     setCarregandoMais(true);
     setErroBusca('');
     try {
       const resultado = await buscarPagina(resultados.length);
+      if (idBusca !== buscaEmAndamento.current) return;
       setResultados((atual) => [...atual, ...resultado.movimentos]);
       setTemMais(resultado.tem_mais);
     } catch (err) {
+      if (idBusca !== buscaEmAndamento.current) return;
       setErroBusca(typeof err === 'string' ? err : 'Nao foi possivel carregar mais resultados.');
     } finally {
-      setCarregandoMais(false);
+      if (idBusca === buscaEmAndamento.current) setCarregandoMais(false);
     }
   }
 
@@ -177,7 +179,7 @@ export default function Historico({ usuario, armazem, armazens }: Props) {
           m.hora,
           pedidoTexto(m),
           colunaColeta(m, armazens),
-          itensResumo(m),
+          itensResumoTexto(m, resultados),
           String(qtdTotal(m)),
           m.quem_retirou || '-',
           m.usuario_nome,
@@ -190,7 +192,7 @@ export default function Historico({ usuario, armazem, armazens }: Props) {
           formatarData(m.data),
           m.hora,
           direcaoTexto(m),
-          itensResumo(m),
+          itensResumoTexto(m, resultados),
           String(qtdTotal(m)),
           m.usuario_nome,
           situacaoInfo(m).texto,
@@ -212,7 +214,7 @@ export default function Historico({ usuario, armazem, armazens }: Props) {
           formatarData(m.data),
           m.hora,
           m.contraparte || '-',
-          itensResumo(m),
+          itensResumoTexto(m, resultados),
           String(qtdTotal(m)),
           resultadoReparoTexto(m),
           m.usuario_nome,
@@ -237,7 +239,7 @@ export default function Historico({ usuario, armazem, armazens }: Props) {
           m.hora,
           m.numero_pedido || '-',
           colunaColeta(m, armazens),
-          itensResumo(m),
+          itensResumoTexto(m, resultados),
           String(qtdTotal(m)),
           motivoSacTexto(m),
           m.usuario_nome,
@@ -399,13 +401,13 @@ export default function Historico({ usuario, armazem, armazens }: Props) {
       <section className="cartao">
         {erroBusca && (
           <div>
-            <p className="erro">{erroBusca}</p>
+            <p className="erro" role="alert">{erroBusca}</p>
             <button type="button" onClick={buscar}>
               Tentar novamente
             </button>
           </div>
         )}
-        {erroAcao && <p className="erro">{erroAcao}</p>}
+        {erroAcao && <p className="erro" role="alert">{erroAcao}</p>}
         {carregando ? (
           <Carregando texto="Buscando..." />
         ) : (
@@ -459,7 +461,7 @@ export default function Historico({ usuario, armazem, armazens }: Props) {
                         </>
                       )}
                       {fluxo === 'reparo_externo' && <td>{m.contraparte || '-'}</td>}
-                      <td>{itensResumo(m)}</td>
+                      <td>{itensResumoTexto(m, resultados)}</td>
                       <td>{qtdTotal(m)}</td>
                       {fluxo === 'saida_armazem' && <td>{m.quem_retirou || '-'}</td>}
                       {fluxo === 'sac' && <td>{motivoSacTexto(m)}</td>}

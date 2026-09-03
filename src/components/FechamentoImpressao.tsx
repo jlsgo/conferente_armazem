@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import type { Armazem, Fechamento, Movimento, VarianteFechamento } from '../types';
-import { colunaColeta, motivoSacTexto, resumoMovimentos, situacaoInfo } from '../lib/situacao';
+import { colunaColeta, itensResumoTexto, motivoSacTexto, resumoMovimentos, situacaoInfo } from '../lib/situacao';
 import { agoraLocalTexto, formatarData, formatarDataArquivo, formatarDataHora } from '../lib/data';
 import { paraCsv, baixarCsv } from '../lib/csv';
 import { baixarXlsx } from '../lib/xlsx';
-import { colunasFechamento, itensTexto, qtdTotal, resultadoReparoTexto, rodapeAuditoria } from '../lib/exportFechamento';
+import { colunasFechamento, qtdTotal, resultadoReparoTexto, rodapeAuditoria } from '../lib/exportFechamento';
 import logoEcoviva from '../assets/ecoviva-logo.png';
 
 type Variante = VarianteFechamento;
@@ -77,7 +77,7 @@ export default function FechamentoImpressao({
   }
 
   function handleExportarCsv() {
-    const { cabecalhos, linha } = colunasFechamento(variante, armazens);
+    const { cabecalhos, linha } = colunasFechamento(variante, armazens, lancamentos);
     const linhas = lancamentos.map(linha);
     const rodape = rodapeAuditoria(fechamento);
     const linhasComRodape = [...linhas, [], ...rodape.map((r) => [r.rotulo, r.valor])];
@@ -87,7 +87,7 @@ export default function FechamentoImpressao({
   async function handleExportarXlsx() {
     setExportandoXlsx(true);
     try {
-      const { cabecalhos, linha } = colunasFechamento(variante, armazens);
+      const { cabecalhos, linha } = colunasFechamento(variante, armazens, lancamentos);
       const linhas = lancamentos.map(linha);
       const rodape = rodapeAuditoria(fechamento);
       await baixarXlsx(nomeBase('xlsx'), [
@@ -186,7 +186,7 @@ export default function FechamentoImpressao({
                 </>
               )}
               {variante === 'reparo_externo' && <td>{m.contraparte || '-'}</td>}
-              <td>{itensTexto(m)}</td>
+              <td>{itensResumoTexto(m, lancamentos)}</td>
               <td>{qtdTotal(m)}</td>
               {variante === 'armazem' && <td>{m.quem_retirou || '-'}</td>}
               {variante === 'montagem' && <td>{resultadoReparoTexto(m)}</td>}

@@ -39,7 +39,7 @@ export default function App() {
   if (erro || !status) {
     return (
       <div className="tela-centralizada">
-        <p className="erro">{erro || 'Nao foi possivel iniciar o aplicativo.'}</p>
+        <p className="erro" role="alert">{erro || 'Nao foi possivel iniciar o aplicativo.'}</p>
         <button type="button" onClick={refreshStatus}>
           Tentar novamente
         </button>

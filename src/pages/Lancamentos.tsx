@@ -14,9 +14,10 @@ import Carregando from '../components/Carregando';
 import TransferenciasChegando from '../components/TransferenciasChegando';
 import TransferenciasRecusadas from '../components/TransferenciasRecusadas';
 import ResumoDoDia from '../components/ResumoDoDia';
-import { colunaColeta, situacaoInfo } from '../lib/situacao';
+import { colunaColeta, itensResumoTexto, situacaoInfo } from '../lib/situacao';
 import { formatarData } from '../lib/data';
 import { algumCampoEhOutro } from '../lib/outro';
+import { itensPreenchidos } from '../lib/formularioSujo';
 import { useToast } from '../lib/toast';
 
 interface Props {
@@ -25,6 +26,8 @@ interface Props {
   armazens: Armazem[];
   /** Avisa o Dashboard pra atualizar o contador de pendentes nas abas na hora, sem esperar o polling de 60s. */
   onTransferenciaConfirmada?: () => void;
+  /** Avisa o Dashboard se ha algo digitado que seria perdido ao trocar de aba. */
+  onSujoChange?: (sujo: boolean) => void;
 }
 
 interface ItemForm {
@@ -69,7 +72,13 @@ function novoItemVazio(): ItemForm {
   return { categoria: 'scooter', descricao: '', montagem: '', quantidade: 1, observacao: '' };
 }
 
-export default function Lancamentos({ usuario, armazem, armazens, onTransferenciaConfirmada }: Props) {
+export default function Lancamentos({
+  usuario,
+  armazem,
+  armazens,
+  onTransferenciaConfirmada,
+  onSujoChange,
+}: Props) {
   const armazemId = usuario.armazem_id as number;
   const data = dataDeHoje();
   const outroArmazem = armazens.find((a) => a.id !== armazem?.id);
@@ -95,6 +104,16 @@ export default function Lancamentos({ usuario, armazem, armazens, onTransferenci
   const [enviando, setEnviando] = useState(false);
   const [fechando, setFechando] = useState(false);
   const [estornando, setEstornando] = useState<number | null>(null);
+
+  useEffect(() => {
+    const sujo =
+      numeroPedido.trim() !== '' ||
+      contraparte.trim() !== '' ||
+      quemRetirou.trim() !== '' ||
+      observacoes.trim() !== '' ||
+      itensPreenchidos(itens);
+    onSujoChange?.(sujo);
+  }, [numeroPedido, contraparte, quemRetirou, observacoes, itens, onSujoChange]);
 
   async function carregarTudo() {
     setCarregandoLista(true);
@@ -285,7 +304,7 @@ export default function Lancamentos({ usuario, armazem, armazens, onTransferenci
   if (erroCarregamento) {
     return (
       <div className="cartao">
-        <p className="erro">{erroCarregamento}</p>
+        <p className="erro" role="alert">{erroCarregamento}</p>
         <button type="button" onClick={carregarTudo}>
           Tentar novamente
         </button>
@@ -299,7 +318,7 @@ export default function Lancamentos({ usuario, armazem, armazens, onTransferenci
         <p className="aviso-fechado">
           O dia {formatarData(data)} ja foi fechado por {fechamento.usuario_nome}. Os lancamentos abaixo sao somente leitura.
         </p>
-        {erro && <p className="erro">{erro}</p>}
+        {erro && <p className="erro" role="alert">{erro}</p>}
         <section className="cartao somente-tela">
           <h2>Corrigir um lancamento deste dia</h2>
           <p className="subtitulo">
@@ -405,7 +424,14 @@ export default function Lancamentos({ usuario, armazem, armazens, onTransferenci
               Numero do pedido {paraOutroArmazemNoForm && '(opcional)'}
               <input
                 value={numeroPedido}
-                onChange={(e) => setNumeroPedido(e.target.value)}
+                onChange={(e) => {
+                  // Limpa o alerta ja na digitacao: ele foi calculado pro numero
+                  // anterior (verificado no blur) - sem isso, corrigir um numero
+                  // digitado errado deixava o aviso na tela referenciando o
+                  // pedido novo, que nunca chegou a ser consultado.
+                  setAlertaRetiradaPendente(null);
+                  setNumeroPedido(e.target.value);
+                }}
                 onBlur={verificarPedidoPendente}
                 placeholder="Ex: 3932"
                 required={!paraOutroArmazemNoForm}
@@ -435,7 +461,7 @@ export default function Lancamentos({ usuario, armazem, armazens, onTransferenci
           </div>
 
           {alertaRetiradaPendente && (
-            <p className="erro" style={{ background: 'var(--aviso-claro)', color: 'var(--aviso-escuro)', borderColor: '#f0c36d' }}>
+            <p className="erro" role="alert" style={{ background: 'var(--aviso-claro)', color: 'var(--aviso-escuro)', borderColor: '#f0c36d' }}>
               Atencao: o pedido {numeroPedido} teve uma retirada parcial em{' '}
               {formatarData(alertaRetiradaPendente.data)} ({alertaRetiradaPendente.itens.reduce((s, it) => s + it.quantidade, 0)} un.).
               Confirme se esta e a retirada complementar.
@@ -530,7 +556,7 @@ export default function Lancamentos({ usuario, armazem, armazens, onTransferenci
             + adicionar item
           </button>
 
-          {erro && <p className="erro">{erro}</p>}
+          {erro && <p className="erro" role="alert">{erro}</p>}
 
           <div style={{ marginTop: 20 }}>
             <button type="submit" disabled={enviando}>
@@ -569,14 +595,7 @@ export default function Lancamentos({ usuario, armazem, armazens, onTransferenci
                   {!m.retirada_completa && <span className="badge badge-parcial"> parcial</span>}
                 </td>
                 <td>{colunaColeta(m, armazens)}</td>
-                <td>
-                  {m.itens
-                    .map(
-                      (it) =>
-                        `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}${it.observacao ? ' - ' + it.observacao : ''}`
-                    )
-                    .join(' + ')}
-                </td>
+                <td>{itensResumoTexto(m, lancamentos)}</td>
                 <td>{m.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
                 <td>{m.quem_retirou || '-'}</td>
                 <td>{m.observacoes || '-'}</td>

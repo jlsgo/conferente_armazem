@@ -117,7 +117,7 @@ export default function Usuarios({ armazens }: Props) {
             Todo novo cadastro entra como conferente. So existe um usuario gestor no sistema.
           </p>
 
-          {erro && <p className="erro">{erro}</p>}
+          {erro && <p className="erro" role="alert">{erro}</p>}
           {sucesso && <p className="sucesso">{sucesso}</p>}
 
           <button type="submit" disabled={enviando}>
@@ -132,7 +132,7 @@ export default function Usuarios({ armazens }: Props) {
           <Carregando />
         ) : erroCarregamento ? (
           <div>
-            <p className="erro">{erroCarregamento}</p>
+            <p className="erro" role="alert">{erroCarregamento}</p>
             <button type="button" onClick={carregar}>
               Tentar novamente
             </button>
