@@ -1,6 +1,6 @@
 [package]
 name = "ecoviva-controle-armazem"
-version = "3.0.0"
+version = "3.1.0"
 description = "Controle de entradas e saidas dos armazens Ecoviva (offline-first)"
 authors = ["Ecoviva"]
 license = "UNLICENSED"
