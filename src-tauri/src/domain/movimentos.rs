@@ -11,6 +11,14 @@ use super::errors::{AppError, AppResult};
 /// entao sempre fica registrado o que era de fato.
 const CATEGORIAS_VALIDAS: [&str; 5] = ["scooter", "triciclo", "patinete", "peca", "outro"];
 const FLUXOS_VALIDOS: [&str; 4] = ["saida_armazem", "peca_montagem", "sac", "reparo_externo"];
+/// Fluxos que suportam transferencia fisica entre A4 e B2 (`armazem_destino_id`
+/// preenchido) - mesma lista de `db::sync::SQL_PENDENTES_RECEBIMENTO`, que so
+/// filtra `fluxo IN ('peca_montagem', 'saida_armazem', 'sac')`. `reparo_externo`
+/// fica de fora de proposito (peca vai/volta do tecnico externo, nao de um
+/// armazem pro outro). Ate agora essa regra so vivia por convencao no
+/// frontend (nenhuma tela de reparo externo expoe o seletor de destino) -
+/// checada aqui tambem pra nao depender so disso.
+const FLUXOS_TRANSFERIVEIS: [&str; 3] = ["saida_armazem", "peca_montagem", "sac"];
 const TIPOS_VALIDOS: [&str; 2] = ["entrada", "saida"];
 const TURNOS_VALIDOS: [&str; 2] = ["diurno", "noturno"];
 const MONTAGENS_VALIDAS: [&str; 2] = ["montado", "caixa"];
@@ -196,6 +204,12 @@ fn validar_novo_movimento(novo: &NovoMovimento) -> AppResult<()> {
         return Err(AppError::Validation(format!(
             "Turno invalido: {}",
             novo.turno
+        )));
+    }
+    if novo.armazem_destino_id.is_some() && !FLUXOS_TRANSFERIVEIS.contains(&novo.fluxo.as_str()) {
+        return Err(AppError::Validation(format!(
+            "Fluxo {} nao suporta transferencia entre armazens.",
+            novo.fluxo
         )));
     }
     validar_texto_livre("Numero do pedido", novo.numero_pedido.as_deref())?;
@@ -811,7 +825,13 @@ pub fn estornar_movimento(
     }
 
     let itens_originais = carregar_itens(&tx, movimento_id)?;
-    let observacoes = format!("ESTORNO do lancamento #{movimento_id}: {justificativa}");
+    // So a justificativa, sem embutir o `id` interno do banco: o `estornado_de`
+    // abaixo ja e a referencia estrutural pro lancamento original, e esse `id`
+    // nao bate com o "Nº" que o conferente ve nas telas (calculado por posicao
+    // em `listar_movimentos_do_dia`). A associacao "Estorno do Nº X" e montada
+    // no frontend, que tem o `numero` calculado e a lista completa do dia
+    // (`situacao::detalheEstorno`).
+    let observacoes = justificativa.to_string();
 
     let campos = CamposHash {
         armazem_id: original.armazem_id,
@@ -2067,6 +2087,12 @@ mod tests {
         assert_eq!(estorno.estornado_de, Some(original.id));
         assert_eq!(estorno.status, "estorno");
         assert_eq!(estorno.itens.len(), original.itens.len());
+        // So a justificativa pura - ver comentario em `estornar_movimento` sobre
+        // por que o `id` interno nao entra mais nesse texto.
+        assert_eq!(
+            estorno.observacoes.as_deref(),
+            Some("pedido duplicado por engano")
+        );
     }
 
     #[test]
@@ -2274,6 +2300,22 @@ mod tests {
         .unwrap();
 
         let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.armazem_destino_id = Some(armazem_a4);
+        let resultado = criar_movimento(&mut conn, novo);
+        assert!(matches!(resultado, Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn rejeita_armazem_destino_em_fluxo_que_nao_suporta_transferencia() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let armazem_a4: i64 = conn
+            .query_row("SELECT id FROM armazens WHERE codigo = 'A4'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.fluxo = "reparo_externo".into();
         novo.armazem_destino_id = Some(armazem_a4);
         let resultado = criar_movimento(&mut conn, novo);
         assert!(matches!(resultado, Err(AppError::Validation(_))));

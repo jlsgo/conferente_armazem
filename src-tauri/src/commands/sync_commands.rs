@@ -207,7 +207,7 @@ pub async fn confirmar_recebimento(
 
     let movimento_confirmado = {
         let mut conn = state.conn()?;
-        let data: String = conn.query_row("SELECT date('now')", [], |r| r.get(0))?;
+        let data: String = conn.query_row("SELECT date('now', 'localtime')", [], |r| r.get(0))?;
         movimentos::criar_movimento(
             &mut conn,
             NovoMovimento {
@@ -318,7 +318,7 @@ pub async fn recusar_recebimento(
 
     let movimento_recusado = {
         let mut conn = state.conn()?;
-        let data: String = conn.query_row("SELECT date('now')", [], |r| r.get(0))?;
+        let data: String = conn.query_row("SELECT date('now', 'localtime')", [], |r| r.get(0))?;
         movimentos::recusar_recebimento(
             &mut conn,
             armazem_id,

@@ -14,7 +14,7 @@ const SUFIXO: &str = ".db";
 const NOME_ARQUIVO_CONFIG_EXTERNO: &str = "backup_externo.txt";
 
 fn data_de_hoje(conn: &Connection) -> AppResult<String> {
-    Ok(conn.query_row("SELECT date('now')", [], |r| r.get(0))?)
+    Ok(conn.query_row("SELECT date('now', 'localtime')", [], |r| r.get(0))?)
 }
 
 /// Nucleo compartilhado por `backup_automatico` e `backup_externo`: grava o
