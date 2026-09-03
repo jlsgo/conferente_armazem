@@ -198,12 +198,13 @@
   table { width: 100%; border-collapse: collapse; font-size: 0.85rem; table-layout: fixed; }
   th, td { text-align: left; padding: 8px 8px; border-bottom: 1px solid var(--borda); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .col-armazem { width: 8%; }
-  .col-fluxo { width: 11%; white-space: normal; }
+  .col-fluxo { width: 8%; white-space: normal; }
   .col-datahora { width: 12%; }
   .col-qtd { width: 6%; }
-  .col-registrado { width: 13%; }
+  .col-registrado { width: 11%; }
   .col-situacao { width: 9%; }
   .col-sincronizado { width: 11%; }
+  .col-coleta { width: 9%; white-space: normal; }
   th { position: sticky; top: 0; background: var(--cartao); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--texto-suave); }
   tbody tr:hover { background: var(--bg); }
   .tabela-scroll { overflow-x: auto; max-height: 65vh; overflow-y: auto; border-radius: 8px; border: 1px solid var(--borda); }
@@ -218,7 +219,8 @@
   .badge-recusado { background: var(--aviso-claro); color: var(--aviso); }
   .col-pedido { width: 10%; }
   td.col-pedido { font-weight: 700; color: var(--verde-escuro); }
-  .col-itens { width: 20%; white-space: normal; }
+  .col-itens { width: 16%; white-space: normal; }
+  .obs-detalhe { color: var(--texto-suave); font-style: italic; }
   .aviso-truncado {
     background: var(--aviso-claro);
     color: var(--aviso);
@@ -263,6 +265,75 @@
   .barra-linha .valor-barra { width: 34px; text-align: right; font-weight: 600; }
   .lista-pendentes p { padding: 8px 0; border-bottom: 1px solid var(--borda); margin: 0; }
   .lista-pendentes p:last-child { border-bottom: none; }
+
+  /* P3 do levantamento do painel (ver docs/ROADMAP.md, "P3 ganhou um item
+     concreto: visualizacao no celular") - ate aqui a pagina nao tinha
+     nenhum @media de largura. So `@media (max-width: ...)`, sem framework
+     novo, mesma filosofia "sem build step" do resto do arquivo. Um so
+     breakpoint (720px, cobre celular em pe e retrato de tablet estreito)
+     em vez de varios estagios, pra manter o raciocinio simples de revisar. */
+  @media (max-width: 720px) {
+    main { padding: 12px; }
+    .cartao { padding: 12px; }
+
+    /* Cabecalho quebrava o seletor PT/中文 em circulos espremidos - forcar
+       ele pra propria linha (100% de largura dentro do flex com wrap) em
+       vez de disputar espaco com o titulo. */
+    header { flex-wrap: wrap; row-gap: 8px; padding: 14px 16px; }
+    header h1 { font-size: 1.05rem; }
+    header .idioma-toggle { margin-left: 0; width: 100%; justify-content: flex-end; }
+
+    /* Grade de filtros: o wrap automatico agrupava campos de forma
+       arbitraria (ex.: atalhos de periodo dividindo linha com Responsavel
+       por acaso) - empilhado em coluna unica fica previsivel. */
+    .filtros { flex-direction: column; align-items: stretch; }
+    .filtros label, .filtros label.campo-destaque input { width: 100%; min-width: 0; }
+    .atalhos-periodo button { flex: 1; }
+
+    /* Tabela de 10 colunas era ilegivel (cabecalho truncava pra letras
+       soltas so no layout, antes de qualquer dado) - so esconder colunas
+       nao bastou (confirmado num teste real: mesmo com so 7, o cabecalho
+       de largura fixa ainda truncava pra "A...", "DAT...", "CO..." etc.).
+       Layout "tabela vira lista de cartoes": cada `<tr>` passa a ser um
+       bloco empilhado, cada celula uma linha label:valor (o rotulo vem de
+       `data-label`, escrito por `renderizarTabela`/`t()` - unico ponto que
+       precisou de JS novo, o resto e so CSS). Esconde Fluxo/Registrado
+       por/Sincronizado (Sincronizado ja tem o card "Sincronizacao por
+       armazem" acima, por armazem) pra cada cartao nao ficar comprido
+       demais numa lista de 200+ movimentos. */
+    .tabela-scroll table, .tabela-scroll tbody, .tabela-scroll tr { display: block; width: 100%; }
+    .tabela-scroll thead { display: none; }
+    .tabela-scroll tbody tr {
+      border: 1px solid var(--borda);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+    }
+    .tabela-scroll td {
+      display: block;
+      width: 100% !important;
+      border-bottom: none;
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+      padding: 3px 0;
+    }
+    .tabela-scroll td::before {
+      content: attr(data-label);
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--texto-suave);
+    }
+    .col-fluxo, .col-registrado, .col-sincronizado { display: none !important; }
+
+    /* Rotulo do grafico de barra (categoria/armazem/fluxo) mais estreito -
+       sobra mais espaco pra barra em si numa tela de ~360-400px de largura
+       util (depois do padding do .cartao acima). */
+    .barra-linha .rotulo-barra { width: 78px; font-size: 0.74rem; }
+  }
 </style>
 </head>
 <body>
@@ -401,6 +472,7 @@
               <th class="col-fluxo" data-i18n="colFluxo">Fluxo</th>
               <th class="col-datahora" data-i18n="colData">Data/Hora</th>
               <th class="col-pedido" data-i18n="colPedido">Pedido</th>
+              <th class="col-coleta" data-i18n="colColeta">Coleta</th>
               <th class="col-itens" data-i18n="colItens">Itens</th>
               <th class="col-qtd" data-i18n="colQtd">Qtd.</th>
               <th class="col-registrado" data-i18n="colRegistradoPor">Registrado por</th>
@@ -505,11 +577,14 @@
       colFluxo: "Fluxo",
       colData: "Data/Hora",
       colPedido: "Pedido",
+      colColeta: "Coleta",
       colItens: "Itens",
       colQtd: "Qtd.",
       colRegistradoPor: "Registrado por",
       colSituacao: "Situacao",
       colSincronizado: "Sincronizado",
+      coletaEnviadoPara: "Enviado para",
+      coletaRecebidoDe: "Recebido de",
       rodapePagina: "Este painel espelha os dados do app oficial de A4/B2 em tempo quase real - nao e a fonte oficial nem o lugar pra conferir a integridade de um lancamento especifico (cada lancamento tem um hash de auditoria encadeado que fica no app, nao reproduzido aqui).",
       statusCarregando: "Carregando...",
       nuncaSincronizou: "nunca sincronizou",
@@ -520,6 +595,7 @@
       statTilePendentes: "Transferencias pendentes",
       statTileRecusados: "Recebimentos recusados",
       statTileTaxaEstorno: "Taxa de estorno",
+      statTileValorVendas: "Valor total (vendas SAC)",
       semDadosPeriodo: "Sem dados no periodo.",
       situacaoEstornoBadge: "ESTORNO",
       situacaoBaixaBadge: "BAIXA",
@@ -577,11 +653,14 @@
       colFluxo: "流程",
       colData: "日期/时间",
       colPedido: "订单",
+      colColeta: "去向",
       colItens: "物品",
       colQtd: "数量",
       colRegistradoPor: "登记人",
       colSituacao: "状态",
       colSincronizado: "同步时间",
+      coletaEnviadoPara: "已发往",
+      coletaRecebidoDe: "收自",
       rodapePagina: "此面板近实时镜像 A4/B2 官方应用的数据 - 它不是官方数据源，也不是核实某条记录完整性的地方（每条记录在官方应用中都有一个链式审计哈希，此处不会重现）。",
       statusCarregando: "加载中...",
       nuncaSincronizou: "从未同步",
@@ -592,6 +671,7 @@
       statTilePendentes: "待确认转运",
       statTileRecusados: "被拒收次数",
       statTileTaxaEstorno: "冲销率",
+      statTileValorVendas: "销售总额（SAC）",
       semDadosPeriodo: "该时段无数据。",
       situacaoEstornoBadge: "冲销",
       situacaoBaixaBadge: "出库",
@@ -686,9 +766,23 @@
   // `linhaParaMovimento` ja usava - ver o comentario la sobre o bug que
   // `motivo` faltando aqui causou (recusa de recebimento invisivel no
   // painel, badge sempre caindo pro caso generico "ENTRADA").
+  // `observacoes` acrescentada no fim (indice 16), mesmo cuidado ja usado
+  // pra `motivo` - nao reordena os indices posicionais existentes que
+  // `linhaParaMovimento` ja usa. Carrega o motivo do estorno (justificativa
+  // gravada por `estornar_movimento` no app) e o motivo da recusa
+  // (`recusar_recebimento`) - antes disso, um badge ESTORNO/RECUSADO no
+  // painel nao vinha acompanhado de nenhuma explicacao.
+  // `contraparte` tambem no fim (indice 17) - e o campo "pra quem/onde a
+  // peca foi" (transportadora/cliente numa saida normal, tecnico/oficina no
+  // reparo externo). Sem ele, uma vez que uma transferencia sai da lista de
+  // pendentes (confirmada ou recusada), o destino/cliente some da visao do
+  // painel - so a coluna Coleta (`colunaColeta` abaixo) usa esse campo.
+  // `valor_centavos` no fim tambem (indice 18) - so preenchido no SAC
+  // (motivo "venda"), usado pro stat tile de valor total de vendas abaixo.
   var COLUNAS_MOVIMENTO = "armazem_codigo, id_origem, fluxo, tipo, data, hora, usuario_nome, " +
     "numero_pedido, status, estornado_de, itens_json, armazem_destino_codigo, " +
-    "recebido_de_armazem_codigo, recebido_de_id_origem, enviado_em, motivo";
+    "recebido_de_armazem_codigo, recebido_de_id_origem, enviado_em, motivo, observacoes, contraparte, " +
+    "valor_centavos";
   var ultimosFiltrados = [];
   var intervaloAtualizacao = null;
 
@@ -786,8 +880,23 @@
       recebido_de_armazem_codigo: v(12),
       recebido_de_id_origem: v(13) != null ? Number(v(13)) : null,
       enviado_em: v(14),
-      motivo: v(15)
+      motivo: v(15),
+      observacoes: v(16),
+      contraparte: v(17),
+      valor_centavos: v(18) != null ? Number(v(18)) : null
     };
+  }
+
+  // Mesma logica de `colunaColeta` (src/lib/situacao.ts) - "Enviado para" e
+  // ja a coluna Coleta do proprio app pra transferencia entre armazens
+  // (`armazem_destino_codigo` ja vem como o codigo, nao um id, entao nao
+  // precisa de lookup de armazem aqui como no lado Rust/TS), "Recebido de"
+  // pra confirmacao de transferencia, senao a contraparte (transportadora/
+  // cliente/tecnico) ou "-".
+  function colunaColeta(m) {
+    if (m.armazem_destino_codigo) return t("coletaEnviadoPara") + " " + m.armazem_destino_codigo;
+    if (m.recebido_de_armazem_codigo) return t("coletaRecebidoDe") + " " + m.recebido_de_armazem_codigo;
+    return m.contraparte ? escaparHtml(m.contraparte) : "-";
   }
 
   // Sentinela gravado por `domain::movimentos::recusar_recebimento` no app -
@@ -818,10 +927,21 @@
   // SQL) - o token do Turso aqui e somente-leitura (reforcado pelo
   // servidor, ver docs/ARQUITETURA.md), mas nao ha motivo pra depender so
   // disso podendo simplesmente nao concatenar.
+  // Mesma logica de `domain::movimentos::escapar_curinga_like` no app - sem
+  // isso, "%"/"_" digitados no numero do pedido sao tratados como curinga do
+  // SQLite (ex.: buscar "50_1" tambem trazia "5011"), trazendo linha a mais
+  // de forma silenciosa no filtro mais destacado da tela.
+  function escaparCuringaLike(texto) {
+    return texto.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+  }
+
   function montarFiltroSql(filtros) {
     var condicoes = [];
     var args = [];
-    if (filtros.pedido) { condicoes.push("numero_pedido LIKE ?"); args.push("%" + filtros.pedido + "%"); }
+    if (filtros.pedido) {
+      condicoes.push("numero_pedido LIKE ? ESCAPE '\\'");
+      args.push("%" + escaparCuringaLike(filtros.pedido) + "%");
+    }
     if (filtros.armazem) { condicoes.push("armazem_codigo = ?"); args.push(filtros.armazem); }
     if (filtros.fluxo) { condicoes.push("fluxo = ?"); args.push(filtros.fluxo); }
     if (filtros.dataInicio) { condicoes.push("data >= ?"); args.push(filtros.dataInicio); }
@@ -959,9 +1079,23 @@
     var el = document.getElementById("filtro-responsavel");
     var selecionado = el.value;
     el.innerHTML = '<option value="">' + t("opcaoTodos") + '</option>' + nomes.map(function (nome) {
-      return '<option value="' + nome.replace(/"/g, "&quot;") + '">' + nome + "</option>";
+      var seguro = escaparHtml(nome);
+      return '<option value="' + seguro + '">' + seguro + "</option>";
     }).join("");
     if (nomes.indexOf(selecionado) >= 0) el.value = selecionado;
+  }
+
+  // Texto livre (descricao/observacao/nome/pedido) vem do app, digitado por
+  // um conferente - nunca deve ir cru pro `innerHTML` (achado ao acrescentar
+  // `observacoes` abaixo: varios campos ja faziam isso sem escapar, um XSS
+  // armazenado em potencial se algum desses campos algum dia contiver HTML).
+  function escaparHtml(texto) {
+    return String(texto)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   function totalItens(itens) {
@@ -986,7 +1120,7 @@
 
   function resumoItens(itens) {
     return itens.map(function (it) {
-      var base = it.quantidade + "x " + rotuloCategoria(it.categoria) + (it.descricao ? " (" + it.descricao + ")" : "");
+      var base = it.quantidade + "x " + rotuloCategoria(it.categoria) + (it.descricao ? " (" + escaparHtml(it.descricao) + ")" : "");
       if (it.quantidade_enviada != null && it.quantidade_enviada !== it.quantidade) {
         base += idiomaAtual === "zh"
           ? " [差异：发送了 " + it.quantidade_enviada + "]"
@@ -1031,9 +1165,15 @@
       return;
     }
     el.innerHTML = pendentes.map(function (m) {
+      // "AAAA-MM-DD" + "HH:MM" concatenados no mesmo formato que
+      // `tempoRelativo` espera ("AAAA-MM-DD HH:MM:SS") - da pra saber ha
+      // quanto tempo uma transferencia esta parada, nao so quando foi
+      // enviada. Uma pendente de uma semana parecia igual a uma de uma hora.
+      var haQuanto = tempoRelativo(m.data + " " + m.hora + ":00");
       return '<p><span class="badge badge-pendente">' + t("badgePendente") + '</span> ' +
         m.armazem_codigo + " &rarr; " + (m.armazem_destino_codigo || "?") + " - " +
-        formatarData(m.data) + " " + m.hora + " - " + resumoItens(m.itens) + "</p>";
+        formatarData(m.data) + " " + m.hora +
+        (haQuanto ? " (" + haQuanto + ")" : "") + " - " + resumoItens(m.itens) + "</p>";
     }).join("");
   }
 
@@ -1054,6 +1194,17 @@
     });
   }
 
+  // So mostra a observacao pra estorno/recusado - e onde ela carrega a
+  // explicacao do que aconteceu (justificativa do estorno, motivo da
+  // recusa); nos outros casos normalmente e so instrucao de transferencia
+  // ja resolvida, menos critica pra quem so esta olhando o historico.
+  function detalheObservacao(m) {
+    if (!m.observacoes) return "";
+    var valor = situacaoValor(m);
+    if (valor !== "estorno" && valor !== "recusado") return "";
+    return ' <span class="obs-detalhe">- ' + escaparHtml(m.observacoes) + "</span>";
+  }
+
   function renderizarTabela(filtrados, totalSemBusca, truncado) {
     var corpo = document.getElementById("corpo-tabela");
     corpo.innerHTML = filtrados.map(function (m) {
@@ -1061,18 +1212,24 @@
         ? ' <span class="badge badge-divergencia">' + t("divergenciaBadge") + '</span>'
         : "";
       var sincronizado = m.enviado_em
-        ? '<td class="col-sincronizado" title="' + formatarDataHora(m.enviado_em) + '">' + tempoRelativo(m.enviado_em) + "</td>"
-        : '<td class="col-sincronizado">-</td>';
-      var nomeAttr = (m.usuario_nome || "").replace(/"/g, "&quot;");
+        ? '<td class="col-sincronizado" data-label="' + t("colSincronizado") + '" title="' + escaparHtml(formatarDataHora(m.enviado_em)) + '">' + tempoRelativo(m.enviado_em) + "</td>"
+        : '<td class="col-sincronizado" data-label="' + t("colSincronizado") + '">-</td>';
+      var nomeSeguro = escaparHtml(m.usuario_nome || "");
+      var pedidoSeguro = escaparHtml(m.numero_pedido || "-");
+      // `data-label` alimenta o rotulo de cada campo no layout "cartao"
+      // usado em tela estreita (ver o @media (max-width: 720px) - o
+      // pseudo-elemento `td::before { content: attr(data-label) }` le
+      // daqui). Sem efeito nenhum acima do breakpoint.
       return "<tr>" +
-        '<td class="col-armazem">' + m.armazem_codigo + "</td>" +
-        '<td class="col-fluxo">' + rotuloFluxo(m.fluxo) + "</td>" +
-        '<td class="col-datahora" title="' + formatarData(m.data) + " " + m.hora + '">' + formatarData(m.data) + " " + m.hora + "</td>" +
-        '<td class="col-pedido">' + (m.numero_pedido || "-") + "</td>" +
-        '<td class="col-itens">' + resumoItens(m.itens) + divergencia + "</td>" +
-        '<td class="col-qtd">' + totalItens(m.itens) + "</td>" +
-        '<td class="col-registrado" title="' + nomeAttr + '">' + m.usuario_nome + "</td>" +
-        '<td class="col-situacao">' + situacaoBadge(m) + "</td>" +
+        '<td class="col-armazem" data-label="' + t("colArmazem") + '">' + m.armazem_codigo + "</td>" +
+        '<td class="col-fluxo" data-label="' + t("colFluxo") + '">' + rotuloFluxo(m.fluxo) + "</td>" +
+        '<td class="col-datahora" data-label="' + t("colData") + '" title="' + formatarData(m.data) + " " + m.hora + '">' + formatarData(m.data) + " " + m.hora + "</td>" +
+        '<td class="col-pedido" data-label="' + t("colPedido") + '">' + pedidoSeguro + "</td>" +
+        '<td class="col-coleta" data-label="' + t("colColeta") + '">' + colunaColeta(m) + "</td>" +
+        '<td class="col-itens" data-label="' + t("colItens") + '">' + resumoItens(m.itens) + divergencia + detalheObservacao(m) + "</td>" +
+        '<td class="col-qtd" data-label="' + t("colQtd") + '">' + totalItens(m.itens) + "</td>" +
+        '<td class="col-registrado" data-label="' + t("colRegistradoPor") + '" title="' + nomeSeguro + '">' + nomeSeguro + "</td>" +
+        '<td class="col-situacao" data-label="' + t("colSituacao") + '">' + situacaoBadge(m) + "</td>" +
         sincronizado +
         "</tr>";
     }).join("");
@@ -1091,6 +1248,9 @@
   function calcularInsights(filtrados, pendentesCount) {
     var porDia = {}, porCategoria = {}, porArmazem = {}, porFluxo = {};
     var totalEstorno = 0, totalRecusado = 0, totalUnidades = 0, totalEntrada = 0, totalSaida = 0;
+    // So soma venda de estorno/recusa fora (nao e uma venda de verdade
+    // acontecendo) - mesmo criterio das outras somas acima.
+    var totalVendasCentavos = 0;
     filtrados.forEach(function (m) {
       var qtd = totalItens(m.itens);
       totalUnidades += qtd;
@@ -1107,6 +1267,7 @@
         totalSaida += qtd;
       } else {
         totalEntrada += qtd;
+        if (m.motivo === "venda" && m.valor_centavos) totalVendasCentavos += m.valor_centavos;
       }
       m.itens.forEach(function (it) {
         porCategoria[it.categoria] = (porCategoria[it.categoria] || 0) + (it.quantidade || 0);
@@ -1122,9 +1283,15 @@
       totalEntrada: totalEntrada,
       totalSaida: totalSaida,
       totalRecusado: totalRecusado,
+      totalVendasCentavos: totalVendasCentavos,
       taxaEstorno: filtrados.length ? (totalEstorno / filtrados.length) : 0,
       pendentesCount: pendentesCount
     };
+  }
+
+  function formatarMoeda(centavos) {
+    var valor = (centavos / 100).toFixed(2).replace(".", ",");
+    return idiomaAtual === "zh" ? "R$" + valor : "R$ " + valor;
   }
 
   // Cores fixas por chave conhecida (nao por posicao/ordem), pra cada
@@ -1162,7 +1329,8 @@
       [t("tipoSaida"), dados.totalSaida],
       [t("statTilePendentes"), dados.pendentesCount],
       [t("statTileRecusados"), dados.totalRecusado],
-      [t("statTileTaxaEstorno"), (dados.taxaEstorno * 100).toFixed(1) + "%"]
+      [t("statTileTaxaEstorno"), (dados.taxaEstorno * 100).toFixed(1) + "%"],
+      [t("statTileValorVendas"), formatarMoeda(dados.totalVendasCentavos)]
     ].map(function (item) {
       return '<div class="stat-tile"><div class="valor">' + item[1] + '</div><div class="rotulo">' + item[0] + '</div></div>';
     }).join("");
@@ -1292,7 +1460,17 @@
 
     atualizar();
     if (intervaloAtualizacao) clearInterval(intervaloAtualizacao);
-    intervaloAtualizacao = setInterval(atualizar, 30000);
+    // Pula a atualizacao automatica com a aba em segundo plano (deixada
+    // aberta numa tela de escritorio, por exemplo) - sem isso o painel
+    // continuava consultando o Turso a cada 30s pra nada, ja que ninguem
+    // estava vendo o resultado. Ao voltar pra aba, atualiza na hora em vez
+    // de esperar o proximo ciclo, pra nao mostrar dado velho.
+    intervaloAtualizacao = setInterval(function () {
+      if (!document.hidden) atualizar();
+    }, 30000);
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden) atualizar();
+    });
   }
 })();
 </script>
