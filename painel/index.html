@@ -585,6 +585,9 @@
       colSincronizado: "Sincronizado",
       coletaEnviadoPara: "Enviado para",
       coletaRecebidoDe: "Recebido de",
+      estornoRefPedido: "Estorno do pedido",
+      estornoRefHorario: "Estorno do lancamento de",
+      estornoRefNaoEncontrado: "Estorno de um lancamento fora do filtro atual",
       rodapePagina: "Este painel espelha os dados do app oficial de A4/B2 em tempo quase real - nao e a fonte oficial nem o lugar pra conferir a integridade de um lancamento especifico (cada lancamento tem um hash de auditoria encadeado que fica no app, nao reproduzido aqui).",
       statusCarregando: "Carregando...",
       nuncaSincronizou: "nunca sincronizou",
@@ -661,6 +664,9 @@
       colSincronizado: "同步时间",
       coletaEnviadoPara: "已发往",
       coletaRecebidoDe: "收自",
+      estornoRefPedido: "冲销订单",
+      estornoRefHorario: "冲销的记录时间",
+      estornoRefNaoEncontrado: "冲销的记录不在当前筛选范围内",
       rodapePagina: "此面板近实时镜像 A4/B2 官方应用的数据 - 它不是官方数据源，也不是核实某条记录完整性的地方（每条记录在官方应用中都有一个链式审计哈希，此处不会重现）。",
       statusCarregando: "加载中...",
       nuncaSincronizou: "从未同步",
@@ -965,6 +971,37 @@
     return { where: condicoes.length ? " WHERE " + condicoes.join(" AND ") : "", args: args };
   }
 
+  // Busca so os lancamentos originais de estornos que NAO vieram no
+  // resultado ja filtrado - acontece sempre que o filtro de Situacao esta
+  // em "Estorno" (o WHERE `estornado_de IS NOT NULL` exclui estruturalmente
+  // o original) ou quando o periodo/paginacao corta o original fora. `faltando`
+  // e uma lista de {armazemCodigo, idOrigem}; retorna vazio sem round-trip
+  // nenhum se nao faltar nada (caso comum - a maioria das telas nao filtra
+  // por estorno).
+  async function buscarReferenciasEstorno(faltando) {
+    if (!faltando.length) return {};
+    var condicoes = [];
+    var args = [];
+    faltando.forEach(function (f) {
+      condicoes.push("(armazem_codigo = ? AND id_origem = ?)");
+      args.push(f.armazemCodigo, f.idOrigem);
+    });
+    var sql = "SELECT armazem_codigo, id_origem, numero_pedido, data, hora FROM movimentos_consolidados WHERE " +
+      condicoes.join(" OR ");
+    var linhas = await executarSql(sql, args);
+    var mapa = {};
+    linhas.forEach(function (linha) {
+      var armazem = linha[0] && linha[0].value;
+      var id = linha[1] && linha[1].value;
+      mapa[armazem + ":" + id] = {
+        numero_pedido: linha[2] && linha[2].value,
+        data: linha[3] && linha[3].value,
+        hora: linha[4] && linha[4].value
+      };
+    });
+    return mapa;
+  }
+
   // Movimentos pro periodo/filtro selecionado (tabela + insights). Pede uma
   // linha a mais que o limite pra saber se foi cortado, sem precisar de um
   // COUNT(*) separado - mesma ideia ja usada em `buscar_historico` no app.
@@ -1198,11 +1235,47 @@
   // explicacao do que aconteceu (justificativa do estorno, motivo da
   // recusa); nos outros casos normalmente e so instrucao de transferencia
   // ja resolvida, menos critica pra quem so esta olhando o historico.
+  // Registros gravados antes da v3.0.0 do app tinham "ESTORNO do
+  // lancamento #<id>: <motivo>" dentro da propria observacoes - o <id> e o
+  // id interno do banco (`estornado_de`/`id_origem`), que nao aparece em
+  // NENHUMA tela (nem aqui, nem no app) - "estorno do lancamento #147"
+  // nao da pra descobrir qual foi. A partir da v3.0.0 o app so grava o
+  // motivo puro ali; aqui removemos o prefixo antigo se existir, pra nunca
+  // mostrar esse id sem contexto - a referencia de verdade vem de
+  // `detalheObservacao` abaixo, resolvida contra o proprio `id_origem`.
+  function justificativaLimpa(m) {
+    return (m.observacoes || "")
+      .replace(/^ESTORNO do lancamento #\d+:\s*/, "")
+      .replace(/^RECUSADO - /, "");
+  }
+
   function detalheObservacao(m) {
-    if (!m.observacoes) return "";
     var valor = situacaoValor(m);
     if (valor !== "estorno" && valor !== "recusado") return "";
-    return ' <span class="obs-detalhe">- ' + escaparHtml(m.observacoes) + "</span>";
+    var motivo = justificativaLimpa(m);
+    if (valor === "recusado") {
+      return motivo ? ' <span class="obs-detalhe">- ' + escaparHtml(motivo) + "</span>" : "";
+    }
+    // Acha o lancamento original no proprio resultado ja carregado (mesmo
+    // armazem, id_origem == estornado_de) e mostra algo que da pra procurar
+    // na tabela - o numero do pedido, ou data/hora se nao tiver pedido
+    // (Montagem nunca tem). Se o original nao estiver no filtro atual
+    // (situacao/periodo restringiu demais), avisa em vez de nao mostrar nada.
+    var original = (ultimosFiltrados.movimentos || []).find(function (o) {
+      return o.armazem_codigo === m.armazem_codigo && o.id_origem === m.estornado_de;
+    });
+    if (!original && ultimosFiltrados.referenciasEstorno) {
+      original = ultimosFiltrados.referenciasEstorno[m.armazem_codigo + ":" + m.estornado_de];
+    }
+    var referencia;
+    if (original && original.numero_pedido) {
+      referencia = t("estornoRefPedido") + " " + escaparHtml(original.numero_pedido);
+    } else if (original) {
+      referencia = t("estornoRefHorario") + " " + formatarData(original.data) + " " + original.hora;
+    } else {
+      referencia = t("estornoRefNaoEncontrado");
+    }
+    return ' <span class="obs-detalhe">- ' + referencia + (motivo ? ": " + escaparHtml(motivo) : "") + "</span>";
   }
 
   function renderizarTabela(filtrados, totalSemBusca, truncado) {
@@ -1404,10 +1477,27 @@
       var pendentes = resultados[1];
       var ultimaSincPorArmazem = resultados[2];
 
+      var precisamOriginal = [];
+      var jaPedidos = {};
+      dadosFiltrados.movimentos.forEach(function (m) {
+        if (m.estornado_de == null) return;
+        var chave = m.armazem_codigo + ":" + m.estornado_de;
+        if (jaPedidos[chave]) return;
+        var jaCarregado = dadosFiltrados.movimentos.some(function (o) {
+          return o.armazem_codigo === m.armazem_codigo && o.id_origem === m.estornado_de;
+        });
+        if (!jaCarregado) {
+          jaPedidos[chave] = true;
+          precisamOriginal.push({ armazemCodigo: m.armazem_codigo, idOrigem: m.estornado_de });
+        }
+      });
+      var referenciasEstorno = await buscarReferenciasEstorno(precisamOriginal);
+
       ultimosFiltrados = {
         movimentos: dadosFiltrados.movimentos,
         truncado: dadosFiltrados.truncado,
-        pendentesCount: pendentes.length
+        pendentesCount: pendentes.length,
+        referenciasEstorno: referenciasEstorno
       };
       renderizarPendentes(pendentes);
       renderizarStatusArmazens(ultimaSincPorArmazem);
