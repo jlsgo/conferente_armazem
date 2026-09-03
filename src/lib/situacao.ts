@@ -1,4 +1,4 @@
-import type { Armazem, Movimento } from '../types';
+import type { Armazem, Montagem, Movimento } from '../types';
 
 /** Texto e classe CSS do badge de situacao, usado em toda tabela/impressao de movimentos. */
 export function situacaoInfo(
@@ -77,22 +77,38 @@ export function detalheEstorno(
   return `ESTORNO do ${alvo}${m.observacoes ? ` - ${m.observacoes}` : ''}`;
 }
 
+/** "Montado"/"Em caixa" pro `montagem` de um item (Saida de Armazem e Montagem,
+ * unico lugar do frontend que traduz esse valor - usado em `itensResumoTexto`
+ * abaixo e no formulario de cada tela). */
+export function montagemTexto(montagem: Montagem | null | undefined): string | null {
+  if (montagem === 'montado') return 'Montado';
+  if (montagem === 'caixa') return 'Em caixa';
+  return null;
+}
+
 /**
- * Texto "2x categoria (descricao) - observacao [cod: X] [enviado: N]" por item,
- * unido por " + ", com o detalhe do estorno (`detalheEstorno`) acrescentado no
- * final quando `m` for um estorno - usado em toda tela/impressao/export que lista
- * lancamentos (telas do dia, Historico, fechamento impresso, CSV/XLSX). Antes
- * reimplementada quase-identica (e inconsistente: observacao do item sumia em
- * algumas) em 6 lugares diferentes - consolidada aqui pelo mesmo motivo de
- * `colunaColeta`/`motivoSacTexto`/`resultadoReparoTexto` acima. Nao inclui
- * `condicao`/`montagem`: essas telas ja tem coluna dedicada propria pra isso
- * (`Condicao` em Montagem/FechamentoImpressao, `resultadoReparoTexto`).
+ * Texto "2x categoria (descricao) - observacao [Montado] [cod: X] [enviado: N]"
+ * por item, unido por " + ", com o detalhe do estorno (`detalheEstorno`)
+ * acrescentado no final quando `m` for um estorno - usado em toda
+ * tela/impressao/export que lista lancamentos (telas do dia, Historico,
+ * fechamento impresso, CSV/XLSX). Antes reimplementada quase-identica (e
+ * inconsistente: observacao do item sumia em algumas) em 6 lugares diferentes -
+ * consolidada aqui pelo mesmo motivo de `colunaColeta`/`motivoSacTexto`/
+ * `resultadoReparoTexto` acima. Nao inclui `condicao`: essas telas ja tem
+ * coluna dedicada propria pra isso (`Condicao` em Montagem/FechamentoImpressao,
+ * `resultadoReparoTexto`). `montagem` (montado/em caixa) nao tem coluna
+ * dedicada em nenhuma tela - fica inline aqui, unico jeito de saber se um
+ * veiculo saiu montado ou em caixa depois do lancamento (achado real: essa
+ * informacao era so preenchida no formulario e nunca aparecia em lugar
+ * nenhum depois - nem aqui, nem no painel web).
  */
 export function itensResumoTexto(m: Movimento, todos: Movimento[]): string {
   const itens = m.itens
     .map((it) => {
       const base = `${it.quantidade}x ${it.categoria}${it.descricao ? ' (' + it.descricao + ')' : ''}${it.observacao ? ' - ' + it.observacao : ''}`;
-      const comCodigo = it.codigo_componente ? `${base} [cod: ${it.codigo_componente}]` : base;
+      const montagem = montagemTexto(it.montagem);
+      const comMontagem = montagem ? `${base} [${montagem}]` : base;
+      const comCodigo = it.codigo_componente ? `${comMontagem} [cod: ${it.codigo_componente}]` : comMontagem;
       const divergente = it.quantidade_enviada != null && it.quantidade_enviada !== it.quantidade;
       return divergente ? `${comCodigo} [enviado: ${it.quantidade_enviada}]` : comCodigo;
     })

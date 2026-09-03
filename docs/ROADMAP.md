@@ -1366,6 +1366,65 @@ Bump de `2.1.2` pra `3.0.0` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
 Commit/push e geracao do instalador (`build-installer.yml`) ficam pra confirmar com o
 usuario antes, nao feitos automaticamente nesta sessao.
 
+## Painel: hotfix pos-3.0.0 — referencia de estorno mostrava o id interno (Feito)
+
+Reportado pelo usuario logo apos o deploy do painel de v3.0.0, com screenshot: uma
+linha ESTORNO mostrava `ESTORNO do lancamento #147: ...` — `#147` e o `id_origem`/
+`estornado_de` interno do banco, que nao aparece em nenhuma tela (nem no painel, nem
+no app) — impossivel descobrir qual lancamento era. Corrigido com
+`detalheObservacao`/`justificativaLimpa` resolvendo o lancamento original (pelo
+`numero_pedido`, ou data/hora quando nao tem pedido) em vez de mostrar o id cru.
+Primeira versao so procurava o original dentro dos movimentos ja carregados na tela —
+falhava sempre que o filtro ativo era "Situacao: Estorno" (esse filtro exclui a linha
+original do resultado por construcao). Corrigido com `buscarReferenciasEstorno`, uma
+consulta extra pequena so pros originais que faltam. Reverificado contra o Turso real
+com o filtro de estorno ativo (16 linhas) — todas resolvidas corretamente. Painel-only,
+sem bump de versao do app (commit `34e1292`).
+
+## Versao 3.1.0 — visibilidade de "montado vs em caixa" na saida de armazem (Feito)
+
+Pedido do usuario: "em saidas de armazem, algumas scooters saem em caixas e outras
+saem montadas seria bom termos esta referencia e visualizacao no site e no sistema
+app windows."
+
+O campo `montagem` (`montado`/`caixa`) por item ja existia de ponta a ponta havia
+tempo — formulario (`Lancamentos.tsx`/`Montagem.tsx`), validacao
+(`domain::movimentos::validar_novo_movimento`), coluna no banco, hash de auditoria,
+`itens_json` do sync pro Turso — mas nunca era **mostrado** em lugar nenhum depois do
+lancamento: nem no Historico, nem na folha impressa do fechamento, nem no
+CSV/XLSX exportado, nem no painel web. Achado real, nao so um pedido de feature nova:
+o dado era coletado e ficava invisivel pra sempre.
+
+**App desktop** (`src/lib/situacao.ts`):
+- `itensResumoTexto` (usada por Lancamentos/Montagem/Sac/ReparoExterno, Historico,
+  `FechamentoImpressao.tsx` e `exportFechamento.ts` — um unico ponto de mudanca cobre
+  todas essas telas/exports de uma vez) ganhou uma tag `[Montado]`/`[Em caixa]` inline
+  por item, ao lado do `[cod: X]`/`[enviado: N]` que ja existiam. Extraida a funcao
+  `montagemTexto` (traduz o valor cru pro rotulo em portugues), reutilizavel.
+  `condicao` continua de fora (ja tem coluna dedicada em Montagem/FechamentoImpressao/
+  `resultadoReparoTexto`) — so `montagem` nunca teve.
+
+**Painel web** (`painel/index.html`):
+- `itens_json` (Turso) ja carregava `montagem` por item (campo do struct Rust
+  `MovimentoItem`, serializado sem mudanca nenhuma no backend) — so faltava mostrar.
+  `resumoItens` (lista de pendentes + coluna Itens da tabela) ganhou a mesma tag
+  `[Montado]`/`[Em caixa]` via nova funcao `montagemTexto`, com chaves de traducao
+  novas (`montagemMontado`/`montagemCaixa`, pt + zh).
+- Dois stat tiles novos em "Resumo do periodo filtrado": "Saiu montado"/"Saiu em
+  caixa" (`calcularInsights` ganhou `totalMontado`/`totalCaixa`, somando
+  `quantidade` dos itens de linhas de saida de verdade — mesmo criterio de exclusao
+  de estorno/recusa que `totalSaida`/`totalVendasCentavos` ja usavam).
+
+**Verificado**: `tsc --noEmit`/`vite build` limpos, `cargo test`/`clippy`/`fmt --check`
+limpos (backend sem mudanca de comportamento — so exposicao de um dado que ja
+existia). Painel testado contra o Turso real de producao (mesmo metodo das rodadas
+anteriores — `scripts/painel-local-gerar.sh` + servidor HTTP local + Chrome headless
+via Puppeteer), filtrado por `Fluxo: Saida de Armazem`: 64 linhas, todas com a tag de
+montagem correta, stat tiles somando 51 montado / 164 caixa (bate com a proporcao
+real), zero erro de console — reconfirmado em pt e zh.
+
+Bump de `3.0.0` pra `3.1.0` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um

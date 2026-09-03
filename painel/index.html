@@ -585,6 +585,8 @@
       colSincronizado: "Sincronizado",
       coletaEnviadoPara: "Enviado para",
       coletaRecebidoDe: "Recebido de",
+      montagemMontado: "Montado",
+      montagemCaixa: "Em caixa",
       estornoRefPedido: "Estorno do pedido",
       estornoRefHorario: "Estorno do lancamento de",
       estornoRefNaoEncontrado: "Estorno de um lancamento fora do filtro atual",
@@ -599,6 +601,8 @@
       statTileRecusados: "Recebimentos recusados",
       statTileTaxaEstorno: "Taxa de estorno",
       statTileValorVendas: "Valor total (vendas SAC)",
+      statTileMontado: "Saiu montado",
+      statTileCaixa: "Saiu em caixa",
       semDadosPeriodo: "Sem dados no periodo.",
       situacaoEstornoBadge: "ESTORNO",
       situacaoBaixaBadge: "BAIXA",
@@ -664,6 +668,8 @@
       colSincronizado: "同步时间",
       coletaEnviadoPara: "已发往",
       coletaRecebidoDe: "收自",
+      montagemMontado: "已组装",
+      montagemCaixa: "装箱",
       estornoRefPedido: "冲销订单",
       estornoRefHorario: "冲销的记录时间",
       estornoRefNaoEncontrado: "冲销的记录不在当前筛选范围内",
@@ -678,6 +684,8 @@
       statTileRecusados: "被拒收次数",
       statTileTaxaEstorno: "冲销率",
       statTileValorVendas: "销售总额（SAC）",
+      statTileMontado: "已组装出库",
+      statTileCaixa: "装箱出库",
       semDadosPeriodo: "该时段无数据。",
       situacaoEstornoBadge: "冲销",
       situacaoBaixaBadge: "出库",
@@ -1155,9 +1163,23 @@
     return partes[1] ? formatarData(partes[0]) + " " + partes[1] : formatarData(partes[0]);
   }
 
+  // "Montado"/"Em caixa" - mesmo dado que o app ja captura no formulario de
+  // Saida de Armazem/Montagem (`montagem` no item) mas nunca mostrava em
+  // lugar nenhum depois de lancado, nem no app nem aqui (reportado pelo
+  // usuario: nao dava pra saber quais scooters saiam montadas e quais em
+  // caixa so olhando o historico). Mesma tradução de src/lib/situacao.ts
+  // (`montagemTexto`).
+  function montagemTexto(montagem) {
+    if (montagem === "montado") return t("montagemMontado");
+    if (montagem === "caixa") return t("montagemCaixa");
+    return null;
+  }
+
   function resumoItens(itens) {
     return itens.map(function (it) {
       var base = it.quantidade + "x " + rotuloCategoria(it.categoria) + (it.descricao ? " (" + escaparHtml(it.descricao) + ")" : "");
+      var montagem = montagemTexto(it.montagem);
+      if (montagem) base += " [" + montagem + "]";
       if (it.quantidade_enviada != null && it.quantidade_enviada !== it.quantidade) {
         base += idiomaAtual === "zh"
           ? " [差异：发送了 " + it.quantidade_enviada + "]"
@@ -1324,6 +1346,11 @@
     // So soma venda de estorno/recusa fora (nao e uma venda de verdade
     // acontecendo) - mesmo criterio das outras somas acima.
     var totalVendasCentavos = 0;
+    // Quantos veiculos saíram montados vs em caixa (item.montagem) - so conta
+    // saida de verdade (nao estorno/recusa, mesmo criterio de totalSaida
+    // acima), pra responder "quantas scooters saíram em caixa hoje?" sem
+    // precisar contar linha por linha na tabela.
+    var totalMontado = 0, totalCaixa = 0;
     filtrados.forEach(function (m) {
       var qtd = totalItens(m.itens);
       totalUnidades += qtd;
@@ -1338,6 +1365,10 @@
         totalRecusado += 1;
       } else if (m.tipo === "saida") {
         totalSaida += qtd;
+        m.itens.forEach(function (it) {
+          if (it.montagem === "montado") totalMontado += it.quantidade || 0;
+          else if (it.montagem === "caixa") totalCaixa += it.quantidade || 0;
+        });
       } else {
         totalEntrada += qtd;
         if (m.motivo === "venda" && m.valor_centavos) totalVendasCentavos += m.valor_centavos;
@@ -1357,6 +1388,8 @@
       totalSaida: totalSaida,
       totalRecusado: totalRecusado,
       totalVendasCentavos: totalVendasCentavos,
+      totalMontado: totalMontado,
+      totalCaixa: totalCaixa,
       taxaEstorno: filtrados.length ? (totalEstorno / filtrados.length) : 0,
       pendentesCount: pendentesCount
     };
@@ -1403,7 +1436,9 @@
       [t("statTilePendentes"), dados.pendentesCount],
       [t("statTileRecusados"), dados.totalRecusado],
       [t("statTileTaxaEstorno"), (dados.taxaEstorno * 100).toFixed(1) + "%"],
-      [t("statTileValorVendas"), formatarMoeda(dados.totalVendasCentavos)]
+      [t("statTileValorVendas"), formatarMoeda(dados.totalVendasCentavos)],
+      [t("statTileMontado"), dados.totalMontado],
+      [t("statTileCaixa"), dados.totalCaixa]
     ].map(function (item) {
       return '<div class="stat-tile"><div class="valor">' + item[1] + '</div><div class="rotulo">' + item[0] + '</div></div>';
     }).join("");
