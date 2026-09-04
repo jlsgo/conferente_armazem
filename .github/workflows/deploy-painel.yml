@@ -1,9 +1,10 @@
 name: Deploy do painel
 
-# Publica painel/index.html no GitHub Pages. So roda quando o painel muda (ou
-# via "Run workflow" manual) - as credenciais reais (URL + token
-# somente-leitura do Turso) ficam em secrets do repo, nunca no arquivo fonte
-# commitado; entram so no artefato publicado por este workflow.
+# Publica painel/index.html (mais manifest.json/sw.js/icons/, do PWA) no
+# GitHub Pages. So roda quando o painel muda (ou via "Run workflow" manual) -
+# as credenciais reais (URL + token somente-leitura do Turso) ficam em
+# secrets do repo, nunca no arquivo fonte commitado; entram so no artefato
+# publicado por este workflow.
 on:
   workflow_dispatch:
   push:
@@ -42,6 +43,12 @@ jobs:
         env:
           TURSO_PAINEL_URL: ${{ secrets.TURSO_PAINEL_URL }}
           TURSO_PAINEL_TOKEN: ${{ secrets.TURSO_PAINEL_TOKEN }}
+
+      - name: Copia manifest, service worker e icones (PWA)
+        run: |
+          cp painel/manifest.json _site/manifest.json
+          cp painel/sw.js _site/sw.js
+          cp -r painel/icons _site/icons
 
       - name: Configura o Pages
         uses: actions/configure-pages@v5

@@ -4,7 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%A6%3C/text%3E%3C/svg%3E" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#0f6d3a" />
 <title>Painel Ecoviva - Armazens</title>
 <style>
   :root {
@@ -93,9 +96,11 @@
     gap: 14px;
     box-shadow: var(--sombra-md);
   }
+  /* Icones SVG inline (substituem os emojis usados antes como icone) -
+     `stroke="currentColor"` no proprio SVG ja herda a cor do texto ao redor
+     em qualquer tema/badge, essa classe so cuida do tamanho. */
+  .icone-inline { width: 1em; height: 1em; flex-shrink: 0; }
   header .icone-cabecalho {
-    font-size: 1.6rem;
-    line-height: 1;
     background: rgba(255, 255, 255, 0.18);
     border-radius: 10px;
     width: 40px;
@@ -105,8 +110,12 @@
     justify-content: center;
     flex-shrink: 0;
   }
+  header .icone-cabecalho .icone-inline { width: 22px; height: 22px; }
   header h1 { margin: 0; font-size: 1.25rem; font-weight: 700; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .badge-somente-leitura {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     font-size: 0.7rem;
     font-weight: 700;
     background: rgba(255, 255, 255, 0.16);
@@ -222,6 +231,9 @@
   .col-itens { width: 16%; white-space: normal; }
   .obs-detalhe { color: var(--texto-suave); font-style: italic; }
   .aviso-truncado {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
     background: var(--aviso-claro);
     color: var(--aviso);
     border: 1px solid var(--aviso);
@@ -231,6 +243,7 @@
     font-weight: 600;
     margin: 0 0 14px;
   }
+  .aviso-truncado .icone-inline { margin-top: 0.15em; }
   .rodape { font-size: 0.75rem; color: var(--texto-suave); margin-top: 10px; }
   .rodape-pagina { font-size: 0.72rem; color: var(--texto-suave); text-align: center; margin: 4px 0 0; }
   .escondido { display: none; }
@@ -256,6 +269,8 @@
   .grade-stats { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
   .stat-tile { background: var(--bg); border: 1px solid var(--borda); border-radius: 8px; padding: 12px 16px; min-width: 140px; flex: 1; }
   .stat-tile .valor { font-size: 1.5rem; font-weight: 700; color: var(--verde); }
+  .stat-tile .valor.aviso { color: var(--aviso); }
+  .stat-tile .valor.erro { color: var(--erro); }
   .stat-tile .rotulo { font-size: 0.75rem; color: var(--texto-suave); margin-top: 2px; }
   .grafico-bloco { margin-top: 18px; }
   .grafico-bloco h4 { margin: 0 0 10px; font-size: 0.85rem; color: var(--texto-suave); text-transform: uppercase; letter-spacing: 0.03em; }
@@ -352,10 +367,15 @@
 
 <div id="conteudo" class="escondido">
   <header>
-    <span class="icone-cabecalho" aria-hidden="true">📦</span>
+    <span class="icone-cabecalho" aria-hidden="true">
+      <svg class="icone-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>
+    </span>
     <div>
       <h1><span data-i18n="headerTitulo">Painel Ecoviva - Armazens A4 / B2</span>
-        <span class="badge-somente-leitura" data-i18n="badgeSomenteLeitura" data-i18n-title="badgeSomenteLeituraTitulo" title="Este painel so consegue LER os dados - o acesso usado aqui e um token do banco configurado para nunca aceitar escrita, reforcado pelo proprio servidor do banco (nao e so uma trava no codigo desta pagina). Os dados vem do app oficial de cada armazem, que registra cada lancamento com um hash de auditoria encadeado.">🔒 somente leitura</span>
+        <span class="badge-somente-leitura" title="Este painel so consegue LER os dados - o acesso usado aqui e um token do banco configurado para nunca aceitar escrita, reforcado pelo proprio servidor do banco (nao e so uma trava no codigo desta pagina). Os dados vem do app oficial de cada armazem, que registra cada lancamento com um hash de auditoria encadeado." data-i18n-title="badgeSomenteLeituraTitulo">
+          <svg class="icone-inline" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          <span data-i18n="badgeSomenteLeitura">somente leitura</span>
+        </span>
       </h1>
       <p id="status-topo">Carregando...</p>
     </div>
@@ -435,8 +455,9 @@
 
     <div class="cartao" id="cartao-insights">
       <h3 data-i18n="cartaoInsightsTitulo">Resumo do periodo filtrado</h3>
-      <p id="aviso-truncado" class="aviso-truncado escondido" data-i18n="avisoTruncadoTexto">
-        ⚠ Este filtro tem mais movimentos do que o carregado - os numeros abaixo estao incompletos. Reduza o periodo ou refine o filtro pra ver o total real.
+      <p id="aviso-truncado" class="aviso-truncado escondido">
+        <svg class="icone-inline" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg>
+        <span data-i18n="avisoTruncadoTexto">Este filtro tem mais movimentos do que o carregado - os numeros abaixo estao incompletos. Reduza o periodo ou refine o filtro pra ver o total real.</span>
       </p>
       <div id="grade-stats" class="grade-stats"></div>
       <div class="grafico-bloco">
@@ -534,7 +555,7 @@
       botaoEntrar: "Entrar",
       senhaIncorreta: "Senha incorreta.",
       headerTitulo: "Painel Ecoviva - Armazens A4 / B2",
-      badgeSomenteLeitura: "🔒 somente leitura",
+      badgeSomenteLeitura: "somente leitura",
       badgeSomenteLeituraTitulo: "Este painel so consegue LER os dados - o acesso usado aqui e um token do banco configurado para nunca aceitar escrita, reforcado pelo proprio servidor do banco (nao e so uma trava no codigo desta pagina). Os dados vem do app oficial de cada armazem, que registra cada lancamento com um hash de auditoria encadeado.",
       filtroPedidoLabel: "Numero do pedido",
       filtroPedidoPlaceholder: "Ex: 3893",
@@ -565,7 +586,7 @@
       cartaoSyncTitulo: "Sincronizacao por armazem",
       cartaoSyncSubtitulo: "Quando cada armazem mandou dado pela ultima vez - se um ficar muito tempo sem sincronizar, o que aparece dele aqui pode estar desatualizado.",
       cartaoInsightsTitulo: "Resumo do periodo filtrado",
-      avisoTruncadoTexto: "⚠ Este filtro tem mais movimentos do que o carregado - os numeros abaixo estao incompletos. Reduza o periodo ou refine o filtro pra ver o total real.",
+      avisoTruncadoTexto: "Este filtro tem mais movimentos do que o carregado - os numeros abaixo estao incompletos. Reduza o periodo ou refine o filtro pra ver o total real.",
       graficoVolumeTitulo: "Volume por dia",
       graficoCategoriasTitulo: "Top categorias de item",
       graficoArmazemTitulo: "Por armazem",
@@ -617,7 +638,7 @@
       botaoEntrar: "进入",
       senhaIncorreta: "密码错误。",
       headerTitulo: "Ecoviva 面板 - A4 / B2 仓库",
-      badgeSomenteLeitura: "🔒 只读",
+      badgeSomenteLeitura: "只读",
       badgeSomenteLeituraTitulo: "此面板只能读取数据 - 所用的访问令牌被配置为永不接受写入，并由数据库服务器本身强制执行（不仅仅是本页代码里的限制）。数据来自各仓库的官方应用，每条记录都带有链式审计哈希。",
       filtroPedidoLabel: "订单号",
       filtroPedidoPlaceholder: "例如：3893",
@@ -648,7 +669,7 @@
       cartaoSyncTitulo: "各仓库同步状态",
       cartaoSyncSubtitulo: "每个仓库最后一次发送数据的时间 - 如果某个仓库长时间未同步，这里显示的数据可能已过时。",
       cartaoInsightsTitulo: "所选时段汇总",
-      avisoTruncadoTexto: "⚠ 此筛选条件下的记录数超过已加载的数量 - 以下数字不完整。请缩小时间范围或调整筛选条件以查看真实总数。",
+      avisoTruncadoTexto: "此筛选条件下的记录数超过已加载的数量 - 以下数字不完整。请缩小时间范围或调整筛选条件以查看真实总数。",
       graficoVolumeTitulo: "每日数量",
       graficoCategoriasTitulo: "物品类别排行",
       graficoArmazemTitulo: "按仓库",
@@ -1369,6 +1390,10 @@
           if (it.montagem === "montado") totalMontado += it.quantidade || 0;
           else if (it.montagem === "caixa") totalCaixa += it.quantidade || 0;
         });
+        // motivo "venda" tambem existe em saida do SAC (peca vendida como
+        // destino, nao so devolucao de cliente) - sem isto, "Valor total
+        // (vendas SAC)" ficava faltando as vendas do lado de saida.
+        if (m.motivo === "venda" && m.valor_centavos) totalVendasCentavos += m.valor_centavos;
       } else {
         totalEntrada += qtd;
         if (m.motivo === "venda" && m.valor_centavos) totalVendasCentavos += m.valor_centavos;
@@ -1396,7 +1421,12 @@
   }
 
   function formatarMoeda(centavos) {
-    var valor = (centavos / 100).toFixed(2).replace(".", ",");
+    // pt-BR pra ter separador de milhar (ponto) alem da virgula decimal -
+    // e sempre Real (a moeda do sistema), independente do idioma da UI.
+    var valor = (centavos / 100).toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
     return idiomaAtual === "zh" ? "R$" + valor : "R$ " + valor;
   }
 
@@ -1434,13 +1464,18 @@
       [t("tipoEntrada"), dados.totalEntrada],
       [t("tipoSaida"), dados.totalSaida],
       [t("statTilePendentes"), dados.pendentesCount],
-      [t("statTileRecusados"), dados.totalRecusado],
-      [t("statTileTaxaEstorno"), (dados.taxaEstorno * 100).toFixed(1) + "%"],
+      // Recusados e taxa de estorno sao metricas negativas - nao fazem
+      // sentido na mesma cor verde usada pras demais (neutras/positivas),
+      // reaproveita as mesmas cores que badge-recusado/badge-estorno ja
+      // usam na tabela pra essa mesma situacao.
+      [t("statTileRecusados"), dados.totalRecusado, "aviso"],
+      [t("statTileTaxaEstorno"), (dados.taxaEstorno * 100).toFixed(1) + "%", "erro"],
       [t("statTileValorVendas"), formatarMoeda(dados.totalVendasCentavos)],
       [t("statTileMontado"), dados.totalMontado],
       [t("statTileCaixa"), dados.totalCaixa]
     ].map(function (item) {
-      return '<div class="stat-tile"><div class="valor">' + item[1] + '</div><div class="rotulo">' + item[0] + '</div></div>';
+      var classeValor = "valor" + (item[2] ? " " + item[2] : "");
+      return '<div class="stat-tile"><div class="' + classeValor + '">' + item[1] + '</div><div class="rotulo">' + item[0] + '</div></div>';
     }).join("");
 
     renderizarBarras("grafico-volume", dados.porDia, Object.keys(dados.porDia).sort(), formatarData);
@@ -1595,6 +1630,17 @@
     }, 30000);
     document.addEventListener("visibilitychange", function () {
       if (!document.hidden) atualizar();
+    });
+  }
+
+  // PWA: registra o service worker do shell estatico (ver painel/sw.js -
+  // nunca cacheia dado do Turso, so HTML/manifest/icones). `.catch` vazio de
+  // proposito - falha aqui (ex.: aberto via file:// num teste local, onde o
+  // navegador bloqueia service worker) nunca deve impedir o painel de
+  // carregar.
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function () {});
     });
   }
 })();
