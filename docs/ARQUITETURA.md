@@ -278,6 +278,18 @@ privados precisam de GitHub Pro; o repo foi tornado publico especificamente por 
 (confirmado antes que nenhum segredo jamais foi commitado — `turso.txt` sempre viveu
 fora do repo, no diretorio de dados do usuario).
 
+**PWA**: o painel e instalavel (`painel/manifest.json`, icones em `painel/icons/`,
+gerados a partir da marca real da empresa em `src-tauri/assets/icon-source.png`, e
+`painel/sw.js`). O service worker **so cacheia o shell estatico** (o proprio HTML, o
+manifest, os icones) — o `fetch` handler ignora explicitamente qualquer requisicao
+cross-origin (o `/v2/pipeline` do Turso e sempre outra origem) e nao-GET, deixando o
+navegador tratar essas normalmente, e faz network-first (nunca cache-first) pro que ele
+cacheia, so caindo pro cache se a rede falhar. Isso existe pra dar um icone
+instalavel/janela propria sem nunca arriscar mostrar um numero desatualizado — o unico
+motivo de existir desse painel e ser ao vivo. `.github/workflows/deploy-painel.yml`
+copia `manifest.json`/`sw.js`/`icons/` pro `_site/` sem passar pelo `sed` (nao tem
+segredo neles, so o `index.html` precisa da substituicao de credenciais).
+
 ## Migrations
 
 Arquivos SQL numerados em `src-tauri/migrations/`, aplicados por `rusqlite_migration` a
@@ -303,6 +315,14 @@ momento, esse passo e pulado silenciosamente — o backup local continua acontec
 normalmente de qualquer forma. Configurar isso e manual (crie o arquivo apontando pro
 caminho da unidade removivel no PC).
 
+**Backup completo (config incluida)**: tanto `backup_automatico` quanto `backup_externo`
+tambem copiam `turso.txt` e `backup_externo.txt` (se existirem) pra dentro da pasta de
+backup, via `db::backup::copiar_config` — sem versionamento (sobrescreve a cada execucao,
+reflete a config atual, nao um historico). Sem isso, um backup so tinha os dados; pra
+recompor um PC do zero seria preciso recriar o token do Turso e o caminho do pendrive a
+mao. Melhor-esforco, como o resto do backup: arquivo ausente e ignorado, falha de copia
+so vira um aviso no log.
+
 **Para restaurar um backup** (recuperar de um problema, ou trocar de computador):
 1. Feche o app completamente.
 2. Localize a pasta de dados (no Windows, normalmente
@@ -322,6 +342,78 @@ reabrir) e coberto por um teste de integracao automatizado
 (`db::backup::tests::restaura_backup_e_dados_e_cadeia_de_hash_sobrevivem`) que confere
 nao so que os dados voltam, mas que a cadeia de hash de auditoria
 (`domain::movimentos::verificar_cadeia`) continua intacta depois da restauracao.
+
+### Export do Turso (`movimentos_consolidados`)
+
+O Turso (free tier) e so uma camada de consolidacao oportunista (ver secao acima) — nao
+e a fonte de verdade dos movimentos, que continua sendo o banco local de cada armazem.
+Mas a tabela `movimentos_consolidados` em si (usada pelo painel publico e pra auditoria
+cruzada entre A4 e B2) so existia la: se a conta Turso fosse perdida (suspensao,
+exclusao), esse historico consolidado so seria reconstruivel manualmente a partir dos
+dois bancos locais.
+
+`db::sync::exportar_consolidado` fecha essa lacuna: roda `SELECT * FROM
+movimentos_consolidados` (deliberadamente sem uma lista curada de colunas — um export
+generico nao deve ficar desatualizado se a tabela ganhar uma coluna nova) e grava um
+snapshot em `movimentos_consolidados-<AAAA-MM-DD>.json` dentro de `backups/` (e no
+destino externo, se configurado), com a mesma retencao de 14 dias dos backups do banco
+(`db::backup::limpar_backups_antigos`, generalizada pra aceitar prefixo/sufixo proprios).
+Roda uma vez por abertura real do app, numa task assincrona separada do loop de sync
+(`lib.rs`) — so acontece se `turso.txt` estiver configurado, e uma falha (sem internet,
+Turso fora do ar) so vira um aviso no log, igual o resto do backup.
+
+### Backup offsite (S3)
+
+O pendrive/HD do backup externo normalmente fica no mesmo local fisico que o PC —
+protege contra falha de disco, mas nao contra incendio/roubo/pane que atinja o site
+inteiro. `db::backup_nuvem` faz upload automatico do backup do dia (`.db`, o dump do
+Turso, e as copias dos arquivos de config) pra um bucket S3, seguindo o mesmo padrao de
+arquivo-de-configuracao de `turso.txt`/`backup_externo.txt`: um `backup_nuvem.txt` na
+pasta de dados, 5 linhas —
+
+```text
+AKIA...                (access key id)
+wJalrXUtn...            (secret access key)
+ecoviva-backups         (nome do bucket)
+sa-east-1               (regiao)
+A4                      (prefixo/pasta - diferente em cada PC, ex. A4 e B2)
+```
+
+Sem esse arquivo, o upload e pulado silenciosamente — mesmo comportamento de "nao
+configurado" do Turso e do backup externo. O prefixo evita colisao entre os uploads dos
+dois PCs no mesmo bucket.
+
+**Setup na AWS** (uma vez, por conta/bucket):
+
+1. Criar um bucket S3 privado (bloquear todo acesso publico).
+2. Criar uma IAM policy restrita **apenas a esse bucket** e **apenas `s3:PutObject`**
+   (sem `s3:DeleteObject`, sem `s3:*`).
+3. Criar um IAM user com essa policy, gerar um access key + secret pra ele.
+4. Gravar as 5 linhas acima em `backup_nuvem.txt`, em cada PC (prefixo diferente por
+   PC — ex. `A4` no PC do armazem A4, `B2` no do B2).
+
+**Decisao deliberada de seguranca: o app so faz `PutObject`, nunca `DeleteObject`.** Nao
+existe nenhuma chamada de exclusao no S3 em `db::backup_nuvem` — por isso a IAM policy
+da credencial gravada no PC deve conceder so `s3:PutObject`. Isso significa que um bug
+local, uma conta comprometida ou ate um ransomware que atinja o PC nao consegue apagar a
+copia offsite, que fica isolada mesmo de um desastre total na maquina. Retencao/expiracao
+de objetos antigos no bucket (se quiser) fica a cargo de uma regra de Lifecycle
+configurada no console da AWS, nao de codigo no app.
+
+Upload roda uma vez por abertura real do app (mesma cadencia do backup local/externo),
+numa task assincrona unica — nao e um loop de retry, granularidade diaria ja e
+suficiente. Melhor-esforco por arquivo: uma falha (arquivo ausente, sem internet) so
+loga um aviso e nao impede os demais. O teste de ponta a ponta contra um bucket real
+(`tests/backup_nuvem_real_test.rs`, `#[ignore]` por padrao, mesmo padrao do
+`sync_turso_real_test.rs`) roda manualmente:
+
+```bash
+AWS_TESTE_ACCESS_KEY_ID=... AWS_TESTE_SECRET_ACCESS_KEY=... \
+AWS_TESTE_BUCKET=... AWS_TESTE_REGIAO=... \
+  cargo test --test backup_nuvem_real_test -- --ignored
+```
+
+**Nunca aponte isso pro bucket de producao** — use sempre um bucket de teste descartavel.
 
 ## Rodando localmente
 
