@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, OptionalExtension, ToSql};
 use serde::Serialize;
@@ -7,7 +7,7 @@ use serde::Serialize;
 use crate::domain::errors::{AppError, AppResult};
 use crate::domain::movimentos::{carregar_itens, Movimento, MovimentoItem};
 
-const NOME_ARQUIVO_CONFIG_TURSO: &str = "turso.txt";
+pub(crate) const NOME_ARQUIVO_CONFIG_TURSO: &str = "turso.txt";
 
 /// Le `turso.txt` (duas linhas: URL `libsql://...` e token) na pasta de
 /// dados. `None` se o arquivo nao existir ou estiver incompleto - a
@@ -388,6 +388,100 @@ pub async fn enviar_para_turso(
     }
 
     Ok(resultado)
+}
+
+const PREFIXO_EXPORT_CONSOLIDADO: &str = "movimentos_consolidados-";
+const SUFIXO_EXPORT_CONSOLIDADO: &str = ".json";
+
+/// Converte um valor generico do Turso pra JSON. `SELECT *` nao tem como
+/// mapear pra structs Rust tipados (o export deliberadamente nao usa uma
+/// lista curada de colunas - ver `exportar_consolidado`), entao cada valor
+/// vira um `serde_json::Value` dinamico, igual o `sqlite3` faria num
+/// `.dump`/export generico.
+fn valor_para_json(valor: libsql::Value) -> serde_json::Value {
+    match valor {
+        libsql::Value::Null => serde_json::Value::Null,
+        libsql::Value::Integer(n) => serde_json::Value::from(n),
+        libsql::Value::Real(f) => serde_json::Number::from_f64(f)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
+        libsql::Value::Text(s) => serde_json::Value::String(s),
+        libsql::Value::Blob(bytes) => {
+            serde_json::Value::String(bytes.iter().map(|b| format!("{b:02x}")).collect())
+        }
+    }
+}
+
+/// Exporta um snapshot de `movimentos_consolidados` (a tabela do Turso) pra
+/// um arquivo JSON local, com a mesma politica de retencao de 14 dias dos
+/// backups do banco (`db::backup::limpar_backups_antigos`). Essa tabela hoje
+/// so existe no Turso (free tier) e no painel publico - se a conta Turso for
+/// perdida, esse dump e a unica copia offline do historico consolidado dos
+/// dois armazens. Nao substitui o banco local de cada armazem (que continua
+/// sendo a fonte de verdade dos proprios movimentos), e deliberadamente usa
+/// `SELECT *` em vez de uma lista curada de colunas - um export generico nao
+/// deve ficar desatualizado se a tabela ganhar uma coluna nova no futuro,
+/// diferente das queries estruturadas acima que alimentam structs Rust
+/// especificos.
+pub async fn exportar_consolidado(
+    url: &str,
+    token: &str,
+    destino: &Path,
+    data: &str,
+) -> AppResult<PathBuf> {
+    let remoto = conectar_turso(url, token).await?;
+
+    let mut rows = remoto
+        .query(
+            "SELECT * FROM movimentos_consolidados ORDER BY armazem_codigo, id_origem",
+            (),
+        )
+        .await
+        .map_err(|e| {
+            AppError::Interno(format!(
+                "Nao foi possivel exportar a tabela consolidada: {e}"
+            ))
+        })?;
+
+    let colunas: Vec<String> = (0..rows.column_count())
+        .map(|i| rows.column_name(i).unwrap_or_default().to_string())
+        .collect();
+
+    let mut linhas = Vec::new();
+    while let Some(row) = rows
+        .next()
+        .await
+        .map_err(|e| AppError::Interno(format!("Erro lendo a tabela consolidada: {e}")))?
+    {
+        let mut objeto = serde_json::Map::new();
+        for (indice, coluna) in colunas.iter().enumerate() {
+            let valor = row
+                .get_value(indice as i32)
+                .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
+            objeto.insert(coluna.clone(), valor_para_json(valor));
+        }
+        linhas.push(serde_json::Value::Object(objeto));
+    }
+
+    fs::create_dir_all(destino).map_err(|e| {
+        AppError::Interno(format!("Nao foi possivel criar a pasta de backups: {e}"))
+    })?;
+    let caminho = destino.join(format!(
+        "{PREFIXO_EXPORT_CONSOLIDADO}{data}{SUFIXO_EXPORT_CONSOLIDADO}"
+    ));
+    let json = serde_json::to_string_pretty(&linhas)
+        .map_err(|e| AppError::Interno(format!("Nao foi possivel serializar o export: {e}")))?;
+    fs::write(&caminho, json)
+        .map_err(|e| AppError::Interno(format!("Nao foi possivel gravar o export: {e}")))?;
+
+    crate::db::backup::limpar_backups_antigos(
+        destino,
+        PREFIXO_EXPORT_CONSOLIDADO,
+        SUFIXO_EXPORT_CONSOLIDADO,
+        crate::db::backup::RETENCAO_DIAS,
+    )?;
+
+    Ok(caminho)
 }
 
 /// Tenta sincronizar a fila local com o Turso uma vez: busca os pendentes,
@@ -1470,5 +1564,55 @@ mod tests {
 
         let pendentes = buscar_pendentes_via_sql(&conn, "A4");
         assert!(pendentes.is_empty());
+    }
+
+    #[test]
+    fn valor_para_json_converte_cada_variante() {
+        assert_eq!(
+            valor_para_json(libsql::Value::Null),
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            valor_para_json(libsql::Value::Integer(42)),
+            serde_json::json!(42)
+        );
+        assert_eq!(
+            valor_para_json(libsql::Value::Real(1.5)),
+            serde_json::json!(1.5)
+        );
+        assert_eq!(
+            valor_para_json(libsql::Value::Text("ola".into())),
+            serde_json::json!("ola")
+        );
+        assert_eq!(
+            valor_para_json(libsql::Value::Blob(vec![0xde, 0xad])),
+            serde_json::json!("dead")
+        );
+    }
+
+    /// `exportar_consolidado` usa `SELECT *` (deliberado, ver o comentario na
+    /// funcao) em vez de uma lista curada de colunas - esse teste so confere
+    /// que a query roda contra o schema real e traz as colunas esperadas,
+    /// sem precisar de uma conta Turso (mesmo `rusqlite` em memoria usado
+    /// pelos outros testes deste arquivo).
+    #[test]
+    fn select_do_export_consolidado_roda_contra_o_schema_real_e_traz_as_colunas() {
+        let conn = conexao_remota_de_teste();
+        let linha = linha_pendente_de_teste(1);
+        inserir_na_tabela_remota(&conn, &linha, "2026-09-04 08:00:00");
+
+        let mut stmt = conn
+            .prepare("SELECT * FROM movimentos_consolidados ORDER BY armazem_codigo, id_origem")
+            .unwrap();
+        let colunas: Vec<String> = stmt.column_names().into_iter().map(String::from).collect();
+        assert!(colunas.contains(&"armazem_codigo".to_string()));
+        assert!(colunas.contains(&"id_origem".to_string()));
+        assert!(colunas.contains(&"hash_integridade".to_string()));
+
+        let total = stmt
+            .query_map([], |r| r.get::<_, String>(0))
+            .unwrap()
+            .count();
+        assert_eq!(total, 1);
     }
 }

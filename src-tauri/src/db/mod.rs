@@ -6,6 +6,7 @@ use rusqlite_migration::{Migrations, M};
 use crate::domain::errors::{AppError, AppResult};
 
 pub mod backup;
+pub mod backup_nuvem;
 pub mod sync;
 
 fn migrations() -> Migrations<'static> {

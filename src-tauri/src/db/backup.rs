@@ -5,13 +5,15 @@ use rusqlite::{params, Connection, DatabaseName, OpenFlags, OptionalExtension};
 
 use crate::domain::errors::{AppError, AppResult};
 
-/// Quantos backups diarios manter antes de apagar os mais antigos.
-const RETENCAO_DIAS: usize = 14;
+/// Quantos backups diarios manter antes de apagar os mais antigos. Tambem
+/// reaproveitado por `db::sync::exportar_consolidado` para o dump do Turso,
+/// que segue a mesma politica de retencao dos backups do banco.
+pub(crate) const RETENCAO_DIAS: usize = 14;
 
 const PREFIXO: &str = "ecoviva-armazem-";
 const SUFIXO: &str = ".db";
 
-const NOME_ARQUIVO_CONFIG_EXTERNO: &str = "backup_externo.txt";
+pub(crate) const NOME_ARQUIVO_CONFIG_EXTERNO: &str = "backup_externo.txt";
 
 fn data_de_hoje(conn: &Connection) -> AppResult<String> {
     Ok(conn.query_row("SELECT date('now', 'localtime')", [], |r| r.get(0))?)
@@ -33,14 +35,39 @@ fn fazer_backup_em(conn: &Connection, diretorio_backups: &Path) -> AppResult<Pat
 
     conn.backup(DatabaseName::Main, &caminho, None)?;
 
-    limpar_backups_antigos(diretorio_backups)?;
+    limpar_backups_antigos(diretorio_backups, PREFIXO, SUFIXO, RETENCAO_DIAS)?;
 
     Ok(caminho)
 }
 
+/// Copia `turso.txt` e `backup_externo.txt` (se existirem) para `destino`,
+/// junto do backup do banco - sem isso, um backup so tem os dados e nao as
+/// configuracoes necessarias pra recompor um PC do zero (teria que recriar o
+/// token do Turso e o caminho do pendrive a mao). Sobrescreve a cada execucao
+/// (reflete a config atual, nao um historico) e e melhor-esforco: arquivo
+/// ausente e ignorado, falha de copia so vira um aviso no log, nunca aborta o
+/// backup do banco em si.
+fn copiar_config(diretorio_dados: &Path, destino: &Path) {
+    for nome in [
+        crate::db::sync::NOME_ARQUIVO_CONFIG_TURSO,
+        NOME_ARQUIVO_CONFIG_EXTERNO,
+    ] {
+        let origem = diretorio_dados.join(nome);
+        if !origem.exists() {
+            continue;
+        }
+        if let Err(e) = fs::copy(&origem, destino.join(nome)) {
+            log::warn!("Falha ao copiar {nome} para o backup: {e}");
+        }
+    }
+}
+
 /// Faz uma copia consistente do banco em `<diretorio_dados>/backups/`.
 pub fn backup_automatico(conn: &Connection, diretorio_dados: &Path) -> AppResult<PathBuf> {
-    fazer_backup_em(conn, &diretorio_dados.join("backups"))
+    let destino = diretorio_dados.join("backups");
+    let caminho = fazer_backup_em(conn, &destino)?;
+    copiar_config(diretorio_dados, &destino);
+    Ok(caminho)
 }
 
 /// Le `backup_externo.txt` (uma linha com o caminho de destino, ex.: um
@@ -61,8 +88,14 @@ pub fn ler_destino_externo(diretorio_dados: &Path) -> Option<PathBuf> {
 /// `ler_destino_externo`). Melhor-esforco por natureza: se a unidade estiver
 /// desconectada no momento, esta chamada falha e quem chamou deve tratar como
 /// nao-fatal (mesmo padrao de `backup_automatico` no `lib.rs`).
-pub fn backup_externo(conn: &Connection, destino: &Path) -> AppResult<PathBuf> {
-    fazer_backup_em(conn, destino)
+pub fn backup_externo(
+    conn: &Connection,
+    diretorio_dados: &Path,
+    destino: &Path,
+) -> AppResult<PathBuf> {
+    let caminho = fazer_backup_em(conn, destino)?;
+    copiar_config(diretorio_dados, destino);
+    Ok(caminho)
 }
 
 const TABELAS_ESPERADAS: [&str; 4] = ["usuarios", "movimentos", "movimento_itens", "fechamentos"];
@@ -107,8 +140,16 @@ pub fn verificar_backup_valido(caminho: &Path) -> AppResult<()> {
     Ok(())
 }
 
-fn limpar_backups_antigos(diretorio_backups: &Path) -> AppResult<()> {
-    let mut arquivos: Vec<PathBuf> = fs::read_dir(diretorio_backups)
+/// Generico o suficiente pra tambem ser reaproveitado por
+/// `db::sync::exportar_consolidado` (dump JSON do Turso), que precisa da
+/// mesma politica de retencao mas com prefixo/sufixo/dias proprios.
+pub(crate) fn limpar_backups_antigos(
+    diretorio: &Path,
+    prefixo: &str,
+    sufixo: &str,
+    retencao: usize,
+) -> AppResult<()> {
+    let mut arquivos: Vec<PathBuf> = fs::read_dir(diretorio)
         .map_err(|e| AppError::Interno(format!("Nao foi possivel listar backups: {e}")))?
         .filter_map(|entrada| entrada.ok())
         .map(|entrada| entrada.path())
@@ -116,14 +157,14 @@ fn limpar_backups_antigos(diretorio_backups: &Path) -> AppResult<()> {
             caminho
                 .file_name()
                 .and_then(|n| n.to_str())
-                .is_some_and(|n| n.starts_with(PREFIXO) && n.ends_with(SUFIXO))
+                .is_some_and(|n| n.starts_with(prefixo) && n.ends_with(sufixo))
         })
         .collect();
 
     arquivos.sort();
 
-    if arquivos.len() > RETENCAO_DIAS {
-        for antigo in &arquivos[..arquivos.len() - RETENCAO_DIAS] {
+    if arquivos.len() > retencao {
+        for antigo in &arquivos[..arquivos.len() - retencao] {
             let _ = fs::remove_file(antigo);
         }
     }
@@ -187,7 +228,7 @@ mod tests {
             fs::write(diretorio_backups.join(nome), b"fake").unwrap();
         }
 
-        limpar_backups_antigos(&diretorio_backups).unwrap();
+        limpar_backups_antigos(&diretorio_backups, PREFIXO, SUFIXO, RETENCAO_DIAS).unwrap();
 
         let restantes = fs::read_dir(&diretorio_backups).unwrap().count();
         assert_eq!(restantes, RETENCAO_DIAS);
@@ -234,12 +275,50 @@ mod tests {
     }
 
     #[test]
+    fn backup_automatico_copia_arquivos_de_config_quando_existem() {
+        let dir = diretorio_de_teste("backup-com-config");
+        fs::write(
+            dir.join(crate::db::sync::NOME_ARQUIVO_CONFIG_TURSO),
+            "libsql://x\ntoken\n",
+        )
+        .unwrap();
+        fs::write(dir.join(NOME_ARQUIVO_CONFIG_EXTERNO), "/media/pendrive\n").unwrap();
+        let conn = db::abrir_em_memoria().unwrap();
+
+        backup_automatico(&conn, &dir).unwrap();
+
+        let backups = dir.join("backups");
+        assert!(backups
+            .join(crate::db::sync::NOME_ARQUIVO_CONFIG_TURSO)
+            .exists());
+        assert!(backups.join(NOME_ARQUIVO_CONFIG_EXTERNO).exists());
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn backup_automatico_nao_falha_quando_arquivos_de_config_nao_existem() {
+        let dir = diretorio_de_teste("backup-sem-config");
+        let conn = db::abrir_em_memoria().unwrap();
+
+        let caminho = backup_automatico(&conn, &dir).unwrap();
+
+        assert!(caminho.exists());
+        assert!(!dir
+            .join("backups")
+            .join(crate::db::sync::NOME_ARQUIVO_CONFIG_TURSO)
+            .exists());
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
     fn backup_externo_grava_no_destino_configurado() {
         let dir_dados = diretorio_de_teste("origem");
         let dir_pendrive = diretorio_de_teste("pendrive-destino");
         let conn = db::abrir_em_memoria().unwrap();
 
-        let caminho = backup_externo(&conn, &dir_pendrive).unwrap();
+        let caminho = backup_externo(&conn, &dir_dados, &dir_pendrive).unwrap();
 
         assert!(caminho.exists());
         assert!(caminho.starts_with(&dir_pendrive));

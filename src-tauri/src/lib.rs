@@ -23,18 +23,41 @@ pub fn run() {
             let diretorio_dados = app.path().app_data_dir()?;
             let conn = db::abrir(&diretorio_dados)?;
 
-            if let Err(e) = db::backup::backup_automatico(&conn, &diretorio_dados) {
-                log::warn!("Falha ao fazer backup automatico do banco: {e}");
+            let diretorio_backups = diretorio_dados.join("backups");
+            let mut arquivos_do_dia: Vec<std::path::PathBuf> = Vec::new();
+
+            match db::backup::backup_automatico(&conn, &diretorio_dados) {
+                Ok(caminho) => arquivos_do_dia.push(caminho),
+                Err(e) => log::warn!("Falha ao fazer backup automatico do banco: {e}"),
             }
 
             // Backup externo (pendrive/HD): so acontece se `backup_externo.txt`
             // estiver configurado nesta maquina e a unidade estiver conectada
             // agora - melhor-esforco, nunca trava a abertura do app.
-            if let Some(destino) = db::backup::ler_destino_externo(&diretorio_dados) {
-                if let Err(e) = db::backup::backup_externo(&conn, &destino) {
+            let destino_externo = db::backup::ler_destino_externo(&diretorio_dados);
+            if let Some(destino) = &destino_externo {
+                if let Err(e) = db::backup::backup_externo(&conn, &diretorio_dados, destino) {
                     log::warn!("Falha ao fazer backup externo do banco: {e}");
                 }
             }
+
+            // Copias dos arquivos de config (turso.txt, backup_externo.txt) ja
+            // foram feitas por backup_automatico/backup_externo acima, dentro
+            // da pasta de backups local - incluir aqui pra tambem irem pro
+            // backup offsite (S3) mais abaixo.
+            for nome in [
+                db::sync::NOME_ARQUIVO_CONFIG_TURSO,
+                db::backup::NOME_ARQUIVO_CONFIG_EXTERNO,
+            ] {
+                let copia = diretorio_backups.join(nome);
+                if copia.exists() {
+                    arquivos_do_dia.push(copia);
+                }
+            }
+
+            let data_hoje: Option<String> = conn
+                .query_row("SELECT date('now', 'localtime')", [], |r| r.get(0))
+                .ok();
 
             app.manage(AppState::new(conn));
 
@@ -58,6 +81,43 @@ pub fn run() {
                         db::sync::tentar_sincronizar_uma_vez(&app_handle, &url, &token).await;
                     }
                     tokio::time::sleep(INTERVALO_SINCRONIZACAO).await;
+                }
+            });
+
+            // Backup completo: export do Turso (dump de movimentos_consolidados
+            // - a unica copia offline dessa tabela, ver docs/ARQUITETURA.md) e
+            // upload offsite pro S3 (se `backup_nuvem.txt` estiver configurado).
+            // Roda uma vez por abertura real do app (mesma cadencia do backup
+            // local/externo acima), nao um loop - granularidade diaria basta
+            // pra um backup. As duas etapas sao independentes: falha numa nao
+            // impede a outra, e nenhuma delas trava a abertura do app.
+            tauri::async_runtime::spawn(async move {
+                let mut arquivos_do_dia = arquivos_do_dia;
+
+                if let (Some((url, token)), Some(data)) =
+                    (db::sync::ler_config_turso(&diretorio_dados), data_hoje)
+                {
+                    match db::sync::exportar_consolidado(&url, &token, &diretorio_backups, &data)
+                        .await
+                    {
+                        Ok(caminho) => arquivos_do_dia.push(caminho),
+                        Err(e) => {
+                            log::warn!("Falha ao exportar a tabela consolidada do Turso: {e}")
+                        }
+                    }
+                    if let Some(destino) = &destino_externo {
+                        if let Err(e) =
+                            db::sync::exportar_consolidado(&url, &token, destino, &data).await
+                        {
+                            log::warn!(
+                                "Falha ao exportar a tabela consolidada do Turso pro destino externo: {e}"
+                            );
+                        }
+                    }
+                }
+
+                if let Some(config) = db::backup_nuvem::ler_config_nuvem(&diretorio_dados) {
+                    db::backup_nuvem::enviar_backups_do_dia(&config, &arquivos_do_dia).await;
                 }
             });
 
