@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
-import type { Armazem, Usuario } from '../types';
-import { criarUsuario, listarUsuarios } from '../lib/api';
+import type { Armazem, QuebraCadeia, Usuario } from '../types';
+import { criarUsuario, listarUsuarios, verificarIntegridade } from '../lib/api';
 import Carregando from '../components/Carregando';
 
 interface Props {
@@ -19,6 +19,12 @@ export default function Usuarios({ armazens }: Props) {
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
   const [enviando, setEnviando] = useState(false);
+
+  const [verificando, setVerificando] = useState(false);
+  const [erroIntegridade, setErroIntegridade] = useState('');
+  // undefined = ainda nao verificou nessa sessao da tela; null = verificou e
+  // esta intacta; QuebraCadeia = achou uma linha divergente.
+  const [quebra, setQuebra] = useState<QuebraCadeia | null | undefined>(undefined);
 
   async function carregar() {
     setCarregando(true);
@@ -63,6 +69,19 @@ export default function Usuarios({ armazens }: Props) {
     setLogin('');
     setSenha('');
     await carregar();
+  }
+
+  async function handleVerificarIntegridade() {
+    setErroIntegridade('');
+    setVerificando(true);
+    const resultado = await verificarIntegridade();
+    setVerificando(false);
+
+    if (!resultado.ok) {
+      setErroIntegridade(resultado.error ?? 'Nao foi possivel verificar a integridade.');
+      return;
+    }
+    setQuebra(resultado.quebra ?? null);
   }
 
   return (
@@ -124,6 +143,31 @@ export default function Usuarios({ armazens }: Props) {
             {enviando ? 'Cadastrando...' : 'Cadastrar usuario'}
           </button>
         </form>
+      </section>
+
+      <section className="cartao">
+        <h2>Integridade da auditoria</h2>
+        <p className="subtitulo">
+          Confere se algum lancamento foi alterado direto no banco, fora do fluxo normal do
+          app (a trilha de auditoria e uma cadeia de hash - ver <code>docs/ARQUITETURA.md</code>).
+          Pode demorar alguns segundos num banco grande.
+        </p>
+
+        {erroIntegridade && <p className="erro" role="alert">{erroIntegridade}</p>}
+        {quebra === null && (
+          <p className="sucesso">Cadeia intacta - nenhuma alteracao fora do fluxo normal encontrada.</p>
+        )}
+        {quebra && (
+          <p className="erro" role="alert">
+            Quebra encontrada no lancamento nº {quebra.movimento_id}
+            {quebra.numero_pedido ? ` (pedido ${quebra.numero_pedido})` : ''} - algum campo foi
+            alterado direto no banco.
+          </p>
+        )}
+
+        <button type="button" onClick={handleVerificarIntegridade} disabled={verificando}>
+          {verificando ? 'Verificando...' : 'Verificar integridade'}
+        </button>
       </section>
 
       <section className="cartao">

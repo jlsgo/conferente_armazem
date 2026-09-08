@@ -61,6 +61,12 @@ export interface NovoMovimento {
   itens: MovimentoItemInput[];
 }
 
+/** Retorno de `verificar_integridade` - `null` significa cadeia intacta. */
+export interface QuebraCadeia {
+  movimento_id: number;
+  numero_pedido: string | null;
+}
+
 export interface MovimentoItem {
   id: number;
   categoria: Categoria;

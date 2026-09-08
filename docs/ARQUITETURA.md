@@ -290,6 +290,22 @@ motivo de existir desse painel e ser ao vivo. `.github/workflows/deploy-painel.y
 copia `manifest.json`/`sw.js`/`icons/` pro `_site/` sem passar pelo `sed` (nao tem
 segredo neles, so o `index.html` precisa da substituicao de credenciais).
 
+## Log de erros (`tauri_plugin_log`)
+
+`lib.rs` (`.setup()`) registra o plugin de log em toda build, gravando avisos/erros
+(`log::warn!`/`log::info!` espalhados pelo codigo — falha de backup, de sincronizacao,
+de `criar_movimento`/`estornar_movimento`/`fechar_dia`) num arquivo na pasta de log
+padrao do sistema operacional (target `LogDir` do plugin — ver a documentacao do
+`tauri-plugin-log` pro caminho exato por plataforma; no Windows fica em
+`%LOCALAPPDATA%\<identifier do app>\logs`). Antes disso o plugin so era ligado
+`if cfg!(debug_assertions)` — ou seja, nunca era inicializado na build de producao (o
+`.exe` que de fato vai pros PCs de A4/B2), e as macros do crate `log` sao um no-op sem
+logger registrado: todo aquele log espalhado pelo codigo nao ia pra lugar nenhum. Rotacao
+ajustada pra 5MB por arquivo, mantendo os ultimos 10 (`RotationStrategy::KeepSome(10)`) —
+os padroes do plugin (40KB, `KeepOne`) davam pouquissimo historico pra investigar algo de
+mais de alguns minutos atras. Se um conferente relatar um erro estranho, esse arquivo e o
+primeiro lugar pra olhar, em vez de tentar reproduzir o problema por telefone.
+
 ## Migrations
 
 Arquivos SQL numerados em `src-tauri/migrations/`, aplicados por `rusqlite_migration` a

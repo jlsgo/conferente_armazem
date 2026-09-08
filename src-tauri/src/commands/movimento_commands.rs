@@ -2,7 +2,7 @@ use serde::Deserialize;
 use tauri::State;
 
 use crate::domain::errors::AppResult;
-use crate::domain::movimentos::{self, Movimento, MovimentoItemInput, NovoMovimento};
+use crate::domain::movimentos::{self, Movimento, MovimentoItemInput, NovoMovimento, QuebraCadeia};
 use crate::state::AppState;
 
 /// Espelha `domain::movimentos::NovoMovimento`, mas sem `usuario_id`: quem
@@ -42,6 +42,8 @@ pub fn criar_movimento(
 ) -> AppResult<Movimento> {
     let usuario_id = state.usuario_logado()?;
     let mut conn = state.conn()?;
+    let armazem_id = payload.armazem_id;
+    let fluxo = payload.fluxo.clone();
     movimentos::criar_movimento(
         &mut conn,
         NovoMovimento {
@@ -69,6 +71,13 @@ pub fn criar_movimento(
             itens: payload.itens,
         },
     )
+    // So loga erro (nunca sucesso - um lancamento por si so nao e um evento
+    // digno de log, e o volume afogaria o arquivo) - diagnosticar um
+    // problema no PC do armazem hoje depende de telefonema, isso da uma
+    // trilha local pra conferir primeiro (ver `docs/ARQUITETURA.md`).
+    .inspect_err(|e| {
+        log::warn!("criar_movimento falhou (armazem={armazem_id}, fluxo={fluxo}): {e}")
+    })
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -80,6 +89,7 @@ pub fn estornar_movimento(
     let usuario_id = state.usuario_logado()?;
     let mut conn = state.conn()?;
     movimentos::estornar_movimento(&mut conn, movimento_id, usuario_id, &justificativa)
+        .inspect_err(|e| log::warn!("estornar_movimento falhou (movimento_id={movimento_id}): {e}"))
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -175,4 +185,14 @@ pub fn buscar_historico(
         numero_pedido.as_deref(),
         offset,
     )
+}
+
+/// So um gestor pode rodar - ver `movimentos::verificar_cadeia_como_gestor`.
+/// Percorre a tabela `movimentos` inteira (pode demorar num banco grande),
+/// entao e uma acao explicita da tela de Usuarios, nao algo automatico.
+#[tauri::command(rename_all = "snake_case")]
+pub fn verificar_integridade(state: State<AppState>) -> AppResult<Option<QuebraCadeia>> {
+    let solicitante_id = state.usuario_logado()?;
+    let conn = state.conn()?;
+    movimentos::verificar_cadeia_como_gestor(&conn, solicitante_id)
 }

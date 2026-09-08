@@ -7,6 +7,7 @@ import type {
   Movimento,
   NovoMovimento,
   NovoUsuarioInput,
+  QuebraCadeia,
   ReparoConcluido,
   ReparoPendente,
   ResultadoHistorico,
@@ -171,6 +172,20 @@ export async function criarUsuario(payload: NovoUsuarioInput): Promise<OkResult>
   try {
     await invoke('criar_usuario', { payload });
     return { ok: true };
+  } catch (err) {
+    return { ok: false, error: erroParaTexto(err) };
+  }
+}
+
+export interface VerificarIntegridadeResult extends OkResult {
+  quebra?: QuebraCadeia | null;
+}
+
+/** So um gestor pode chamar - ver `movimentos::verificar_cadeia_como_gestor` no backend. */
+export async function verificarIntegridade(): Promise<VerificarIntegridadeResult> {
+  try {
+    const quebra = await invoke<QuebraCadeia | null>('verificar_integridade');
+    return { ok: true, quebra };
   } catch (err) {
     return { ok: false, error: erroParaTexto(err) };
   }

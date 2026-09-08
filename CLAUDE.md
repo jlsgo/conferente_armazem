@@ -158,8 +158,13 @@ actually build and run for local testing.
   over the previous row's hash plus every field of this row, including item-level
   fields (`domain::movimentos::calcular_hash`/`CamposHash`) — a direct `UPDATE` on any
   covered column breaks the chain. `domain::movimentos::verificar_cadeia` walks the
-  table and returns the first row whose stored hash no longer matches; it's
-  domain-only today (no Tauri command/UI), covered by unit tests.
+  table and returns the first row whose stored hash no longer matches. Exposed via
+  `verificar_cadeia_como_gestor` (gated the same way as `auth::criar_usuario_como_gestor`/
+  `listar_usuarios_como_gestor` — only an active `papel = 'gestor'` may call it, since it
+  reads across every armazem's rows, not just the caller's) → `verificar_integridade`
+  Tauri command → a "Verificar integridade" button on `Usuarios.tsx` (gestor-only screen).
+  Walks the whole `movimentos` table, so it's an explicit user action, not something run
+  automatically on a timer or on every login.
 - **Session-based authorization**: `AppState.sessao` (set by the `login` command,
   cleared by `logout`) is the only source of "who is doing this" for
   `criar_movimento`, `fechar_dia`, `criar_usuario` and `estornar_movimento` — none of
@@ -196,6 +201,19 @@ actually build and run for local testing.
   turns every variant into the plain Portuguese string shown directly in the UI. Keep
   error messages user-safe — never let raw `rusqlite::Error`/SQL text reach a variant's
   `Display` output.
+- **Logging**: `tauri_plugin_log` (`src-tauri/src/lib.rs`) used to only be plugged in
+  `if cfg!(debug_assertions)` — meaning every `log::warn!`/`log::info!` scattered through
+  the code (backup/sync failures, mainly) went nowhere in a release build, since `log`'s
+  macros are a no-op without a registered logger. Now always enabled, with
+  `max_file_size`/`rotation_strategy` tuned up from the plugin's defaults (40KB/`KeepOne`
+  — too little to diagnose anything from more than a few minutes ago) to 5MB/`KeepSome(10)`.
+  Writes to the plugin's default `LogDir` target (OS-standard per-app log folder — see
+  `tauri_plugin_log`'s docs for the exact path per platform; on Windows it's under
+  `%LOCALAPPDATA%\<bundle id>\logs`). `criar_movimento`/`estornar_movimento`/`fechar_dia`
+  (`commands/movimento_commands.rs`, `commands/fechamento_commands.rs`) log a `warn!` with
+  armazem/fluxo context on failure via `.inspect_err(...)` — deliberately only on error,
+  never on success, so routine lancamentos don't flood the file. This is meant to replace
+  "call Jhon to describe what happened" with "pull this file" as the first diagnostic step.
 - **Frontend ↔ backend**: `src/lib/api.ts` wraps `@tauri-apps/api`'s `invoke()`, matching
   the Rust command names and payload shapes (JSON field names are snake_case, mirroring
   the Rust structs directly — no camelCase conversion in the payloads). Tauri commands

@@ -1087,6 +1087,25 @@ pub fn verificar_cadeia(conn: &Connection) -> AppResult<Option<QuebraCadeia>> {
     Ok(None)
 }
 
+/// Como `verificar_cadeia`, mas so se quem esta pedindo for um gestor -
+/// percorre a tabela inteira (nao so o armazem de quem chamou) e, numa
+/// quebra, expoe `numero_pedido` de qualquer armazem, entao segue o mesmo
+/// padrao gestor-only de `auth::criar_usuario_como_gestor`/
+/// `listar_usuarios_como_gestor` em vez do check por-armazem que o resto
+/// deste modulo usa.
+pub fn verificar_cadeia_como_gestor(
+    conn: &Connection,
+    solicitante_id: i64,
+) -> AppResult<Option<QuebraCadeia>> {
+    let solicitante = buscar_usuario_ativo(conn, solicitante_id)?;
+    if solicitante.papel != "gestor" {
+        return Err(AppError::Validation(
+            "Somente um gestor pode verificar a integridade da cadeia de auditoria.".into(),
+        ));
+    }
+    verificar_cadeia(conn)
+}
+
 pub(crate) fn carregar_itens(
     conn: &Connection,
     movimento_id: i64,
@@ -2238,6 +2257,25 @@ mod tests {
             .unwrap()
             .expect("deveria detectar a quebra");
         assert_eq!(quebra.movimento_id, alvo.id);
+    }
+
+    #[test]
+    fn rejeita_verificar_cadeia_de_conferente() {
+        let (conn, _armazem_id, usuario_id) = conexao_de_teste();
+        assert!(matches!(
+            verificar_cadeia_como_gestor(&conn, usuario_id),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn aceita_verificar_cadeia_de_gestor() {
+        let (conn, armazem_id, _usuario_id) = conexao_de_teste();
+        let gestor_id = criar_gestor(&conn, Some(armazem_id));
+        assert_eq!(
+            verificar_cadeia_como_gestor(&conn, gestor_id).unwrap(),
+            None
+        );
     }
 
     // --- Stage 4: estorno ---

@@ -12,13 +12,22 @@ use state::AppState;
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
+            // Antes so rodava em debug_assertions - em producao (o .exe que
+            // de fato vai pros PCs de A4/B2) o plugin nunca era inicializado,
+            // entao todo `log::warn!`/`log::info!` espalhado pelo codigo
+            // (falha de backup, de sync, etc.) nao ia pra lugar nenhum: sem
+            // logger registrado, as macros do crate `log` sao um no-op. Alvo
+            // padrao do plugin ja inclui `LogDir` (pasta de log padrao do
+            // SO - ver `docs/ARQUITETURA.md`), so precisava deixar de ser
+            // so-debug e ajustar o tamanho/rotacao padrao (40KB/KeepOne e
+            // pouco pra diagnosticar algo de dias atras).
+            app.handle().plugin(
+                tauri_plugin_log::Builder::default()
+                    .level(log::LevelFilter::Info)
+                    .max_file_size(5_000_000)
+                    .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(10))
+                    .build(),
+            )?;
 
             let diretorio_dados = app.path().app_data_dir()?;
             let conn = db::abrir(&diretorio_dados)?;
@@ -138,6 +147,7 @@ pub fn run() {
             commands::movimento_commands::verificar_retirada_pendente,
             commands::movimento_commands::buscar_reparos_em_aberto,
             commands::movimento_commands::buscar_reparos_concluidos,
+            commands::movimento_commands::verificar_integridade,
             commands::fechamento_commands::fechar_dia,
             commands::fechamento_commands::buscar_fechamento_do_dia,
             commands::sync_commands::sincronizar_agora,

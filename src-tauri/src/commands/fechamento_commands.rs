@@ -17,6 +17,9 @@ pub struct FecharDiaPayload {
 pub fn fechar_dia(state: State<AppState>, payload: FecharDiaPayload) -> AppResult<Fechamento> {
     let usuario_id = state.usuario_logado()?;
     let mut conn = state.conn()?;
+    let armazem_id = payload.armazem_id;
+    let fluxo = payload.fluxo.clone();
+    let data = payload.data.clone();
     fechamentos::fechar_dia(
         &mut conn,
         payload.armazem_id,
@@ -24,6 +27,9 @@ pub fn fechar_dia(state: State<AppState>, payload: FecharDiaPayload) -> AppResul
         &payload.data,
         usuario_id,
     )
+    .inspect_err(|e| {
+        log::warn!("fechar_dia falhou (armazem={armazem_id}, fluxo={fluxo}, data={data}): {e}")
+    })
 }
 
 #[tauri::command(rename_all = "snake_case")]
