@@ -1425,6 +1425,96 @@ real), zero erro de console — reconfirmado em pt e zh.
 
 Bump de `3.0.0` pra `3.1.0` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
 
+## Versao 3.2.0 — regras de preenchimento do SAC/itens, log de producao, tema escuro (Feito)
+
+Pedido do usuario, em varias rodadas: regras de negocio novas no SAC (valor de
+garantia, remover "entregue"), campos que hoje sao opcionais virarem obrigatorios,
+"coleta" obrigatoria, "quem retirou" removido, cores de borda por aba, mais
+margem/destaque em toggles e avisos, e depois "as outras sprints" combinadas
+antes (testes de frontend, observabilidade, verificar integridade, arquivar docs
+antigos) mais tema claro/escuro.
+
+**SAC** (`domain::movimentos.rs`): motivo de saida `entregue` removido —
+`MOTIVOS_SAC_SAIDA_VALIDOS` (era o unico motivo sem valor associado, entao nao dava
+pra saber quanto realmente saiu do SAC num dia). `valor_centavos` agora obrigatorio
+pra venda/garantia/outro na saida (so `descarte` fica sem valor,
+`MOTIVOS_SAC_SAIDA_COM_VALOR_OBRIGATORIO`) — entrada continua igual (so venda exige
+valor). Linhas antigas com `motivo="entregue"` continuam validas no historico
+(`motivoSacTexto` em `situacao.ts` ainda traduz), so nao e mais selecionavel num
+lancamento novo.
+
+**Campos obrigatorios** (mesmo arquivo + `Lancamentos.tsx`/`Montagem.tsx`/`Sac.tsx`):
+`descricao` do item passa a ser obrigatoria em `saida_armazem`/`peca_montagem`/`sac`
+(nao em `reparo_externo`, fora do pedido). `montagem` passa a ser obrigatoria pra
+todo item em `saida_armazem` (mesmo categoria "peca"/"outro" — nessa tela e sempre
+uma linha do pedido do cliente) mas so pra categoria de veiculo
+(scooter/triciclo/patinete) em `peca_montagem` (`CATEGORIAS_VEICULO`) — uma peca
+solta indo pra montagem nao "vem montada", e `Montagem.tsx` nunca mostrou esse campo
+pra ela. `montagem="outro"` deixou de ser um valor so-frontend (antes virava `null`
+antes de mandar pro backend, porque o campo era opcional) — agora e um valor real
+(`MONTAGENS_VALIDAS` ganhou a terceira opcao), mesmo padrao de `categoria`/`condicao`.
+Selects de montagem sem mais opcao em branco, ordem Em caixa → Montado → Outro
+(pedido explicito do usuario nessa ordem). "Coleta" (`contraparte`) obrigatoria numa
+saida normal de `saida_armazem` (nao numa transferencia pro outro armazem, que nao
+tem coleta nenhuma). Campo "Quem retirou" removido do formulario de
+`Lancamentos.tsx` (redundante com coleta) — coluna/campo continuam existindo pra
+historico antigo, so nao e mais coletado.
+
+**Infra de teste de frontend**: `vitest` + `@testing-library/react` (nao existia
+nenhum teste de frontend antes), ligado ao CI (`npm run test:frontend`). Mock global
+do `invoke` do Tauri em `src/test/setup.ts`. Cobertura dos formularios que mudaram
+nesta versao (`Sac.test.tsx`, `Lancamentos.test.tsx`, `Montagem.test.tsx`) mais
+`Usuarios.test.tsx` (verificar integridade) e `useTema.test.ts`.
+
+**Log de erros em producao**: `tauri_plugin_log` (`lib.rs`) so era ligado
+`if cfg!(debug_assertions)` — nunca inicializava na build de producao, entao todo
+`log::warn!`/`log::info!` espalhado pelo codigo (falha de backup, de sync) ia pro
+vazio. Agora sempre ligado, rotacao ajustada de 40KB/`KeepOne` (padrao do plugin,
+pouquissimo historico) pra 5MB/`KeepSome(10)`. `criar_movimento`/
+`estornar_movimento`/`fechar_dia` logam um `warn!` com contexto (armazem/fluxo) na
+falha, via `.inspect_err(...)`.
+
+**Verificar integridade**: `domain::movimentos::verificar_cadeia` (hash de auditoria)
+ja existia e era testada, mas nao tinha comando nem UI. Exposta via
+`verificar_cadeia_como_gestor` (so `papel = 'gestor'`, mesmo padrao de
+`criar_usuario_como_gestor`) → comando `verificar_integridade` → botao "Verificar
+integridade" em `Usuarios.tsx`.
+
+**UX**: cada aba colore a borda inteira das suas caixas (nao so o friso do topo de
+antes), reaproveitando as cores que ja existiam na navegacao. Toggles tipo-aba
+(Saida/Entrada, Cliente/Transferir) ganharam borda visivel mesmo inativos + mais
+espaco entre eles; linhas de item com mais respiro entre os campos; avisos/toasts
+com mais padding e botao de fechar com area de clique maior.
+
+**Tema claro/escuro**: `src/hooks/useTema.ts`, chamado em `App.tsx` (nao por
+pagina, pra Setup/Login tambem respeitarem antes de existir sessao). Comeca no que
+o SO ja usa (`prefers-color-scheme`), uma escolha manual (botao no cabecalho do
+Dashboard) sempre vence e fica salva por PC (`localStorage`, nao sincroniza entre
+A4/B2). `global.css` cobre isso com um bloco `:root[data-tema='escuro']` — só os
+tokens de fundo/superficie e as tintas "-claro" mudam por inteiro; os tokens
+"-escuro" mantem o mesmo valor escuro nos dois temas de proposito (sao fundo de
+botao no hover, com texto branco por cima — clarear quebraria o contraste), e onde
+um deles e usado como TEXTO em vez de fundo (titulo, badge, hover de aba inativa) a
+sobrescrita mira o seletor especifico, nao o token.
+
+**Docs arquivados**: os 3 arquivos de plano/diagnostico pre-implementacao (escritos
+antes de Montagem, SAC, sync e impressao unificada existirem) foram pra
+`docs/historico/`, com um README explicando que este arquivo e `ARQUITETURA.md` sao
+a fonte de verdade atual.
+
+**Verificado**: `tsc --noEmit`/`vite build`/`vitest run` (18 testes) limpos,
+`cargo fmt --check`/`clippy -D warnings`/`cargo test` (163 testes) limpos, em cada
+commit separado desta sequencia. Tema escuro **nao foi verificado visualmente**
+(sem navegador disponivel na sessao que fez a mudanca) — só a logica dos tokens foi
+conferida com cuidado; vale um `npm run dev` real antes de confiar 100% no visual.
+
+Gap conhecido: os scripts de seed (`src-tauri/examples/seed_dev_data.rs`,
+`seed_teste_hoje.rs`, `seed_saida_hoje.rs`) nao foram atualizados pros novos campos
+obrigatorios — compilam, mas podem falhar em runtime se rodados pra popular dados
+de teste.
+
+Bump de `3.1.0` pra `3.2.0` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um
