@@ -46,8 +46,15 @@
     --sombra-md: 0 6px 20px rgba(15, 23, 42, 0.08);
     --raio: 10px;
   }
+  /* Tema claro/escuro: comeca em `prefers-color-scheme` (SO de quem esta
+     olhando o painel), mas uma escolha manual no botao sol/lua do cabecalho
+     sempre vence e fica salva neste navegador (`data-tema` em `<html>`,
+     mesmo padrao de `src/hooks/useTema.ts` no app) - por isso o seletor da
+     media query exclui `[data-tema="claro"]` (escolha manual pro claro
+     vence mesmo com o SO em escuro) e o bloco `[data-tema="escuro"]` abaixo
+     repete os mesmos valores pra vencer o SO no sentido contrario. */
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-tema="claro"]) {
       --bg: #10161f;
       --texto: #e7edf5;
       --texto-suave: #93a2b8;
@@ -61,6 +68,20 @@
       --sombra-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
       --sombra-md: 0 6px 24px rgba(0, 0, 0, 0.4);
     }
+  }
+  :root[data-tema="escuro"] {
+    --bg: #10161f;
+    --texto: #e7edf5;
+    --texto-suave: #93a2b8;
+    --cartao: #171f2b;
+    --borda: #2b3648;
+    --verde-claro: #143726;
+    --azul-claro: #1a2749;
+    --erro-claro: #3a1a1c;
+    --aviso-claro: #3a2c0f;
+    --divergencia-claro: #3a2814;
+    --sombra-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --sombra-md: 0 6px 24px rgba(0, 0, 0, 0.4);
   }
   * { box-sizing: border-box; }
   body {
@@ -86,7 +107,23 @@
   .gate .idioma-toggle { justify-content: center; margin-bottom: 14px; }
   .gate .idioma-btn { background: var(--bg); color: var(--texto-suave); border-color: var(--borda); }
   .gate .idioma-btn.ativo { background: var(--verde); color: white; border-color: var(--verde); }
-  header .idioma-toggle { margin-left: auto; align-self: flex-start; }
+  .tema-btn {
+    background: rgba(255, 255, 255, 0.12);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s ease;
+  }
+  .tema-btn:hover { background: rgba(255, 255, 255, 0.24); }
+  .tema-btn .icone-inline { width: 15px; height: 15px; }
+  header .header-controles { margin-left: auto; align-self: flex-start; display: flex; align-items: center; gap: 10px; }
   header {
     background: linear-gradient(135deg, var(--verde), var(--verde-escuro));
     color: white;
@@ -296,7 +333,7 @@
        vez de disputar espaco com o titulo. */
     header { flex-wrap: wrap; row-gap: 8px; padding: 14px 16px; }
     header h1 { font-size: 1.05rem; }
-    header .idioma-toggle { margin-left: 0; width: 100%; justify-content: flex-end; }
+    header .header-controles { margin-left: 0; width: 100%; justify-content: flex-end; }
 
     /* Grade de filtros: o wrap automatico agrupava campos de forma
        arbitraria (ex.: atalhos de periodo dividindo linha com Responsavel
@@ -379,9 +416,15 @@
       </h1>
       <p id="status-topo">Carregando...</p>
     </div>
-    <div class="idioma-toggle">
-      <button type="button" class="idioma-btn" data-idioma="pt">PT</button>
-      <button type="button" class="idioma-btn" data-idioma="zh">中文</button>
+    <div class="header-controles">
+      <button type="button" id="botao-tema" class="tema-btn" aria-label="Alternar tema claro/escuro">
+        <svg id="icone-tema-sol" class="icone-inline escondido" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2.5" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="21.5"/><line x1="2.5" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="21.5" y2="12"/><line x1="4.9" y1="4.9" x2="6.6" y2="6.6"/><line x1="17.4" y1="17.4" x2="19.1" y2="19.1"/><line x1="4.9" y1="19.1" x2="6.6" y2="17.4"/><line x1="17.4" y1="6.6" x2="19.1" y2="4.9"/></svg>
+        <svg id="icone-tema-lua" class="icone-inline escondido" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a7 7 0 1 0 10.5 10.5z"/></svg>
+      </button>
+      <div class="idioma-toggle">
+        <button type="button" class="idioma-btn" data-idioma="pt">PT</button>
+        <button type="button" class="idioma-btn" data-idioma="zh">中文</button>
+      </div>
     </div>
   </header>
   <main>
@@ -532,6 +575,59 @@
   var SENHA_HASH = "3b1fe3aa0328bb257cc8cc0fd0187097a839598e8cb6e7b56c3d72f4f40ca1d4";
   var CHAVE_SESSAO = "ecoviva-painel-autenticado";
 
+  // ---- Tema (claro / escuro) ----
+  // Mesmo padrao do app (`src/hooks/useTema.ts`): comeca no que o SO de
+  // quem esta olhando ja usa (`prefers-color-scheme`, aplicado so via CSS -
+  // ver o bloco @media no <style>), mas uma escolha manual no botao
+  // sol/lua sempre vence e fica salva neste navegador (`data-tema` em
+  // `<html>`, por maquina - nao sincroniza entre quem acessa o painel).
+  var CHAVE_TEMA = "ecoviva-painel-tema";
+  var elBotaoTema = document.getElementById("botao-tema");
+  var elIconeTemaSol = document.getElementById("icone-tema-sol");
+  var elIconeTemaLua = document.getElementById("icone-tema-lua");
+
+  function temaSalvo() {
+    try {
+      var v = localStorage.getItem(CHAVE_TEMA);
+      return v === "claro" || v === "escuro" ? v : null;
+    } catch (e) { return null; }
+  }
+
+  function temaEfetivo() {
+    var salvo = temaSalvo();
+    if (salvo) return salvo;
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "escuro" : "claro";
+  }
+
+  // So grava `data-tema` no `<html>` quando ha escolha manual - sem escolha,
+  // o CSS segue o SO sozinho (nenhum atributo), igual antes deste botao existir.
+  function aplicarAtributoTema() {
+    var salvo = temaSalvo();
+    if (salvo) document.documentElement.setAttribute("data-tema", salvo);
+    else document.documentElement.removeAttribute("data-tema");
+  }
+
+  // Icone mostra pra onde o clique leva (igual ao app): sol enquanto esta
+  // no escuro (clique volta pro claro), lua enquanto esta no claro.
+  function atualizarIconeTema() {
+    var efetivo = temaEfetivo();
+    elIconeTemaSol.classList.toggle("escondido", efetivo !== "escuro");
+    elIconeTemaLua.classList.toggle("escondido", efetivo === "escuro");
+    elBotaoTema.title = efetivo === "claro"
+      ? (idiomaAtual === "zh" ? "切换到深色模式" : "Mudar para tema escuro")
+      : (idiomaAtual === "zh" ? "切换到浅色模式" : "Mudar para tema claro");
+  }
+
+  elBotaoTema.addEventListener("click", function () {
+    var novo = temaEfetivo() === "claro" ? "escuro" : "claro";
+    try { localStorage.setItem(CHAVE_TEMA, novo); } catch (e) {}
+    aplicarAtributoTema();
+    atualizarIconeTema();
+  });
+
+  aplicarAtributoTema();
+  atualizarIconeTema();
+
   // ---- Idioma (PT / chines simplificado) ----
   // So traduz este painel (dashboard de leitura) - o app desktop dos
   // conferentes continua so em portugues. Traducao de textos fixos via
@@ -608,6 +704,7 @@
       coletaRecebidoDe: "Recebido de",
       montagemMontado: "Montado",
       montagemCaixa: "Em caixa",
+      montagemOutro: "Outro",
       estornoRefPedido: "Estorno do pedido",
       estornoRefHorario: "Estorno do lancamento de",
       estornoRefNaoEncontrado: "Estorno de um lancamento fora do filtro atual",
@@ -622,6 +719,7 @@
       statTileRecusados: "Recebimentos recusados",
       statTileTaxaEstorno: "Taxa de estorno",
       statTileValorVendas: "Valor total (vendas SAC)",
+      statTileValorGarantia: "Valor total (garantias SAC)",
       statTileMontado: "Saiu montado",
       statTileCaixa: "Saiu em caixa",
       semDadosPeriodo: "Sem dados no periodo.",
@@ -691,6 +789,7 @@
       coletaRecebidoDe: "收自",
       montagemMontado: "已组装",
       montagemCaixa: "装箱",
+      montagemOutro: "其他",
       estornoRefPedido: "冲销订单",
       estornoRefHorario: "冲销的记录时间",
       estornoRefNaoEncontrado: "冲销的记录不在当前筛选范围内",
@@ -705,6 +804,7 @@
       statTileRecusados: "被拒收次数",
       statTileTaxaEstorno: "冲销率",
       statTileValorVendas: "销售总额（SAC）",
+      statTileValorGarantia: "保修总额（SAC）",
       statTileMontado: "已组装出库",
       statTileCaixa: "装箱出库",
       semDadosPeriodo: "该时段无数据。",
@@ -771,6 +871,7 @@
     idiomaAtual = idioma;
     try { localStorage.setItem(CHAVE_IDIOMA, idioma); } catch (e) {}
     aplicarTraducoesEstaticas();
+    atualizarIconeTema();
     // Re-renderiza os blocos dinamicos (nao passam por data-i18n) com o que
     // ja tinha sido buscado - so dispara consulta nova se ainda nao tinha
     // carregado nada (elConteudo escondido, usuario ainda no gate).
@@ -786,6 +887,11 @@
     btn.addEventListener("click", function () { definirIdioma(btn.getAttribute("data-idioma")); });
   });
   aplicarTraducoesEstaticas();
+  // So o tooltip do botao de tema depende do idioma - refaz aqui pra pegar
+  // o idioma salvo (o `aplicarAtributoTema`/`atualizarIconeTema` la em cima
+  // ja rodou antes de `idiomaAtual` estar definido, so pra nao esperar pra
+  // aplicar o `data-tema` e evitar flash do tema errado).
+  atualizarIconeTema();
 
   // Declarados aqui (antes do bloco de autenticacao logo abaixo) de
   // proposito: numa visita repetida na mesma sessao, `jaAutenticado` ja
@@ -1193,6 +1299,7 @@
   function montagemTexto(montagem) {
     if (montagem === "montado") return t("montagemMontado");
     if (montagem === "caixa") return t("montagemCaixa");
+    if (montagem === "outro") return t("montagemOutro");
     return null;
   }
 
@@ -1367,6 +1474,12 @@
     // So soma venda de estorno/recusa fora (nao e uma venda de verdade
     // acontecendo) - mesmo criterio das outras somas acima.
     var totalVendasCentavos = 0;
+    // Valor de garantia (SAC saida - `valor_centavos` passou a ser
+    // obrigatorio pra garantia, nao so venda, ver CLAUDE.md/domain/
+    // movimentos.rs) - sem isto nao dava pra saber quanto saiu do SAC em
+    // garantias no dia, so em vendas. So existe do lado saida (entrada de
+    // garantia, a devolucao do cliente, nunca carrega valor).
+    var totalGarantiaCentavos = 0;
     // Quantos veiculos saíram montados vs em caixa (item.montagem) - so conta
     // saida de verdade (nao estorno/recusa, mesmo criterio de totalSaida
     // acima), pra responder "quantas scooters saíram em caixa hoje?" sem
@@ -1394,6 +1507,7 @@
         // destino, nao so devolucao de cliente) - sem isto, "Valor total
         // (vendas SAC)" ficava faltando as vendas do lado de saida.
         if (m.motivo === "venda" && m.valor_centavos) totalVendasCentavos += m.valor_centavos;
+        if (m.motivo === "garantia" && m.valor_centavos) totalGarantiaCentavos += m.valor_centavos;
       } else {
         totalEntrada += qtd;
         if (m.motivo === "venda" && m.valor_centavos) totalVendasCentavos += m.valor_centavos;
@@ -1413,6 +1527,7 @@
       totalSaida: totalSaida,
       totalRecusado: totalRecusado,
       totalVendasCentavos: totalVendasCentavos,
+      totalGarantiaCentavos: totalGarantiaCentavos,
       totalMontado: totalMontado,
       totalCaixa: totalCaixa,
       taxaEstorno: filtrados.length ? (totalEstorno / filtrados.length) : 0,
@@ -1471,6 +1586,7 @@
       [t("statTileRecusados"), dados.totalRecusado, "aviso"],
       [t("statTileTaxaEstorno"), (dados.taxaEstorno * 100).toFixed(1) + "%", "erro"],
       [t("statTileValorVendas"), formatarMoeda(dados.totalVendasCentavos)],
+      [t("statTileValorGarantia"), formatarMoeda(dados.totalGarantiaCentavos)],
       [t("statTileMontado"), dados.totalMontado],
       [t("statTileCaixa"), dados.totalCaixa]
     ].map(function (item) {

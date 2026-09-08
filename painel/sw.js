@@ -4,7 +4,7 @@
 // desatualizado num painel que existe justamente pra mostrar dado ao vivo.
 // Sobe a versao do nome do cache (`CACHE_NOME`) quando o shell mudar, pra
 // forcar a limpeza do cache antigo no proximo `activate`.
-var CACHE_NOME = "ecoviva-painel-v1";
+var CACHE_NOME = "ecoviva-painel-v2";
 var ARQUIVOS_SHELL = ["./", "manifest.json", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", function (evento) {
