@@ -359,9 +359,9 @@ button.info:hover:not(:disabled) {
   background: var(--erro-claro);
   border: 1px solid #f6c9c4;
   border-radius: var(--raio-sm);
-  padding: 8px 12px;
+  padding: 10px 14px;
   font-size: 13px;
-  margin: -2px 0 14px;
+  margin: 0 0 16px;
 }
 
 .pagina {
@@ -398,19 +398,21 @@ button.info:hover:not(:disabled) {
 
 .abas {
   display: flex;
-  gap: 6px;
+  gap: 10px;
   margin: 16px 0;
   border-bottom: 1px solid var(--borda);
   padding-bottom: 12px;
   flex-wrap: wrap;
 }
 
+/* Borda visivel mesmo sem estar selecionado (era transparente) - sem isso a
+   opcao inativa parecia so um texto solto, nao uma caixa clicavel. */
 .abas button {
   background: transparent;
   color: var(--texto-suave);
-  border: 1px solid transparent;
+  border: 1px solid var(--borda);
   border-radius: 999px;
-  padding: 8px 16px 8px 12px;
+  padding: 9px 18px 9px 14px;
   box-shadow: none;
 }
 
@@ -533,25 +535,45 @@ button.info:hover:not(:disabled) {
   background: var(--cor-entrada-escuro);
 }
 
-/* Friso no topo do primeiro cartao da pagina, na cor da aba ativa - fica
-   visivel mesmo depois de rolar a pagina pra baixo do menu. */
+/* Toda caixa da pagina usa a borda na cor da aba ativa (nao so a primeira) -
+   ajuda a conferente a saber em qual aba esta so de bater o olho, mesmo tendo
+   rolado a pagina pra baixo do menu. O topo fica mais grosso pra dar destaque
+   ao cartao principal (o formulario) sem inventar uma cor nova. */
+.conteudo-aba-lancamentos .cartao {
+  border-color: var(--cor-lancamentos);
+}
 .conteudo-aba-lancamentos .cartao:first-of-type {
-  border-top: 4px solid var(--cor-lancamentos);
+  border-top-width: 4px;
+}
+.conteudo-aba-montagem .cartao {
+  border-color: var(--cor-montagem);
 }
 .conteudo-aba-montagem .cartao:first-of-type {
-  border-top: 4px solid var(--cor-montagem);
+  border-top-width: 4px;
+}
+.conteudo-aba-sac .cartao {
+  border-color: var(--cor-sac);
 }
 .conteudo-aba-sac .cartao:first-of-type {
-  border-top: 4px solid var(--cor-sac);
+  border-top-width: 4px;
+}
+.conteudo-aba-historico .cartao {
+  border-color: var(--cor-historico);
 }
 .conteudo-aba-historico .cartao:first-of-type {
-  border-top: 4px solid var(--cor-historico);
+  border-top-width: 4px;
+}
+.conteudo-aba-usuarios .cartao {
+  border-color: var(--cor-usuarios);
 }
 .conteudo-aba-usuarios .cartao:first-of-type {
-  border-top: 4px solid var(--cor-usuarios);
+  border-top-width: 4px;
+}
+.conteudo-aba-reparo_externo .cartao {
+  border-color: var(--cor-reparo);
 }
 .conteudo-aba-reparo_externo .cartao:first-of-type {
-  border-top: 4px solid var(--cor-reparo);
+  border-top-width: 4px;
 }
 
 .tabela-scroll {
@@ -694,9 +716,9 @@ tbody tr:last-child td {
 .linha-item {
   display: grid;
   grid-template-columns: 1fr 120px auto;
-  gap: 10px;
+  gap: 14px;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 
 .linha-item select,
@@ -763,24 +785,24 @@ tbody tr:last-child td {
    segundos, mas podem ser fechadas na hora. */
 .toast-viewport {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  bottom: 24px;
+  right: 24px;
   z-index: 1000;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
   max-width: 360px;
 }
 
 .toast {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
   background: var(--superficie);
   border: 1px solid var(--borda);
   border-left: 4px solid var(--info);
   border-radius: var(--raio-md);
-  padding: 12px 14px;
+  padding: 14px 16px;
   box-shadow: var(--sombra-lg);
   font-size: 13px;
   animation: entrar-toast 0.18s ease-out;
@@ -830,7 +852,8 @@ tbody tr:last-child td {
 .toast-fechar {
   background: transparent;
   box-shadow: none;
-  padding: 2px;
+  padding: 6px;
+  margin: -6px -6px -6px 0;
   color: var(--texto-suave);
 }
 

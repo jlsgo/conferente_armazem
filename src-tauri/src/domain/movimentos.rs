@@ -21,14 +21,34 @@ const FLUXOS_VALIDOS: [&str; 4] = ["saida_armazem", "peca_montagem", "sac", "rep
 const FLUXOS_TRANSFERIVEIS: [&str; 3] = ["saida_armazem", "peca_montagem", "sac"];
 const TIPOS_VALIDOS: [&str; 2] = ["entrada", "saida"];
 const TURNOS_VALIDOS: [&str; 2] = ["diurno", "noturno"];
-const MONTAGENS_VALIDAS: [&str; 2] = ["montado", "caixa"];
+/// Obrigatorio (ver `validar_novo_movimento`) pra `saida_armazem`/`peca_montagem`
+/// desde que o controle diario passou a precisar saber quantos itens saem
+/// montados vs. em caixa - "outro" segue o mesmo padrao de `CATEGORIAS_VALIDAS`
+/// (exige observacao, ver `exigir_detalhe_para_outro`). Nao existe pra `sac`
+/// (peca de atendimento nao tem esse conceito).
+const MONTAGENS_VALIDAS: [&str; 3] = ["montado", "caixa", "outro"];
+/// Fluxos onde `descricao` do item e obrigatoria - `reparo_externo` fica de
+/// fora de proposito (fora do escopo pedido, tela propria com suas proprias
+/// regras).
+const FLUXOS_ITEM_DESCRICAO_OBRIGATORIA: [&str; 3] = ["saida_armazem", "peca_montagem", "sac"];
+/// Categorias que representam um veiculo inteiro (tem "montado"/"em caixa" pra
+/// valer) - `src/pages/Montagem.tsx` so mostra o campo de montagem pra essas
+/// categorias (uma peca solta indo pra montagem nao "vem montada"), entao a
+/// obrigatoriedade abaixo respeita a mesma distincao.
+const CATEGORIAS_VEICULO: [&str; 3] = ["scooter", "triciclo", "patinete"];
 const CONDICOES_VALIDAS: [&str; 4] = ["boa", "defeito", "sucata", "outro"];
 const MOTIVOS_SAC_ENTRADA_VALIDOS: [&str; 3] = ["garantia", "venda", "outro"];
-/// Saida do SAC: peca entregue de volta ao cliente (consertada, trocada),
-/// descartada por nao ter conserto, ou resolvida como garantia/venda (troca
-/// por peca nova sob garantia, ou vendida como reposicao) - nao existe
-/// "devolvida ao fabricante" hoje, confirmado com o cliente.
-const MOTIVOS_SAC_SAIDA_VALIDOS: [&str; 5] = ["entregue", "descarte", "garantia", "venda", "outro"];
+/// Saida do SAC: descartada por nao ter conserto, ou resolvida como
+/// garantia/venda (troca por peca nova sob garantia, ou vendida como
+/// reposicao) - nao existe "devolvida ao fabricante" hoje, confirmado com o
+/// cliente. "entregue" existiu como motivo mas foi removido (so ficava sem
+/// valor associado, o que quebrava o controle diario de quanto saiu do SAC);
+/// movimentos antigos com motivo="entregue" continuam validos no historico,
+/// so nao e mais uma opcao pra lancamento novo.
+const MOTIVOS_SAC_SAIDA_VALIDOS: [&str; 4] = ["descarte", "garantia", "venda", "outro"];
+/// Motivos de saida do SAC que exigem valor: tudo exceto "descarte" (peca
+/// jogada fora nao tem valor de venda/reposicao associado).
+const MOTIVOS_SAC_SAIDA_COM_VALOR_OBRIGATORIO: [&str; 3] = ["venda", "garantia", "outro"];
 const TEXTO_LIVRE_MAX: usize = 500;
 const QUANTIDADE_MAX: i64 = 100_000;
 /// Sentinela interno gravado em `motivo` pra distinguir uma entrada de
@@ -215,6 +235,19 @@ fn validar_novo_movimento(novo: &NovoMovimento) -> AppResult<()> {
     validar_texto_livre("Numero do pedido", novo.numero_pedido.as_deref())?;
     validar_texto_livre("Codigo de rastreio", novo.codigo_rastreio.as_deref())?;
     validar_texto_livre("Coleta/contraparte", novo.contraparte.as_deref())?;
+    // "Coleta" (transportadora/cliente que retira) so faz sentido pra uma
+    // saida de veiculo que realmente vai pro cliente - uma transferencia pro
+    // outro armazem (`armazem_destino_id` setado) nao tem "coleta" nenhuma, o
+    // veiculo so esta indo pro outro lado da empresa.
+    if novo.fluxo == "saida_armazem"
+        && novo.tipo == "saida"
+        && novo.armazem_destino_id.is_none()
+        && novo.contraparte.as_deref().unwrap_or("").trim().is_empty()
+    {
+        return Err(AppError::Validation(
+            "Informe a coleta (transportadora ou cliente que retirou).".into(),
+        ));
+    }
     validar_texto_livre("Quem retirou", novo.quem_retirou.as_deref())?;
     validar_texto_livre("Motivo", novo.motivo.as_deref())?;
     validar_texto_livre("Observacoes", novo.observacoes.as_deref())?;
@@ -238,7 +271,7 @@ fn validar_novo_movimento(novo: &NovoMovimento) -> AppResult<()> {
             Some(motivo) if motivos_validos.contains(&motivo) => {}
             _ if novo.tipo == "saida" => {
                 return Err(AppError::Validation(
-                    "Informe o motivo da saida do SAC: entregue ao cliente, descarte, garantia, venda ou outro.".into(),
+                    "Informe o motivo da saida do SAC: descarte, garantia, venda ou outro.".into(),
                 ));
             }
             _ => {
@@ -247,12 +280,19 @@ fn validar_novo_movimento(novo: &NovoMovimento) -> AppResult<()> {
                 ));
             }
         }
-        if novo.motivo.as_deref() == Some("venda") {
+        let exige_valor = if novo.tipo == "saida" {
+            novo.motivo
+                .as_deref()
+                .is_some_and(|m| MOTIVOS_SAC_SAIDA_COM_VALOR_OBRIGATORIO.contains(&m))
+        } else {
+            novo.motivo.as_deref() == Some("venda")
+        };
+        if exige_valor {
             match novo.valor_centavos {
                 Some(v) if v > 0 => {}
                 _ => {
                     return Err(AppError::Validation(
-                        "Informe o valor da venda (maior que zero).".into(),
+                        "Informe o valor (maior que zero).".into(),
                     ));
                 }
             }
@@ -267,6 +307,12 @@ fn validar_novo_movimento(novo: &NovoMovimento) -> AppResult<()> {
             "Inclua ao menos um item no lancamento.".into(),
         ));
     }
+    // Confirmacao de recebimento (`confirmar_recebimento`) reconstroi os itens
+    // a partir do que o remetente ja registrou do outro lado (ver
+    // `validar_quantidades_recebidas`) - descricao/montagem ja foram exigidas
+    // na saida original, entao nao faz sentido bloquear a entrada por causa
+    // delas aqui.
+    let item_e_recebimento_de_transferencia = novo.recebido_de_armazem_codigo.is_some();
     for item in &novo.itens {
         if !CATEGORIAS_VALIDAS.contains(&item.categoria.as_str()) {
             return Err(AppError::Validation(format!(
@@ -302,7 +348,31 @@ fn validar_novo_movimento(novo: &NovoMovimento) -> AppResult<()> {
         validar_texto_livre("Descricao do item", item.descricao.as_deref())?;
         validar_texto_livre("Observacao do item", item.observacao.as_deref())?;
         validar_texto_livre("Codigo do componente", item.codigo_componente.as_deref())?;
-        if item.categoria == "outro" || item.condicao.as_deref() == Some("outro") {
+        if !item_e_recebimento_de_transferencia
+            && FLUXOS_ITEM_DESCRICAO_OBRIGATORIA.contains(&novo.fluxo.as_str())
+            && item.descricao.as_deref().unwrap_or("").trim().is_empty()
+        {
+            return Err(AppError::Validation("Informe a descricao do item.".into()));
+        }
+        // Montagem so e obrigatoria pra veiculo inteiro: em `saida_armazem`
+        // toda categoria representa um veiculo saindo (mesmo "peca"/"outro"
+        // nessa tela sao itens do pedido do cliente, nao peca solta de
+        // estoque), mas em `peca_montagem` uma peca solta (categoria "peca"
+        // ou "outro") nao "vem montada" - `Montagem.tsx` nem mostra o campo
+        // nesse caso, entao a obrigatoriedade aqui respeita a mesma distincao.
+        let montagem_obrigatoria = !item_e_recebimento_de_transferencia
+            && (novo.fluxo == "saida_armazem"
+                || (novo.fluxo == "peca_montagem"
+                    && CATEGORIAS_VEICULO.contains(&item.categoria.as_str())));
+        if montagem_obrigatoria && item.montagem.is_none() {
+            return Err(AppError::Validation(
+                "Informe a montagem do item: montado, em caixa ou outro.".into(),
+            ));
+        }
+        if item.categoria == "outro"
+            || item.condicao.as_deref() == Some("outro")
+            || item.montagem.as_deref() == Some("outro")
+        {
             exigir_detalhe_para_outro(item.observacao.as_deref(), "o item na observacao")?;
         }
         // Na saida o codigo e gerado sozinho (`gerar_codigos_reparo_externo`,
@@ -1473,7 +1543,7 @@ mod tests {
             },
             MovimentoItemInput {
                 categoria: "patinete".into(),
-                descricao: None,
+                descricao: Some("PT-10 BLACK".into()),
                 montagem: Some("caixa".into()),
                 condicao: None,
                 quantidade: 2,
@@ -1539,8 +1609,8 @@ mod tests {
         for qtd in [1, 2, 3] {
             let itens = vec![MovimentoItemInput {
                 categoria: "scooter".into(),
-                descricao: None,
-                montagem: None,
+                descricao: Some("HE-15 GREEN".into()),
+                montagem: Some("caixa".into()),
                 condicao: None,
                 quantidade: qtd,
                 observacao: None,
@@ -1571,8 +1641,8 @@ mod tests {
         let item = || {
             vec![MovimentoItemInput {
                 categoria: "scooter".into(),
-                descricao: None,
-                montagem: None,
+                descricao: Some("HE-15 GREEN".into()),
+                montagem: Some("caixa".into()),
                 condicao: None,
                 quantidade: 1,
                 observacao: None,
@@ -1608,7 +1678,7 @@ mod tests {
             MovimentoItemInput {
                 categoria: "scooter".into(),
                 descricao: Some("HE-15 GREEN".into()),
-                montagem: None,
+                montagem: Some("caixa".into()),
                 condicao: None,
                 quantidade: 1,
                 observacao: None,
@@ -1618,7 +1688,7 @@ mod tests {
             MovimentoItemInput {
                 categoria: "peca".into(),
                 descricao: Some("Retrovisor".into()),
-                montagem: None,
+                montagem: Some("caixa".into()),
                 condicao: Some("boa".into()),
                 quantidade: 1,
                 observacao: None,
@@ -1635,8 +1705,8 @@ mod tests {
     fn item_simples() -> Vec<MovimentoItemInput> {
         vec![MovimentoItemInput {
             categoria: "scooter".into(),
-            descricao: None,
-            montagem: None,
+            descricao: Some("HE-15 GREEN".into()),
+            montagem: Some("caixa".into()),
             condicao: None,
             quantidade: 1,
             observacao: None,
@@ -1800,6 +1870,78 @@ mod tests {
     }
 
     #[test]
+    fn aceita_peca_montagem_categoria_peca_sem_montagem() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.fluxo = "peca_montagem".into();
+        novo.itens[0].categoria = "peca".into();
+        novo.itens[0].montagem = None;
+        novo.itens[0].condicao = Some("boa".into());
+        assert!(criar_movimento(&mut conn, novo).is_ok());
+    }
+
+    #[test]
+    fn rejeita_peca_montagem_categoria_veiculo_sem_montagem() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.fluxo = "peca_montagem".into();
+        novo.itens[0].categoria = "scooter".into();
+        novo.itens[0].montagem = None;
+        novo.itens[0].condicao = Some("boa".into());
+        assert!(matches!(
+            criar_movimento(&mut conn, novo),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn rejeita_saida_armazem_sem_descricao_do_item() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.itens[0].descricao = None;
+        assert!(matches!(
+            criar_movimento(&mut conn, novo),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn rejeita_saida_armazem_sem_montagem_do_item() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.itens[0].montagem = None;
+        assert!(matches!(
+            criar_movimento(&mut conn, novo),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn rejeita_saida_armazem_sem_coleta() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.contraparte = None;
+        assert!(matches!(
+            criar_movimento(&mut conn, novo),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn aceita_transferencia_saida_armazem_sem_coleta() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let armazem_a4: i64 = conn
+            .query_row("SELECT id FROM armazens WHERE codigo = 'A4'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.armazem_destino_id = Some(armazem_a4);
+        novo.contraparte = None;
+        assert!(criar_movimento(&mut conn, novo).is_ok());
+    }
+
+    #[test]
     fn rejeita_categoria_outro_sem_observacao() {
         let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
         let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
@@ -1902,17 +2044,20 @@ mod tests {
     }
 
     #[test]
-    fn aceita_sac_saida_entregue_ao_cliente() {
+    fn rejeita_sac_saida_motivo_entregue_removido() {
         let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
         let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
         novo.fluxo = "sac".into();
         novo.tipo = "saida".into();
         novo.motivo = Some("entregue".into());
-        assert!(criar_movimento(&mut conn, novo).is_ok());
+        assert!(matches!(
+            criar_movimento(&mut conn, novo),
+            Err(AppError::Validation(_))
+        ));
     }
 
     #[test]
-    fn aceita_sac_saida_descarte() {
+    fn aceita_sac_saida_descarte_sem_valor() {
         let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
         let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
         novo.fluxo = "sac".into();
@@ -1932,13 +2077,28 @@ mod tests {
     }
 
     #[test]
-    fn aceita_sac_saida_garantia() {
+    fn aceita_sac_saida_garantia_com_valor() {
         let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
         let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
         novo.fluxo = "sac".into();
         novo.tipo = "saida".into();
         novo.motivo = Some("garantia".into());
+        novo.valor_centavos = Some(15_000);
         assert!(criar_movimento(&mut conn, novo).is_ok());
+    }
+
+    #[test]
+    fn rejeita_sac_saida_garantia_sem_valor() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.fluxo = "sac".into();
+        novo.tipo = "saida".into();
+        novo.motivo = Some("garantia".into());
+        novo.valor_centavos = None;
+        assert!(matches!(
+            criar_movimento(&mut conn, novo),
+            Err(AppError::Validation(_))
+        ));
     }
 
     #[test]
@@ -1991,14 +2151,30 @@ mod tests {
     }
 
     #[test]
-    fn aceita_sac_saida_motivo_outro_com_observacoes() {
+    fn aceita_sac_saida_motivo_outro_com_observacoes_e_valor() {
         let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
         let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
         novo.fluxo = "sac".into();
         novo.tipo = "saida".into();
         novo.motivo = Some("outro".into());
         novo.observacoes = Some("Peca ficou retida com o tecnico, fora do fluxo normal".into());
+        novo.valor_centavos = Some(15_000);
         assert!(criar_movimento(&mut conn, novo).is_ok());
+    }
+
+    #[test]
+    fn rejeita_sac_saida_motivo_outro_sem_valor() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.fluxo = "sac".into();
+        novo.tipo = "saida".into();
+        novo.motivo = Some("outro".into());
+        novo.observacoes = Some("Peca ficou retida com o tecnico, fora do fluxo normal".into());
+        novo.valor_centavos = None;
+        assert!(matches!(
+            criar_movimento(&mut conn, novo),
+            Err(AppError::Validation(_))
+        ));
     }
 
     // --- Stage 3: hash de auditoria e verificacao de cadeia ---
@@ -2778,8 +2954,8 @@ mod tests {
             usuario_id,
             vec![MovimentoItemInput {
                 categoria: "peca".into(),
-                descricao: None,
-                montagem: None,
+                descricao: Some("Retrovisor".into()),
+                montagem: Some("caixa".into()),
                 condicao: Some("boa".into()),
                 quantidade: 1,
                 observacao: None,
@@ -2835,8 +3011,8 @@ mod tests {
             usuario_id,
             vec![MovimentoItemInput {
                 categoria: "scooter".into(),
-                descricao: None,
-                montagem: None,
+                descricao: Some("HE-15 GREEN".into()),
+                montagem: Some("caixa".into()),
                 condicao: None,
                 quantidade: 2,
                 observacao: None,
@@ -2861,8 +3037,8 @@ mod tests {
             usuario_id,
             vec![MovimentoItemInput {
                 categoria: "scooter".into(),
-                descricao: None,
-                montagem: None,
+                descricao: Some("HE-15 GREEN".into()),
+                montagem: Some("caixa".into()),
                 condicao: None,
                 quantidade: 5,
                 observacao: None,
@@ -2889,8 +3065,8 @@ mod tests {
             usuario_id,
             vec![MovimentoItemInput {
                 categoria: "scooter".into(),
-                descricao: None,
-                montagem: None,
+                descricao: Some("HE-15 GREEN".into()),
+                montagem: Some("caixa".into()),
                 condicao: None,
                 quantidade: 3,
                 observacao: None,
@@ -2908,8 +3084,8 @@ mod tests {
             usuario_id,
             vec![MovimentoItemInput {
                 categoria: "scooter".into(),
-                descricao: None,
-                montagem: None,
+                descricao: Some("HE-15 GREEN".into()),
+                montagem: Some("caixa".into()),
                 condicao: None,
                 quantidade: 2,
                 observacao: None,

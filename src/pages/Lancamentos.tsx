@@ -33,10 +33,7 @@ interface Props {
 interface ItemForm {
   categoria: Categoria;
   descricao: string;
-  // 'outro' aqui e so um estado de UI - na hora de enviar vira null (o campo
-  // e opcional, "outro" so serve pra sinalizar que precisa descrever na
-  // observacao, ver `itemPrecisaObservacao`).
-  montagem: Montagem | '' | 'outro';
+  montagem: Montagem;
   quantidade: number;
   observacao: string;
 }
@@ -69,7 +66,7 @@ function horaAtual(): string {
 }
 
 function novoItemVazio(): ItemForm {
-  return { categoria: 'scooter', descricao: '', montagem: '', quantidade: 1, observacao: '' };
+  return { categoria: 'scooter', descricao: '', montagem: 'caixa', quantidade: 1, observacao: '' };
 }
 
 export default function Lancamentos({
@@ -95,7 +92,6 @@ export default function Lancamentos({
   const [hora, setHora] = useState(horaAtual());
   const [numeroPedido, setNumeroPedido] = useState('');
   const [contraparte, setContraparte] = useState('');
-  const [quemRetirou, setQuemRetirou] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [retiradaParcial, setRetiradaParcial] = useState(false);
   const [alertaRetiradaPendente, setAlertaRetiradaPendente] = useState<Movimento | null>(null);
@@ -109,11 +105,10 @@ export default function Lancamentos({
     const sujo =
       numeroPedido.trim() !== '' ||
       contraparte.trim() !== '' ||
-      quemRetirou.trim() !== '' ||
       observacoes.trim() !== '' ||
       itensPreenchidos(itens);
     onSujoChange?.(sujo);
-  }, [numeroPedido, contraparte, quemRetirou, observacoes, itens, onSujoChange]);
+  }, [numeroPedido, contraparte, observacoes, itens, onSujoChange]);
 
   async function carregarTudo() {
     setCarregandoLista(true);
@@ -170,7 +165,6 @@ export default function Lancamentos({
     // que ela tenha que reajustar o campo a cada lancamento do mesmo lote.
     setNumeroPedido('');
     setContraparte('');
-    setQuemRetirou('');
     setObservacoes('');
     setRetiradaParcial(false);
     setDestino('cliente');
@@ -209,7 +203,7 @@ export default function Lancamentos({
     const itensValidos: MovimentoItemInput[] = itensComQuantidade.map((it) => ({
       categoria: it.categoria,
       descricao: it.descricao.trim() || null,
-      montagem: it.montagem === 'outro' ? null : it.montagem || null,
+      montagem: it.montagem,
       quantidade: it.quantidade,
       observacao: it.observacao.trim() || null,
     }));
@@ -231,7 +225,6 @@ export default function Lancamentos({
       numero_pedido: numeroPedido || null,
       codigo_rastreio: null,
       contraparte: paraOutroArmazem ? null : contraparte || null,
-      quem_retirou: paraOutroArmazem ? null : quemRetirou || null,
       observacoes: observacoes || null,
       retirada_completa: paraOutroArmazem ? true : tipo === 'saida' ? !retiradaParcial : true,
       itens: itensValidos,
@@ -444,19 +437,14 @@ export default function Lancamentos({
             </label>
 
             {!paraOutroArmazemNoForm && (
-              <>
-                <label>
-                  {tipo === 'saida' ? 'Coleta (transportadora / cliente)' : 'Fornecedor / origem'}
-                  <input value={contraparte} onChange={(e) => setContraparte(e.target.value)} />
-                </label>
-
-                {tipo === 'saida' && (
-                  <label>
-                    Quem retirou
-                    <input value={quemRetirou} onChange={(e) => setQuemRetirou(e.target.value)} />
-                  </label>
-                )}
-              </>
+              <label>
+                {tipo === 'saida' ? 'Coleta (transportadora / cliente)' : 'Fornecedor / origem'}
+                <input
+                  value={contraparte}
+                  onChange={(e) => setContraparte(e.target.value)}
+                  required={tipo === 'saida'}
+                />
+              </label>
             )}
           </div>
 
@@ -507,8 +495,9 @@ export default function Lancamentos({
               <input
                 value={item.descricao}
                 onChange={(e) => atualizarItem(indice, { descricao: e.target.value })}
-                placeholder="Detalhe opcional (ex: HE-15 GREEN)"
+                placeholder="Detalhe do item (ex: HE-15 GREEN)"
                 list={`sugestoes-${item.categoria}`}
+                required
               />
               <datalist id={`sugestoes-${item.categoria}`}>
                 {(sugestoesPorCategoria[item.categoria] ?? []).map((s) => (
@@ -518,11 +507,11 @@ export default function Lancamentos({
 
               <select
                 value={item.montagem}
-                onChange={(e) => atualizarItem(indice, { montagem: e.target.value as Montagem | '' | 'outro' })}
+                onChange={(e) => atualizarItem(indice, { montagem: e.target.value as Montagem })}
+                required
               >
-                <option value="">Montagem</option>
-                <option value="montado">Montado</option>
                 <option value="caixa">Em caixa</option>
+                <option value="montado">Montado</option>
                 <option value="outro">Outro</option>
               </select>
 

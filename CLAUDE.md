@@ -80,23 +80,56 @@ actually build and run for local testing.
   `src/pages/Sac.tsx` (warranty/sale part returns, both directions: `tipo=entrada` for
   the customer's return — `motivo` required garantia/venda/outro, `valor_centavos`
   required only when venda — and `tipo=saida` for what happens to the part afterward —
-  `motivo` required entregue/descarte/garantia/venda/outro). `domain::movimentos::
-  validar_novo_movimento` picks the valid `motivo` set based on `tipo`
-  (`MOTIVOS_SAC_ENTRADA_VALIDOS` vs `MOTIVOS_SAC_SAIDA_VALIDOS`) — a `saida` with a
-  `entrada`-only motivo like `garantia` is rejected, and vice versa; that whole
-  motivo/valor_centavos block is skipped when `recebido_de_armazem_codigo` is set (see
-  cross-warehouse transfer below), since that entrada is a physical receipt, not a
-  customer return. `Sac.tsx`'s `saida` form also gained a "Transferir para {outro
-  armazem}" destino toggle — for a part whose next stop is being boxed with a vehicle
-  shipment already leaving from the other armazem, to share the freight instead of
-  paying for a second one; `motivo` is still required in that case (it still describes
-  what ultimately happens to the part — typically `entregue` — the toggle only changes
-  the physical routing, not the disposition). All three screens share `commands/movimento_commands.rs`
+  `motivo` required descarte/garantia/venda/outro, `valor_centavos` required for every
+  motivo except descarte). `domain::movimentos::validar_novo_movimento` picks the valid
+  `motivo` set based on `tipo` (`MOTIVOS_SAC_ENTRADA_VALIDOS` vs
+  `MOTIVOS_SAC_SAIDA_VALIDOS`) — a `saida` with a `entrada`-only motivo like `garantia`
+  is rejected, and vice versa; that whole motivo/valor_centavos block is skipped when
+  `recebido_de_armazem_codigo` is set (see cross-warehouse transfer below), since that
+  entrada is a physical receipt, not a customer return. The `saida` motivo `entregue`
+  (delivered back to the customer with no value attached) was removed — it was the one
+  saida motivo that never carried a value, which made it impossible to know how much
+  left the SAC in a day; `MOTIVOS_SAC_SAIDA_COM_VALOR_OBRIGATORIO` lists exactly which
+  saida motivos require `valor_centavos` (everything except `descarte`, which by
+  definition has no sale/replacement value). Old rows with `motivo="entregue"` stay
+  valid in history (`motivoSacTexto` in `src/lib/situacao.ts` still renders them) — it's
+  just no longer a selectable option for a new lancamento. `Sac.tsx`'s `saida` form also
+  has a "Transferir para {outro armazem}" destino toggle — for a part whose next stop is
+  being boxed with a vehicle shipment already leaving from the other armazem, to share
+  the freight instead of paying for a second one; `motivo` (and its value, per the same
+  rule above) is still required in that case — the toggle only changes the physical
+  routing, not the disposition. All three screens share `commands/movimento_commands.rs`
   and `commands/fechamento_commands.rs` — the domain layer was already generic per
   `fluxo` before these screens existed. All three also support a manual `tipo=entrada`
   and `tipo=saida` in their form (Montagem's manual entrada was briefly missing after
   the cross-warehouse transfer work below replaced its old tipo toggle with a
   destino-only saida form — restored, tipo and destino are independent toggles now).
+- **Item `descricao` and `montagem` requiredness**: `descricao` (product detail, e.g. "HE-15
+  GREEN") used to be always-optional free text; it's now required on every item in
+  `saida_armazem`/`peca_montagem`/`sac` (`FLUXOS_ITEM_DESCRICAO_OBRIGATORIA`) —
+  `reparo_externo` is deliberately excluded (its own screen/rules, out of scope). `montagem`
+  (`montado`/`caixa`) used to be fully optional everywhere; it's now required, but only
+  where the item represents a whole vehicle: every item in `saida_armazem` (that screen's
+  categories are always a customer's order line, even a `peca`/`outro` one), and only
+  vehicle categories (`CATEGORIAS_VEICULO` = scooter/triciclo/patinete) in `peca_montagem`
+  — a loose part released to assembly doesn't "arrive assembled", and `Montagem.tsx` never
+  shows the field for non-vehicle categories, so the backend requirement mirrors that
+  exactly (`Categoria` gating in `validar_novo_movimento`). `montagem`'s `outro` also
+  changed: it used to be frontend-only (`Lancamentos.tsx`/`Montagem.tsx` silently sent
+  `null` instead, since the field was optional so `null` and "chose outro" were
+  indistinguishable to the backend); now that it's required, `outro` is a real value
+  (`MONTAGENS_VALIDAS` gained a third entry) sent as-is, same pattern as `categoria`/
+  `condicao` — `exigir_detalhe_para_outro` covers it too. Both requirements are skipped for
+  a transfer's receiving side (`recebido_de_armazem_codigo` set) — the sending side already
+  enforced them.
+- **"Coleta" (`contraparte`) requiredness**: required for `saida_armazem`/`saida` when it's
+  not a cross-warehouse transfer (`armazem_destino_id` is `None`) — a vehicle actually
+  leaving to a customer always has a transportadora/cliente attached; a transfer to the
+  other armazem doesn't have a "coleta" at all (`Lancamentos.tsx` hides the field in that
+  case, matching). `quem_retirou` was removed from `Lancamentos.tsx`'s form entirely (
+  redundant with coleta per the client) — the column/field still exists in the schema and
+  in `Historico.tsx`/`exportFechamento.ts` for old rows, it's just never collected on a new
+  lancamento anymore (`criar_movimento` payload from `Lancamentos.tsx` no longer sends it).
 - **Cross-warehouse transfer + receipt confirmation (A4 ↔ B2)**: implemented, and generic
   across `fluxo` — a `saida` with `armazem_destino_id` set (`saida_armazem` for
   vehicles, from `Lancamentos.tsx`; `peca_montagem` for loose parts, from

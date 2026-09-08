@@ -42,10 +42,10 @@ interface Props {
 interface ItemForm {
   categoria: Categoria;
   descricao: string;
-  // 'outro' aqui e so um estado de UI - na hora de enviar vira null (o campo
-  // e opcional, ao contrario de condicao que exige a palavra "outro" de
-  // verdade - ver `itemPrecisaObservacao`).
-  montagem: MontagemVeiculo | '' | 'outro';
+  // So se aplica (e so e obrigatorio) pra categoria de veiculo inteiro
+  // (scooter/triciclo/patinete) - uma peca solta (categoria "peca"/"outro")
+  // nao "vem montada", entao fica '' e nunca e enviada (ver handleSubmit).
+  montagem: MontagemVeiculo | '';
   condicao: Condicao | '';
   quantidade: number;
   observacao: string;
@@ -82,6 +82,10 @@ function horaAtual(): string {
 
 function novoItemVazio(): ItemForm {
   return { categoria: 'peca', descricao: '', montagem: '', condicao: '', quantidade: 1, observacao: '' };
+}
+
+function montagemPadrao(categoria: Categoria): MontagemVeiculo | '' {
+  return CATEGORIAS_VEICULO.includes(categoria) ? 'caixa' : '';
 }
 
 export default function Montagem({
@@ -153,7 +157,18 @@ export default function Montagem({
   }, []);
 
   function atualizarItem(indice: number, alteracoes: Partial<ItemForm>) {
-    setItens((atual) => atual.map((it, i) => (i === indice ? { ...it, ...alteracoes } : it)));
+    setItens((atual) =>
+      atual.map((it, i) => {
+        if (i !== indice) return it;
+        const novo = { ...it, ...alteracoes };
+        // Troca de categoria: entra numa categoria de veiculo ja com uma
+        // montagem valida pre-selecionada (campo obrigatorio, sem opcao em
+        // branco), e some com a montagem ao sair de uma (campo nem aparece
+        // pra peca solta).
+        if (alteracoes.categoria) novo.montagem = montagemPadrao(alteracoes.categoria);
+        return novo;
+      })
+    );
     if (alteracoes.categoria) garantirSugestoes(alteracoes.categoria);
   }
 
@@ -192,7 +207,7 @@ export default function Montagem({
       .map((it) => ({
         categoria: it.categoria,
         descricao: it.descricao.trim() || null,
-        montagem: it.montagem === 'outro' ? null : it.montagem || null,
+        montagem: it.montagem || null,
         condicao: it.condicao || null,
         quantidade: it.quantidade,
         observacao: it.observacao.trim() || null,
@@ -451,6 +466,7 @@ export default function Montagem({
                 onChange={(e) => atualizarItem(indice, { descricao: e.target.value })}
                 placeholder="Descricao (ex: Retrovisor)"
                 list={`sugestoes-${item.categoria}`}
+                required
               />
               <datalist id={`sugestoes-${item.categoria}`}>
                 {(sugestoesPorCategoria[item.categoria] ?? []).map((s) => (
@@ -462,12 +478,12 @@ export default function Montagem({
                 <select
                   value={item.montagem}
                   onChange={(e) =>
-                    atualizarItem(indice, { montagem: e.target.value as MontagemVeiculo | '' | 'outro' })
+                    atualizarItem(indice, { montagem: e.target.value as MontagemVeiculo })
                   }
+                  required
                 >
-                  <option value="">Montagem</option>
-                  <option value="montado">Montado</option>
                   <option value="caixa">Em caixa</option>
+                  <option value="montado">Montado</option>
                   <option value="outro">Outro</option>
                 </select>
               ) : (

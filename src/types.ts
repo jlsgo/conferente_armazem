@@ -25,7 +25,7 @@ export type Fluxo = 'saida_armazem' | 'peca_montagem' | 'sac' | 'reparo_externo'
 /** Variante do fechamento diario/impressao - mesmos fluxos, nomes diferentes
  * (usada por `FechamentoImpressao.tsx`/`exportFechamento.ts`, nao vem do banco). */
 export type VarianteFechamento = 'armazem' | 'montagem' | 'sac' | 'reparo_externo';
-export type Montagem = 'montado' | 'caixa';
+export type Montagem = 'montado' | 'caixa' | 'outro';
 export type Condicao = 'boa' | 'defeito' | 'sucata' | 'outro';
 
 export interface MovimentoItemInput {

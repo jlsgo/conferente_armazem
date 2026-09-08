@@ -29,7 +29,7 @@ interface Props {
 }
 
 type MotivoEntrada = 'garantia' | 'venda' | 'outro';
-type MotivoSaida = 'entregue' | 'descarte' | 'garantia' | 'venda' | 'outro';
+type MotivoSaida = 'descarte' | 'garantia' | 'venda' | 'outro';
 type Motivo = MotivoEntrada | MotivoSaida;
 type Destino = 'cliente' | 'armazem';
 
@@ -158,15 +158,19 @@ export default function Sac({
       setErro(
         tipo === 'entrada'
           ? 'Informe se e garantia, venda ou outro.'
-          : 'Informe o motivo da saida: entregue, descarte, garantia, venda ou outro.'
+          : 'Informe o motivo da saida: descarte, garantia, venda ou outro.'
       );
       return;
     }
+    // Na saida, todo motivo exige valor exceto descarte (peca sem valor de
+    // venda/reposicao associado) - espelha MOTIVOS_SAC_SAIDA_COM_VALOR_OBRIGATORIO
+    // no backend. Na entrada, so venda exige (regra original, sem mudanca).
+    const exigeValor = tipo === 'saida' ? motivo !== 'descarte' : motivo === 'venda';
     let valorCentavos: number | null = null;
-    if (motivo === 'venda') {
+    if (exigeValor) {
       const valor = Number(valorReais.replace(',', '.'));
       if (!valorReais || Number.isNaN(valor) || valor <= 0) {
-        setErro('Informe o valor da venda.');
+        setErro('Informe o valor (maior que zero).');
         return;
       }
       valorCentavos = Math.round(valor * 100);
@@ -430,7 +434,6 @@ export default function Sac({
                   </>
                 ) : (
                   <>
-                    <option value="entregue">Entregue ao cliente</option>
                     <option value="descarte">Descarte (sucata)</option>
                     <option value="garantia">Garantia</option>
                     <option value="venda">Venda</option>
@@ -440,9 +443,9 @@ export default function Sac({
               </select>
             </label>
 
-            {motivo === 'venda' && (
+            {(tipo === 'saida' ? motivo !== '' && motivo !== 'descarte' : motivo === 'venda') && (
               <label>
-                Valor da venda (R$)
+                Valor (R$)
                 <input
                   type="number"
                   min={0}
@@ -479,6 +482,7 @@ export default function Sac({
                 onChange={(e) => atualizarItem(indice, { descricao: e.target.value })}
                 placeholder="Descricao da peca (ex: Retrovisor)"
                 list="sugestoes-peca-sac"
+                required
               />
               <datalist id="sugestoes-peca-sac">
                 {sugestoes.map((s) => (

@@ -18,19 +18,25 @@ export function situacaoInfo(
   return { texto: 'ENTRADA', classe: 'badge badge-entrada' };
 }
 
-/** Texto do motivo de um atendimento SAC (entrada: garantia/venda/outro; saida: entregue/descarte/garantia/venda/outro). */
+/**
+ * Texto do motivo de um atendimento SAC (entrada: garantia/venda/outro;
+ * saida: descarte/garantia/venda/outro). "entregue" nao e mais uma opcao pra
+ * lancamento novo, mas continua tratado aqui pra exibir corretamente
+ * lancamentos antigos que ja tem esse motivo gravado.
+ */
 export function motivoSacTexto(m: Pick<Movimento, 'motivo' | 'valor_centavos' | 'observacoes'>): string {
+  const valorTexto = m.valor_centavos != null ? ` (R$ ${(m.valor_centavos / 100).toFixed(2)})` : '';
   switch (m.motivo) {
     case 'venda':
-      return `Venda (R$ ${((m.valor_centavos ?? 0) / 100).toFixed(2)})`;
+      return `Venda${valorTexto}`;
     case 'garantia':
-      return 'Garantia';
+      return `Garantia${valorTexto}`;
     case 'entregue':
       return 'Entregue ao cliente';
     case 'descarte':
       return 'Descarte';
     case 'outro':
-      return `Outro${m.observacoes ? ' - ' + m.observacoes : ''}`;
+      return `Outro${valorTexto}${m.observacoes ? ' - ' + m.observacoes : ''}`;
     default:
       return '-';
   }

@@ -402,8 +402,8 @@ mod tests {
                 retirada_completa: true,
                 itens: vec![MovimentoItemInput {
                     categoria: "scooter".into(),
-                    descricao: None,
-                    montagem: None,
+                    descricao: Some("HE-15 GREEN".into()),
+                    montagem: Some("caixa".into()),
                     condicao: None,
                     quantidade: 3,
                     observacao: None,

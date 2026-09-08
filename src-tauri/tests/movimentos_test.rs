@@ -64,7 +64,7 @@ fn fluxo_completo_de_login_e_lancamento_de_pedido_misto() {
         itens: vec![
             MovimentoItemInput {
                 categoria: "scooter".into(),
-                descricao: None,
+                descricao: Some("HE-15 CARBON".into()),
                 montagem: Some("montado".into()),
                 condicao: None,
                 quantidade: 1,

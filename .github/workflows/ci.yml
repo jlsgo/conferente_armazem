@@ -44,6 +44,9 @@ jobs:
       - name: Type-check do frontend
         run: npx tsc --noEmit
 
+      - name: Testes do frontend
+        run: npm run test:frontend
+
       - name: Build do frontend
         run: npm run build:renderer
 
