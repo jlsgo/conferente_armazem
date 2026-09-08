@@ -466,7 +466,6 @@ export default function Montagem({
                 onChange={(e) => atualizarItem(indice, { descricao: e.target.value })}
                 placeholder="Descricao (ex: Retrovisor)"
                 list={`sugestoes-${item.categoria}`}
-                required
               />
               <datalist id={`sugestoes-${item.categoria}`}>
                 {(sugestoesPorCategoria[item.categoria] ?? []).map((s) => (

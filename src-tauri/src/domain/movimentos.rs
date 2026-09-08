@@ -27,10 +27,6 @@ const TURNOS_VALIDOS: [&str; 2] = ["diurno", "noturno"];
 /// (exige observacao, ver `exigir_detalhe_para_outro`). Nao existe pra `sac`
 /// (peca de atendimento nao tem esse conceito).
 const MONTAGENS_VALIDAS: [&str; 3] = ["montado", "caixa", "outro"];
-/// Fluxos onde `descricao` do item e obrigatoria - `reparo_externo` fica de
-/// fora de proposito (fora do escopo pedido, tela propria com suas proprias
-/// regras).
-const FLUXOS_ITEM_DESCRICAO_OBRIGATORIA: [&str; 3] = ["saida_armazem", "peca_montagem", "sac"];
 /// Categorias que representam um veiculo inteiro (tem "montado"/"em caixa" pra
 /// valer) - `src/pages/Montagem.tsx` so mostra o campo de montagem pra essas
 /// categorias (uma peca solta indo pra montagem nao "vem montada"), entao a
@@ -99,6 +95,16 @@ pub struct NovoMovimento {
     pub codigo_rastreio: Option<String>,
     pub contraparte: Option<String>,
     pub quem_retirou: Option<String>,
+    /// Razao social / nome fantasia do cliente/transportadora (`saida_armazem`/
+    /// `sac`) - texto livre opcional, complementar ao `contraparte` (nome do
+    /// dia a dia, nem sempre o nome legal). Deliberadamente NAO entra em
+    /// `CamposHash`/`calcular_hash`: incluir um campo novo ali mudaria o
+    /// formato do hash a partir de agora, quebrando `verificar_cadeia` pra
+    /// todo lancamento ja gravado antes desta migracao (o hash e recalculado
+    /// com os campos atuais, entao um campo a mais no meio do calculo produz
+    /// uma string diferente da que gerou o hash gravado). Fica de fora do
+    /// hash de proposito - o resto do campo continua coberto normalmente.
+    pub razao_social: Option<String>,
     pub motivo: Option<String>,
     pub valor_centavos: Option<i64>,
     pub observacoes: Option<String>,
@@ -145,6 +151,7 @@ pub struct Movimento {
     pub codigo_rastreio: Option<String>,
     pub contraparte: Option<String>,
     pub quem_retirou: Option<String>,
+    pub razao_social: Option<String>,
     pub motivo: Option<String>,
     pub valor_centavos: Option<i64>,
     pub observacoes: Option<String>,
@@ -235,6 +242,7 @@ fn validar_novo_movimento(novo: &NovoMovimento) -> AppResult<()> {
     validar_texto_livre("Numero do pedido", novo.numero_pedido.as_deref())?;
     validar_texto_livre("Codigo de rastreio", novo.codigo_rastreio.as_deref())?;
     validar_texto_livre("Coleta/contraparte", novo.contraparte.as_deref())?;
+    validar_texto_livre("Razao social / nome fantasia", novo.razao_social.as_deref())?;
     // "Coleta" (transportadora/cliente que retira) so faz sentido pra uma
     // saida de veiculo que realmente vai pro cliente - uma transferencia pro
     // outro armazem (`armazem_destino_id` setado) nao tem "coleta" nenhuma, o
@@ -348,12 +356,6 @@ fn validar_novo_movimento(novo: &NovoMovimento) -> AppResult<()> {
         validar_texto_livre("Descricao do item", item.descricao.as_deref())?;
         validar_texto_livre("Observacao do item", item.observacao.as_deref())?;
         validar_texto_livre("Codigo do componente", item.codigo_componente.as_deref())?;
-        if !item_e_recebimento_de_transferencia
-            && FLUXOS_ITEM_DESCRICAO_OBRIGATORIA.contains(&novo.fluxo.as_str())
-            && item.descricao.as_deref().unwrap_or("").trim().is_empty()
-        {
-            return Err(AppError::Validation("Informe a descricao do item.".into()));
-        }
         // Montagem so e obrigatoria pra veiculo inteiro: em `saida_armazem`
         // toda categoria representa um veiculo saindo (mesmo "peca"/"outro"
         // nessa tela sao itens do pedido do cliente, nao peca solta de
@@ -504,6 +506,7 @@ pub fn recusar_recebimento(
             codigo_rastreio: None,
             contraparte: None,
             quem_retirou: None,
+            razao_social: None,
             motivo: Some(MOTIVO_RECUSA_RECEBIMENTO.into()),
             valor_centavos: None,
             observacoes: Some(format!("RECUSADO - {justificativa}")),
@@ -794,11 +797,11 @@ pub fn criar_movimento(conn: &mut Connection, mut novo: NovoMovimento) -> AppRes
     tx.execute(
         "INSERT INTO movimentos (
             armazem_id, armazem_destino_id, fluxo, tipo, data, hora, turno, usuario_id,
-            numero_pedido, codigo_rastreio, contraparte, quem_retirou,
+            numero_pedido, codigo_rastreio, contraparte, quem_retirou, razao_social,
             motivo, valor_centavos, observacoes, status,
             recebido_de_armazem_codigo, recebido_de_id_origem, retirada_completa, hash_integridade,
             criado_em
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 'aberto', ?16, ?17, ?18, ?19,
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, 'aberto', ?17, ?18, ?19, ?20,
             datetime('now', 'localtime'))",
         params![
             novo.armazem_id,
@@ -813,6 +816,7 @@ pub fn criar_movimento(conn: &mut Connection, mut novo: NovoMovimento) -> AppRes
             novo.codigo_rastreio,
             novo.contraparte,
             novo.quem_retirou,
+            novo.razao_social,
             novo.motivo,
             novo.valor_centavos,
             novo.observacoes,
@@ -944,10 +948,10 @@ pub fn estornar_movimento(
     tx.execute(
         "INSERT INTO movimentos (
             armazem_id, armazem_destino_id, fluxo, tipo, data, hora, turno, usuario_id,
-            numero_pedido, codigo_rastreio, contraparte, quem_retirou,
+            numero_pedido, codigo_rastreio, contraparte, quem_retirou, razao_social,
             motivo, valor_centavos, observacoes, status, estornado_de, retirada_completa, hash_integridade,
             criado_em
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 'estorno', ?16, ?17, ?18,
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, 'estorno', ?17, ?18, ?19,
             datetime('now', 'localtime'))",
         params![
             original.armazem_id,
@@ -962,6 +966,7 @@ pub fn estornar_movimento(
             None::<String>,
             original.contraparte,
             original.quem_retirou,
+            original.razao_social,
             None::<String>,
             None::<i64>,
             observacoes,
@@ -1143,7 +1148,7 @@ const COLUNAS_MOVIMENTO: &str =
                 m.turno, m.usuario_id, u.nome, m.numero_pedido, m.codigo_rastreio, m.contraparte,
                 m.quem_retirou, m.motivo, m.valor_centavos, m.observacoes, m.status,
                 m.estornado_de, m.recebido_de_armazem_codigo, m.recebido_de_id_origem,
-                m.retirada_completa, m.hash_integridade";
+                m.retirada_completa, m.hash_integridade, m.razao_social";
 
 fn mapear_movimento(r: &Row) -> rusqlite::Result<Movimento> {
     Ok(Movimento {
@@ -1171,6 +1176,7 @@ fn mapear_movimento(r: &Row) -> rusqlite::Result<Movimento> {
         recebido_de_id_origem: r.get(20)?,
         retirada_completa: r.get(21)?,
         hash_integridade: r.get(22)?,
+        razao_social: r.get(23)?,
         itens: Vec::new(),
     })
 }
@@ -1535,6 +1541,7 @@ mod tests {
             codigo_rastreio: None,
             contraparte: Some("DISK&TENHA".into()),
             quem_retirou: Some("KAROL".into()),
+            razao_social: None,
             motivo: None,
             valor_centavos: None,
             observacoes: None,
@@ -1914,14 +1921,11 @@ mod tests {
     }
 
     #[test]
-    fn rejeita_saida_armazem_sem_descricao_do_item() {
+    fn aceita_saida_armazem_sem_descricao_do_item() {
         let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
         let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
         novo.itens[0].descricao = None;
-        assert!(matches!(
-            criar_movimento(&mut conn, novo),
-            Err(AppError::Validation(_))
-        ));
+        assert!(criar_movimento(&mut conn, novo).is_ok());
     }
 
     #[test]

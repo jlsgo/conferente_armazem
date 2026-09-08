@@ -53,6 +53,10 @@ export interface NovoMovimento {
   codigo_rastreio?: string | null;
   contraparte?: string | null;
   quem_retirou?: string | null;
+  /** Razao social / nome fantasia do cliente/transportadora - complementar
+   * ao `contraparte` (coleta), sempre opcional. So preenchido em
+   * saida_armazem e sac. */
+  razao_social?: string | null;
   motivo?: string | null;
   valor_centavos?: number | null;
   observacoes?: string | null;
@@ -95,6 +99,7 @@ export interface Movimento {
   codigo_rastreio: string | null;
   contraparte: string | null;
   quem_retirou: string | null;
+  razao_social: string | null;
   motivo: string | null;
   valor_centavos: number | null;
   observacoes: string | null;

@@ -55,6 +55,7 @@ fn fluxo_completo_de_login_e_lancamento_de_pedido_misto() {
         codigo_rastreio: None,
         contraparte: Some("HEP EMPREENDIMENTOS LTDA".into()),
         quem_retirou: Some("TIAGO".into()),
+        razao_social: None,
         motivo: None,
         valor_centavos: None,
         observacoes: None,

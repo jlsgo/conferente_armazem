@@ -104,11 +104,14 @@ actually build and run for local testing.
   and `tipo=saida` in their form (Montagem's manual entrada was briefly missing after
   the cross-warehouse transfer work below replaced its old tipo toggle with a
   destino-only saida form — restored, tipo and destino are independent toggles now).
-- **Item `descricao` and `montagem` requiredness**: `descricao` (product detail, e.g. "HE-15
-  GREEN") used to be always-optional free text; it's now required on every item in
-  `saida_armazem`/`peca_montagem`/`sac` (`FLUXOS_ITEM_DESCRICAO_OBRIGATORIA`) —
-  `reparo_externo` is deliberately excluded (its own screen/rules, out of scope). `montagem`
-  (`montado`/`caixa`) used to be fully optional everywhere; it's now required, but only
+- **Item `descricao` requiredness**: briefly required (v3.2.0) on every item in
+  `saida_armazem`/`peca_montagem`/`sac`, then reverted back to always-optional free text
+  after real-world use showed it slowed conferentes down for no operational benefit — the
+  `FLUXOS_ITEM_DESCRICAO_OBRIGATORIA` const and its check in `validar_novo_movimento` were
+  removed entirely, and `required` dropped from the three description `<input>`s
+  (`Lancamentos.tsx`/`Montagem.tsx`/`Sac.tsx`). `montagem` requiredness (below) was
+  untouched by this reversal — only `descricao` went back to optional.
+- **Item `montagem` requiredness**: used to be fully optional everywhere; it's now required, but only
   where the item represents a whole vehicle: every item in `saida_armazem` (that screen's
   categories are always a customer's order line, even a `peca`/`outro` one), and only
   vehicle categories (`CATEGORIAS_VEICULO` = scooter/triciclo/patinete) in `peca_montagem`
@@ -130,6 +133,24 @@ actually build and run for local testing.
   redundant with coleta per the client) — the column/field still exists in the schema and
   in `Historico.tsx`/`exportFechamento.ts` for old rows, it's just never collected on a new
   lancamento anymore (`criar_movimento` payload from `Lancamentos.tsx` no longer sends it).
+- **`razao_social`** (migration `0010_razao_social.sql`): free-text, always-optional field
+  on `movimentos` — the client's/transportadora's legal/registered name, complementary to
+  `contraparte` (the day-to-day "coleta" name, not necessarily the legal one). Collected on
+  `saida_armazem` and `sac` only (`Lancamentos.tsx`/`Sac.tsx`, next to the Coleta field,
+  hidden for a cross-warehouse transfer same as Coleta), never required. Deliberately **not**
+  included in `CamposHash`/`calcular_hash` (`domain/movimentos.rs`) — the hash is a running
+  chain over every prior row's hash plus every field of the current one; adding a new field
+  to that struct changes what gets hashed for every row from that point on, and recomputing
+  it during `verificar_cadeia` for a row created *before* this field existed would no longer
+  match the hash stored at the time (the row's original hash was computed without that extra
+  field in the string at all) — a guaranteed false "tampered" flag on real production
+  history, not a hypothetical. So `razao_social` stays a plain unhashed column; everything
+  else in this doc about the hash covering "every field" predates this field and still holds
+  for all of them. Synced to Turso the same as every other movement field (`db/sync.rs`:
+  `SQL_ALTER_TABELA_REMOTA`/`SQL_UPSERT`/`movimentos_pendentes`'s SELECT) so it's covered by
+  the same offsite-backup guarantee as the rest of the row — but intentionally left out of
+  `TransferenciaPendente` (same as `contraparte`), since a transfer's receiving side doesn't
+  need the sender's client info to confirm a receipt.
 - **Cross-warehouse transfer + receipt confirmation (A4 ↔ B2)**: implemented, and generic
   across `fluxo` — a `saida` with `armazem_destino_id` set (`saida_armazem` for
   vehicles, from `Lancamentos.tsx`; `peca_montagem` for loose parts, from

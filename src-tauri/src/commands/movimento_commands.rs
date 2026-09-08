@@ -21,6 +21,8 @@ pub struct NovoMovimentoPayload {
     pub codigo_rastreio: Option<String>,
     pub contraparte: Option<String>,
     pub quem_retirou: Option<String>,
+    #[serde(default)]
+    pub razao_social: Option<String>,
     pub motivo: Option<String>,
     pub valor_centavos: Option<i64>,
     pub observacoes: Option<String>,
@@ -59,6 +61,7 @@ pub fn criar_movimento(
             codigo_rastreio: payload.codigo_rastreio,
             contraparte: payload.contraparte,
             quem_retirou: payload.quem_retirou,
+            razao_social: payload.razao_social,
             motivo: payload.motivo,
             valor_centavos: payload.valor_centavos,
             observacoes: payload.observacoes,

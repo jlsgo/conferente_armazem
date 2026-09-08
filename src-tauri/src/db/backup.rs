@@ -394,6 +394,7 @@ mod tests {
                 codigo_rastreio: None,
                 contraparte: Some("Cliente Teste Restauracao".into()),
                 quem_retirou: Some("Fulano".into()),
+                razao_social: None,
                 motivo: None,
                 valor_centavos: None,
                 observacoes: None,

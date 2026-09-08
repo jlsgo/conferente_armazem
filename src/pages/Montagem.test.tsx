@@ -75,8 +75,8 @@ describe('Montagem - montagem so pra veiculo inteiro', () => {
     await waitFor(() => expect(api.listarMovimentosDoDia).toHaveBeenCalled());
 
     // Fluxo padrao (tipo=saida, destino=armazem) ja e uma transferencia pro
-    // outro armazem - descricao/montagem continuam obrigatorias do lado de
-    // quem envia (so a confirmacao de recebimento do outro lado e isenta).
+    // outro armazem - descricao e opcional, montagem continua obrigatoria do
+    // lado de quem envia (so a confirmacao de recebimento do outro lado e isenta).
     await user.type(screen.getByPlaceholderText('Descricao (ex: Retrovisor)'), 'Retrovisor');
     // getAllByRole('combobox'): [0] categoria, [1] descricao (tem `list=`,
     // que da role combobox mesmo sendo <input>), [2] condicao - categoria

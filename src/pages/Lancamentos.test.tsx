@@ -70,7 +70,7 @@ describe('Lancamentos - montagem e coleta do item', () => {
     await user.type(screen.getByPlaceholderText('Ex: 3932'), '4001');
 
     const campoDescricaoItem = screen.getByPlaceholderText('Detalhe do item (ex: HE-15 GREEN)');
-    expect(campoDescricaoItem).toBeRequired();
+    expect(campoDescricaoItem).not.toBeRequired();
     await user.type(campoDescricaoItem, 'HE-15 CARBON');
 
     const campoColeta = screen.getByLabelText(/Coleta \(transportadora/i);

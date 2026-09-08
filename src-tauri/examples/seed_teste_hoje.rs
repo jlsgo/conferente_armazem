@@ -96,6 +96,7 @@ fn registrar(
             codigo_rastreio: codigo_rastreio.map(String::from),
             contraparte: contraparte.map(String::from),
             quem_retirou: quem_retirou.map(String::from),
+            razao_social: None,
             motivo: motivo.map(String::from),
             valor_centavos,
             observacoes: observacoes.map(String::from),

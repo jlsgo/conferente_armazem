@@ -167,6 +167,7 @@ fn main() {
                 codigo_rastreio: None,
                 contraparte: Some(cliente.to_string()),
                 quem_retirou: Some(quem_retirou.to_string()),
+                razao_social: None,
                 motivo: None,
                 valor_centavos: None,
                 observacoes: if i % 7 == 0 {

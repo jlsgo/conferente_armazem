@@ -223,6 +223,7 @@ pub async fn confirmar_recebimento(
                 codigo_rastreio: None,
                 contraparte: None,
                 quem_retirou: None,
+                razao_social: None,
                 motivo: None,
                 valor_centavos: None,
                 observacoes: Some(observacoes),

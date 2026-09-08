@@ -57,7 +57,7 @@ pub fn movimentos_pendentes(conn: &Connection) -> AppResult<Vec<LinhaPendente>> 
                 m.tipo, m.data, m.hora, m.turno, m.usuario_id, u.nome, m.numero_pedido,
                 m.codigo_rastreio, m.contraparte, m.quem_retirou, m.motivo, m.valor_centavos,
                 m.observacoes, m.status, m.estornado_de, m.recebido_de_armazem_codigo,
-                m.recebido_de_id_origem, m.retirada_completa, m.hash_integridade
+                m.recebido_de_id_origem, m.retirada_completa, m.hash_integridade, m.razao_social
          FROM movimentos m
          JOIN armazens a ON a.id = m.armazem_id
          LEFT JOIN armazens ad ON ad.id = m.armazem_destino_id
@@ -98,6 +98,7 @@ pub fn movimentos_pendentes(conn: &Connection) -> AppResult<Vec<LinhaPendente>> 
                     recebido_de_id_origem: r.get(22)?,
                     retirada_completa: r.get(23)?,
                     hash_integridade: r.get(24)?,
+                    razao_social: r.get(25)?,
                     itens: Vec::new(),
                 },
                 armazem_codigo,
@@ -242,10 +243,11 @@ const SQL_CRIAR_TABELA_REMOTA: &str = "
 /// erros sao ignorados de proposito (`let _ =`) porque a unica forma de
 /// falhar aqui e a coluna ja existir (banco criado por uma versao anterior
 /// do app), o que e inofensivo.
-const SQL_ALTER_TABELA_REMOTA: [&str; 3] = [
+const SQL_ALTER_TABELA_REMOTA: [&str; 4] = [
     "ALTER TABLE movimentos_consolidados ADD COLUMN armazem_destino_codigo TEXT",
     "ALTER TABLE movimentos_consolidados ADD COLUMN recebido_de_armazem_codigo TEXT",
     "ALTER TABLE movimentos_consolidados ADD COLUMN recebido_de_id_origem INTEGER",
+    "ALTER TABLE movimentos_consolidados ADD COLUMN razao_social TEXT",
 ];
 
 const SQL_UPSERT: &str = "
@@ -254,9 +256,9 @@ const SQL_UPSERT: &str = "
          numero_pedido, codigo_rastreio, contraparte, quem_retirou, motivo,
          valor_centavos, observacoes, status, estornado_de, hash_integridade,
          itens_json, armazem_destino_codigo, recebido_de_armazem_codigo,
-         recebido_de_id_origem, enviado_em)
+         recebido_de_id_origem, enviado_em, razao_social)
     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-            ?19, ?20, ?21, ?22, ?23)
+            ?19, ?20, ?21, ?22, ?23, ?24)
 ";
 
 /// Conecta no banco Turso configurado, garante que a tabela consolidada
@@ -377,6 +379,7 @@ pub async fn enviar_para_turso(
                     linha.movimento.recebido_de_armazem_codigo.clone(),
                     linha.movimento.recebido_de_id_origem,
                     enviado_em_local,
+                    linha.movimento.razao_social.clone(),
                 ],
             )
             .await;
@@ -1022,6 +1025,7 @@ mod tests {
                 codigo_rastreio: None,
                 contraparte: Some("DISK&TENHA".into()),
                 quem_retirou: None,
+                razao_social: None,
                 motivo: None,
                 valor_centavos: None,
                 observacoes: None,
@@ -1150,6 +1154,7 @@ mod tests {
                 codigo_rastreio: None,
                 contraparte: None,
                 quem_retirou: None,
+                razao_social: None,
                 motivo: None,
                 valor_centavos: None,
                 observacoes: None,
@@ -1260,6 +1265,7 @@ mod tests {
                 codigo_rastreio: None,
                 contraparte: None,
                 quem_retirou: None,
+                razao_social: None,
                 motivo: None,
                 valor_centavos: None,
                 observacoes: None,
@@ -1355,6 +1361,7 @@ mod tests {
                 linha.movimento.recebido_de_armazem_codigo,
                 linha.movimento.recebido_de_id_origem,
                 enviado_em,
+                linha.movimento.razao_social,
             ],
         )
         .unwrap();

@@ -92,6 +92,7 @@ export default function Lancamentos({
   const [hora, setHora] = useState(horaAtual());
   const [numeroPedido, setNumeroPedido] = useState('');
   const [contraparte, setContraparte] = useState('');
+  const [razaoSocial, setRazaoSocial] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [retiradaParcial, setRetiradaParcial] = useState(false);
   const [alertaRetiradaPendente, setAlertaRetiradaPendente] = useState<Movimento | null>(null);
@@ -105,10 +106,11 @@ export default function Lancamentos({
     const sujo =
       numeroPedido.trim() !== '' ||
       contraparte.trim() !== '' ||
+      razaoSocial.trim() !== '' ||
       observacoes.trim() !== '' ||
       itensPreenchidos(itens);
     onSujoChange?.(sujo);
-  }, [numeroPedido, contraparte, observacoes, itens, onSujoChange]);
+  }, [numeroPedido, contraparte, razaoSocial, observacoes, itens, onSujoChange]);
 
   async function carregarTudo() {
     setCarregandoLista(true);
@@ -165,6 +167,7 @@ export default function Lancamentos({
     // que ela tenha que reajustar o campo a cada lancamento do mesmo lote.
     setNumeroPedido('');
     setContraparte('');
+    setRazaoSocial('');
     setObservacoes('');
     setRetiradaParcial(false);
     setDestino('cliente');
@@ -225,6 +228,7 @@ export default function Lancamentos({
       numero_pedido: numeroPedido || null,
       codigo_rastreio: null,
       contraparte: paraOutroArmazem ? null : contraparte || null,
+      razao_social: paraOutroArmazem ? null : razaoSocial || null,
       observacoes: observacoes || null,
       retirada_completa: paraOutroArmazem ? true : tipo === 'saida' ? !retiradaParcial : true,
       itens: itensValidos,
@@ -446,6 +450,13 @@ export default function Lancamentos({
                 />
               </label>
             )}
+
+            {!paraOutroArmazemNoForm && (
+              <label>
+                Razao social / nome fantasia (opcional)
+                <input value={razaoSocial} onChange={(e) => setRazaoSocial(e.target.value)} />
+              </label>
+            )}
           </div>
 
           {alertaRetiradaPendente && (
@@ -497,7 +508,6 @@ export default function Lancamentos({
                 onChange={(e) => atualizarItem(indice, { descricao: e.target.value })}
                 placeholder="Detalhe do item (ex: HE-15 GREEN)"
                 list={`sugestoes-${item.categoria}`}
-                required
               />
               <datalist id={`sugestoes-${item.categoria}`}>
                 {(sugestoesPorCategoria[item.categoria] ?? []).map((s) => (

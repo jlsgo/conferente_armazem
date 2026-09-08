@@ -81,6 +81,7 @@ export default function Sac({
   const [destino, setDestino] = useState<Destino>('cliente');
   const [protocolo, setProtocolo] = useState('');
   const [coleta, setColeta] = useState('');
+  const [razaoSocial, setRazaoSocial] = useState('');
   const [motivo, setMotivo] = useState<Motivo | ''>('');
   const [valorReais, setValorReais] = useState('');
   const [observacoes, setObservacoes] = useState('');
@@ -94,12 +95,13 @@ export default function Sac({
     const sujo =
       protocolo.trim() !== '' ||
       coleta.trim() !== '' ||
+      razaoSocial.trim() !== '' ||
       motivo !== '' ||
       valorReais.trim() !== '' ||
       observacoes.trim() !== '' ||
       itensPreenchidos(itens);
     onSujoChange?.(sujo);
-  }, [protocolo, coleta, motivo, valorReais, observacoes, itens, onSujoChange]);
+  }, [protocolo, coleta, razaoSocial, motivo, valorReais, observacoes, itens, onSujoChange]);
 
   async function carregarTudo() {
     setCarregandoLista(true);
@@ -204,6 +206,7 @@ export default function Sac({
       turno: 'diurno',
       numero_pedido: protocolo || null,
       contraparte: paraOutroArmazem ? null : coleta || null,
+      razao_social: paraOutroArmazem ? null : razaoSocial || null,
       motivo,
       valor_centavos: valorCentavos,
       observacoes: observacoes.trim() || null,
@@ -218,6 +221,7 @@ export default function Sac({
 
     setProtocolo('');
     setColeta('');
+    setRazaoSocial('');
     setMotivo('');
     setValorReais('');
     setObservacoes('');
@@ -422,6 +426,13 @@ export default function Sac({
               </label>
             )}
 
+            {!paraOutroArmazem && (
+              <label>
+                Razao social / nome fantasia (opcional)
+                <input value={razaoSocial} onChange={(e) => setRazaoSocial(e.target.value)} />
+              </label>
+            )}
+
             <label>
               {tipo === 'entrada' ? 'Garantia ou venda' : 'Motivo da saida'}
               <select value={motivo} onChange={(e) => setMotivo(e.target.value as Motivo | '')} required>
@@ -482,7 +493,6 @@ export default function Sac({
                 onChange={(e) => atualizarItem(indice, { descricao: e.target.value })}
                 placeholder="Descricao da peca (ex: Retrovisor)"
                 list="sugestoes-peca-sac"
-                required
               />
               <datalist id="sugestoes-peca-sac">
                 {sugestoes.map((s) => (
