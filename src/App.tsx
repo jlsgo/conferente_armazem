@@ -5,12 +5,17 @@ import Setup from './pages/Setup';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Carregando from './components/Carregando';
+import { useTema } from './hooks/useTema';
 
 export default function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
+  // Chamado aqui (nao dentro de Dashboard) pra aplicar o tema salvo/do SO ja
+  // nas telas de Setup/Login tambem, antes de existir sessao - Dashboard so
+  // recebe de volta o valor e o alternador pra mostrar o botao no cabecalho.
+  const { tema, alternar: alternarTema } = useTema();
 
   async function refreshStatus() {
     setErro('');
@@ -63,6 +68,8 @@ export default function App() {
       armazem={armazem}
       armazens={status.armazens}
       versao={status.versao}
+      tema={tema}
+      onAlternarTema={alternarTema}
       onSair={() => {
         logout().finally(() => setUsuario(null));
       }}

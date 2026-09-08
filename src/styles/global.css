@@ -60,6 +60,100 @@
   font-family: 'Segoe UI', system-ui, -apple-system, Roboto, Arial, sans-serif;
 }
 
+/* Tema escuro - alternado via botao no cabecalho do Dashboard (`useTema`),
+   comeca no que o SO ja usa e fica salvo neste PC (`data-tema` em <html>).
+   So os tokens de FUNDO/SUPERFICIE/tinta ("-claro") mudam aqui: os tokens
+   "-escuro" (ex. --verde-escuro) continuam de proposito com o MESMO valor
+   escuro nos dois temas, porque sao usados como fundo de botao no hover
+   (texto branco por cima - teria baixo contraste se clareados). Onde um
+   "-escuro"/--info precisa ser texto (badge, titulo, hover de aba), a
+   sobrescrita fica mais abaixo, por seletor, com uma cor clara propria em
+   vez de reaproveitar o token. */
+:root[data-tema='escuro'] {
+  --texto: #e2e8f0;
+  --texto-suave: #94a3b8;
+  --borda: #2c3646;
+  --fundo: #0e141c;
+  --superficie: #19222e;
+  --anel-foco: rgba(34, 197, 94, 0.35);
+
+  --erro: #f87171;
+  --erro-claro: rgba(248, 113, 113, 0.16);
+  --aviso-claro: rgba(251, 191, 36, 0.16);
+  --verde-claro: rgba(34, 168, 98, 0.18);
+
+  --cor-montagem-claro: rgba(124, 58, 237, 0.18);
+  --cor-sac-claro: rgba(234, 88, 12, 0.18);
+  --cor-historico-claro: rgba(37, 99, 235, 0.18);
+  --cor-usuarios-claro: rgba(13, 148, 136, 0.18);
+  --cor-reparo-claro: rgba(219, 39, 119, 0.18);
+}
+
+:root[data-tema='escuro'] input:hover,
+:root[data-tema='escuro'] select:hover,
+:root[data-tema='escuro'] textarea:hover,
+:root[data-tema='escuro'] button.secundario:hover:not(:disabled) {
+  border-color: #3b4759;
+}
+:root[data-tema='escuro'] input::placeholder,
+:root[data-tema='escuro'] textarea::placeholder {
+  color: #64748b;
+}
+:root[data-tema='escuro'] .erro {
+  border-color: rgba(248, 113, 113, 0.35);
+}
+:root[data-tema='escuro'] .aviso-fechado {
+  border-color: rgba(251, 191, 36, 0.35);
+}
+:root[data-tema='escuro'] tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+/* Texto verde (titulo, badge, sucesso, hover de aba/toggle) - --verde-escuro
+   em si nao muda (ver comentario acima), essas cores claras sao so pra texto. */
+:root[data-tema='escuro'] .cartao h1,
+:root[data-tema='escuro'] .topo h1,
+:root[data-tema='escuro'] .abas button:hover:not(:disabled),
+:root[data-tema='escuro'] .abas button.aba-lancamentos:hover:not(:disabled),
+:root[data-tema='escuro'] .abas button.tipo-entrada:hover:not(:disabled),
+:root[data-tema='escuro'] .badge-entrada,
+:root[data-tema='escuro'] .sucesso,
+:root[data-tema='escuro'] .toast-sucesso svg {
+  color: #6ee7a0;
+}
+:root[data-tema='escuro'] .badge-parcial,
+:root[data-tema='escuro'] .badge-recusado,
+:root[data-tema='escuro'] .aviso-fechado {
+  color: #fde68a;
+}
+:root[data-tema='escuro'] .abas button.aba-montagem:hover:not(:disabled) {
+  color: #c4b5fd;
+}
+:root[data-tema='escuro'] .abas button.aba-sac:hover:not(:disabled) {
+  color: #fdba74;
+}
+:root[data-tema='escuro'] .abas button.aba-historico:hover:not(:disabled) {
+  color: #93c5fd;
+}
+:root[data-tema='escuro'] .abas button.aba-usuarios:hover:not(:disabled) {
+  color: #5eead4;
+}
+:root[data-tema='escuro'] .abas button.aba-reparo:hover:not(:disabled) {
+  color: #f9a8d4;
+}
+:root[data-tema='escuro'] .abas button.tipo-saida:hover:not(:disabled) {
+  color: #fca5a5;
+}
+:root[data-tema='escuro'] .toast-info svg {
+  color: #93c5fd;
+}
+/* Badge "BAIXA" (saida) usa uma paleta azul separada da convencao
+   vermelho/verde do resto do app - so ajusta fundo/texto pro escuro. */
+:root[data-tema='escuro'] .badge-saida {
+  background: rgba(37, 99, 235, 0.18);
+  color: #93c5fd;
+}
+
 * {
   box-sizing: border-box;
 }

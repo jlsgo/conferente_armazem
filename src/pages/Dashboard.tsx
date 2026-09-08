@@ -9,6 +9,7 @@ import Usuarios from './Usuarios';
 import logoEcoviva from '../assets/ecoviva-logo.png';
 import { buscarReparosEmAberto, buscarTransferenciasPendentes, sincronizarAgora, statusSincronizacao } from '../lib/api';
 import { useCliquesSecretos } from '../hooks/useCliquesSecretos';
+import type { Tema } from '../hooks/useTema';
 import CobrinhaSecreta from '../components/CobrinhaSecreta';
 import {
   IconAjuste,
@@ -16,7 +17,9 @@ import {
   IconChat,
   IconFerramenta,
   IconLogout,
+  IconLua,
   IconRelogio,
+  IconSol,
   IconSpinner,
   IconUsuarios,
 } from '../components/Icon';
@@ -30,12 +33,22 @@ interface Props {
   armazem: Armazem | undefined;
   armazens: Armazem[];
   versao?: string;
+  tema: Tema;
+  onAlternarTema: () => void;
   onSair: () => void;
 }
 
 type Aba = 'lancamentos' | 'montagem' | 'sac' | 'reparo_externo' | 'historico' | 'usuarios';
 
-export default function Dashboard({ usuario, armazem, armazens, versao, onSair }: Props) {
+export default function Dashboard({
+  usuario,
+  armazem,
+  armazens,
+  versao,
+  tema,
+  onAlternarTema,
+  onSair,
+}: Props) {
   const [aba, setAba] = useState<Aba>('lancamentos');
   const ehGestor = usuario.papel === 'gestor';
 
@@ -169,6 +182,14 @@ export default function Dashboard({ usuario, armazem, armazens, versao, onSair }
             </>
           )}
           {versao && <span className="pilula-versao">v{versao}</span>}
+          <button
+            type="button"
+            className="secundario"
+            onClick={onAlternarTema}
+            title={tema === 'claro' ? 'Mudar para tema escuro' : 'Mudar para tema claro'}
+          >
+            {tema === 'claro' ? <IconLua size={15} /> : <IconSol size={15} />}
+          </button>
           <button className="secundario" onClick={onSair}>
             <IconLogout size={15} />
             Sair

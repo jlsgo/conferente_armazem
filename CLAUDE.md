@@ -214,6 +214,23 @@ actually build and run for local testing.
   armazem/fluxo context on failure via `.inspect_err(...)` — deliberately only on error,
   never on success, so routine lancamentos don't flood the file. This is meant to replace
   "call Jhon to describe what happened" with "pull this file" as the first diagnostic step.
+- **Tema claro/escuro**: `src/hooks/useTema.ts`, called once in `App.tsx` (not per-page) so
+  Setup/Login already render in the right theme before any session exists. Starts from
+  `prefers-color-scheme` (the PC's own OS setting) but a manual toggle (button in
+  `Dashboard.tsx`'s header, `IconSol`/`IconLua`) always wins and persists in
+  `localStorage` — per machine, A4 and B2 don't share it. Applies as `data-tema` (`claro`
+  or `escuro`) on `<html>`; `src/styles/global.css` keys everything off that via a
+  `:root[data-tema='escuro']` block. Only the "-claro" (tinted background) tokens and a
+  handful of base neutrals (`--texto`, `--fundo`, `--superficie`, `--borda`, `--erro`...)
+  get overridden wholesale for dark mode — the "-escuro" tokens (e.g. `--verde-escuro`,
+  `--cor-montagem-escuro`) deliberately keep their *same* (dark) value in both themes,
+  because they're used as a hover-darken **background** under white button text
+  (`button:hover { background: var(--verde-escuro); }`); lightening them for dark mode
+  would break that contrast. Where an "-escuro" token (or `--info`) is used as **text**
+  instead (a heading, a badge, an inactive tab's hover label) — a different, unrelated
+  usage of the same token — the override targets that specific selector with its own
+  light tint rather than touching the token, to avoid fixing one usage by breaking the
+  other. Keep that split in mind before adding a new "-escuro"-colored surface.
 - **Frontend ↔ backend**: `src/lib/api.ts` wraps `@tauri-apps/api`'s `invoke()`, matching
   the Rust command names and payload shapes (JSON field names are snake_case, mirroring
   the Rust structs directly — no camelCase conversion in the payloads). Tauri commands
