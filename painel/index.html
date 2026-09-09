@@ -251,6 +251,7 @@
   .col-situacao { width: 9%; }
   .col-sincronizado { width: 11%; }
   .col-coleta { width: 9%; white-space: normal; }
+  .col-razaosocial { width: 8%; white-space: normal; }
   th { position: sticky; top: 0; background: var(--cartao); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--texto-suave); }
   tbody tr:hover { background: var(--bg); }
   .tabela-scroll { overflow-x: auto; max-height: 65vh; overflow-y: auto; border-radius: 8px; border: 1px solid var(--borda); }
@@ -265,7 +266,7 @@
   .badge-recusado { background: var(--aviso-claro); color: var(--aviso); }
   .col-pedido { width: 10%; }
   td.col-pedido { font-weight: 700; color: var(--verde-escuro); }
-  .col-itens { width: 16%; white-space: normal; }
+  .col-itens { width: 8%; white-space: normal; }
   .obs-detalhe { color: var(--texto-suave); font-style: italic; }
   .aviso-truncado {
     display: flex;
@@ -537,6 +538,7 @@
               <th class="col-datahora" data-i18n="colData">Data/Hora</th>
               <th class="col-pedido" data-i18n="colPedido">Pedido</th>
               <th class="col-coleta" data-i18n="colColeta">Coleta</th>
+              <th class="col-razaosocial" data-i18n="colRazaoSocial">Razao Social</th>
               <th class="col-itens" data-i18n="colItens">Itens</th>
               <th class="col-qtd" data-i18n="colQtd">Qtd.</th>
               <th class="col-registrado" data-i18n="colRegistradoPor">Registrado por</th>
@@ -695,6 +697,7 @@
       colData: "Data/Hora",
       colPedido: "Pedido",
       colColeta: "Coleta",
+      colRazaoSocial: "Razao Social",
       colItens: "Itens",
       colQtd: "Qtd.",
       colRegistradoPor: "Registrado por",
@@ -780,6 +783,7 @@
       colData: "日期/时间",
       colPedido: "订单",
       colColeta: "去向",
+      colRazaoSocial: "公司名称",
       colItens: "物品",
       colQtd: "数量",
       colRegistradoPor: "登记人",
@@ -920,10 +924,14 @@
   // painel - so a coluna Coleta (`colunaColeta` abaixo) usa esse campo.
   // `valor_centavos` no fim tambem (indice 18) - so preenchido no SAC
   // (motivo "venda"), usado pro stat tile de valor total de vendas abaixo.
+  // `razao_social` no fim (indice 19), mesmo cuidado - so preenchida em
+  // saida_armazem/sac (ver src-tauri/src/domain/movimentos.rs), sem ela a
+  // coluna Razao Social do painel ficava sempre vazia mesmo com o dado
+  // gravado e sincronizado no Turso.
   var COLUNAS_MOVIMENTO = "armazem_codigo, id_origem, fluxo, tipo, data, hora, usuario_nome, " +
     "numero_pedido, status, estornado_de, itens_json, armazem_destino_codigo, " +
     "recebido_de_armazem_codigo, recebido_de_id_origem, enviado_em, motivo, observacoes, contraparte, " +
-    "valor_centavos";
+    "valor_centavos, razao_social";
   var ultimosFiltrados = [];
   var intervaloAtualizacao = null;
 
@@ -1024,7 +1032,8 @@
       motivo: v(15),
       observacoes: v(16),
       contraparte: v(17),
-      valor_centavos: v(18) != null ? Number(v(18)) : null
+      valor_centavos: v(18) != null ? Number(v(18)) : null,
+      razao_social: v(19)
     };
   }
 
@@ -1449,6 +1458,7 @@
         '<td class="col-datahora" data-label="' + t("colData") + '" title="' + formatarData(m.data) + " " + m.hora + '">' + formatarData(m.data) + " " + m.hora + "</td>" +
         '<td class="col-pedido" data-label="' + t("colPedido") + '">' + pedidoSeguro + "</td>" +
         '<td class="col-coleta" data-label="' + t("colColeta") + '">' + colunaColeta(m) + "</td>" +
+        '<td class="col-razaosocial" data-label="' + t("colRazaoSocial") + '">' + (m.razao_social ? escaparHtml(m.razao_social) : "-") + "</td>" +
         '<td class="col-itens" data-label="' + t("colItens") + '">' + resumoItens(m.itens) + divergencia + detalheObservacao(m) + "</td>" +
         '<td class="col-qtd" data-label="' + t("colQtd") + '">' + totalItens(m.itens) + "</td>" +
         '<td class="col-registrado" data-label="' + t("colRegistradoPor") + '" title="' + nomeSeguro + '">' + nomeSeguro + "</td>" +
