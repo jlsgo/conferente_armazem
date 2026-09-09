@@ -1515,6 +1515,34 @@ de teste.
 
 Bump de `3.1.0` pra `3.2.0` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
 
+## Versao 3.3.0 — Razao Social opcional no SAC/Saida de Armazem, descricao do item volta a ser opcional (Feito)
+
+Pedido do usuario logo apos usar a v3.2.0 no dia a dia: um campo novo pra anotar a
+razao social/nome fantasia do cliente (nao obrigatorio), e reverter a
+obrigatoriedade da descricao do item — atrapalhava o preenchimento sem ganho real.
+
+**Razao social** (`domain::movimentos.rs`, migration `0010_razao_social.sql`):
+coluna nova em `movimentos`, sempre opcional, coletada em `Lancamentos.tsx`/
+`Sac.tsx` (Saida de Armazem e SAC — nao em Montagem, que nao lida com
+cliente/transportadora), ao lado do campo Coleta e escondida junto com ele numa
+transferencia entre armazens. Deliberadamente **fora** de `CamposHash`/
+`calcular_hash` — um campo novo ali mudaria o que e hasheado dai pra frente,
+quebrando `verificar_cadeia` pra todo lancamento anterior a esta migracao (o hash
+gravado na epoca nunca incluiu esse campo). Sincroniza pro Turso normalmente
+(`db/sync.rs`: `SQL_ALTER_TABELA_REMOTA`/`SQL_UPSERT`), como qualquer outro campo
+do movimento — so nao entra em `TransferenciaPendente` (mesmo criterio de
+`contraparte`: quem confirma um recebimento nao precisa do cliente de quem enviou).
+
+**Descricao do item volta a ser opcional**: `FLUXOS_ITEM_DESCRICAO_OBRIGATORIA` e a
+checagem em `validar_novo_movimento` foram removidos; `required` tirado dos 3
+campos de descricao (`Lancamentos.tsx`/`Montagem.tsx`/`Sac.tsx`). `montagem`
+continua obrigatoria como na v3.2.0 — so a descricao reverteu.
+
+**Verificado**: `tsc --noEmit`/`vite build`/`vitest run` (18 testes) limpos,
+`cargo fmt --check`/`clippy -D warnings`/`cargo test` (163 testes) limpos.
+
+Bump de `3.2.0` pra `3.3.0` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um
