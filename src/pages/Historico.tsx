@@ -422,6 +422,7 @@ export default function Historico({ usuario, armazem, armazens }: Props) {
                       <>
                         <th>Pedido</th>
                         <th>Coleta</th>
+                        <th>Razao Social</th>
                       </>
                     )}
                     {fluxo === 'peca_montagem' && <th>Direcao</th>}
@@ -429,6 +430,7 @@ export default function Historico({ usuario, armazem, armazens }: Props) {
                       <>
                         <th>Protocolo</th>
                         <th>Coleta</th>
+                        <th>Razao Social</th>
                       </>
                     )}
                     {fluxo === 'reparo_externo' && <th>Tecnico/Oficina</th>}
@@ -451,6 +453,7 @@ export default function Historico({ usuario, armazem, armazens }: Props) {
                         <>
                           <td>{pedidoTexto(m)}</td>
                           <td>{colunaColeta(m, armazens)}</td>
+                          <td>{m.razao_social || '-'}</td>
                         </>
                       )}
                       {fluxo === 'peca_montagem' && <td>{direcaoTexto(m)}</td>}
@@ -458,6 +461,7 @@ export default function Historico({ usuario, armazem, armazens }: Props) {
                         <>
                           <td>{m.numero_pedido || '-'}</td>
                           <td>{colunaColeta(m, armazens)}</td>
+                          <td>{m.razao_social || '-'}</td>
                         </>
                       )}
                       {fluxo === 'reparo_externo' && <td>{m.contraparte || '-'}</td>}

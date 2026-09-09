@@ -245,7 +245,7 @@ export default function Dashboard({
           <IconFerramenta size={15} />
           Reparo Externo
           {!!reparosEmAberto && (
-            <span className="badge badge-notificacao" title="Pecas aguardando retorno do tecnico">
+            <span className="badge badge-notificacao" title="Peças aguardando retorno do tecnico">
               {reparosEmAberto}
             </span>
           )}

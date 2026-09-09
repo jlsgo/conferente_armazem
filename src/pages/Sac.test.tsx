@@ -68,7 +68,7 @@ describe('Sac - motivo de saida', () => {
     expect(screen.queryByLabelText(/^valor/i)).not.toBeInTheDocument();
 
     await user.type(
-      screen.getByPlaceholderText('Descricao da peca (ex: Retrovisor)'),
+      screen.getByPlaceholderText('Descricao da peça (ex: Retrovisor)'),
       'Retrovisor quebrado'
     );
     await user.click(screen.getByRole('button', { name: /registrar/i }));
@@ -98,7 +98,7 @@ describe('Sac - motivo de saida', () => {
     expect(campoValor).toBeRequired();
 
     await user.type(
-      screen.getByPlaceholderText('Descricao da peca (ex: Retrovisor)'),
+      screen.getByPlaceholderText('Descricao da peça (ex: Retrovisor)'),
       'Bateria trocada em garantia'
     );
     // Digitado com ponto, nao virgula: o input e type="number", que em jsdom

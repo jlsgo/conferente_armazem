@@ -36,6 +36,7 @@ export function colunasFechamento(
         'Horario',
         'Pedido',
         'Coleta',
+        'Razao Social',
         'Itens',
         'Qtd.',
         'Quem retirou',
@@ -48,6 +49,7 @@ export function colunasFechamento(
         m.hora,
         (m.numero_pedido || '-') + (!m.retirada_completa ? ' (parcial)' : ''),
         colunaColeta(m, armazens),
+        m.razao_social || '-',
         itensResumoTexto(m, todos),
         String(qtdTotal(m)),
         m.quem_retirou || '-',
@@ -91,12 +93,24 @@ export function colunasFechamento(
   }
 
   return {
-    cabecalhos: ['Nº', 'Horario', 'Protocolo', 'Coleta', 'Itens', 'Qtd.', 'Motivo', 'Registrado por', 'Situacao'],
+    cabecalhos: [
+      'Nº',
+      'Horario',
+      'Protocolo',
+      'Coleta',
+      'Razao Social',
+      'Itens',
+      'Qtd.',
+      'Motivo',
+      'Registrado por',
+      'Situacao',
+    ],
     linha: (m) => [
       String(m.numero),
       m.hora,
       m.numero_pedido || '-',
       colunaColeta(m, armazens),
+      m.razao_social || '-',
       itensResumoTexto(m, todos),
       String(qtdTotal(m)),
       motivoSacTexto(m),

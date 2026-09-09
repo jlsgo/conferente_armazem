@@ -54,7 +54,7 @@ interface ItemForm {
 type Destino = 'armazem' | 'externo';
 
 const CATEGORIAS: { valor: Categoria; rotulo: string }[] = [
-  { valor: 'peca', rotulo: 'Peca' },
+  { valor: 'peca', rotulo: 'Peça' },
   { valor: 'scooter', rotulo: 'Scooter' },
   { valor: 'triciclo', rotulo: 'Triciclo' },
   { valor: 'patinete', rotulo: 'Patinete' },
@@ -391,7 +391,7 @@ export default function Montagem({
       <section className="cartao">
         <h2>Registrar {tipo === 'saida' ? 'saida' : 'entrada'} do galpao</h2>
         <p className="subtitulo">
-          {formatarData(data)} - responsavel: {usuario.nome}. Pecas soltas ou scooters montados
+          {formatarData(data)} - responsavel: {usuario.nome}. Peças soltas ou scooters montados
           {tipo === 'saida' ? ' saindo daqui.' : ' chegando aqui (ex: compra de fornecedor).'}
         </p>
 
@@ -511,7 +511,7 @@ export default function Montagem({
                   itemPrecisaObservacao(item)
                     ? 'Descreva o item (obrigatorio)'
                     : tipo === 'saida' && destino === 'externo'
-                      ? 'Codigo/serie da peca'
+                      ? 'Codigo/serie da peça'
                       : 'Observacao (opcional)'
                 }
                 required={itemPrecisaObservacao(item)}

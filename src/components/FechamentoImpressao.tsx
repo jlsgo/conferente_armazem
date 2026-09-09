@@ -22,7 +22,7 @@ interface Props {
 
 const TITULOS: Record<Variante, string> = {
   armazem: 'Controle de Saidas de Armazem',
-  montagem: 'Controle de Pecas para Montagem',
+  montagem: 'Controle de Peças para Montagem',
   sac: 'Controle de Saidas do SAC',
   reparo_externo: 'Controle de Reparo Externo',
 };
@@ -41,9 +41,9 @@ const CORES_VARIANTE: Record<Variante, string> = {
 // sem isso o layout automatico espreme Coleta/Itens pra caber Observacoes,
 // forcando quebra de linha em quase toda linha e estourando pra 2-3 paginas.
 const LARGURAS_COLUNAS: Record<Variante, number[]> = {
-  armazem: [3, 6, 8, 13, 24, 4, 8, 18, 8, 8],
+  armazem: [3, 6, 8, 13, 10, 14, 4, 8, 18, 8, 8],
   montagem: [4, 7, 10, 38, 5, 10, 14, 12],
-  sac: [3, 6, 9, 15, 26, 4, 13, 12, 12],
+  sac: [3, 6, 9, 15, 10, 16, 4, 13, 12, 12],
   reparo_externo: [4, 7, 13, 38, 5, 10, 13, 10],
 };
 
@@ -143,6 +143,7 @@ export default function FechamentoImpressao({
               <>
                 <th>Pedido</th>
                 <th>Coleta</th>
+                <th>Razao Social</th>
               </>
             )}
             {variante === 'montagem' && <th>Direcao</th>}
@@ -150,6 +151,7 @@ export default function FechamentoImpressao({
               <>
                 <th>Protocolo</th>
                 <th>Coleta</th>
+                <th>Razao Social</th>
               </>
             )}
             {variante === 'reparo_externo' && <th>Tecnico/Oficina</th>}
@@ -176,6 +178,7 @@ export default function FechamentoImpressao({
                     {!m.retirada_completa && ' (parcial)'}
                   </td>
                   <td>{colunaColeta(m, armazens)}</td>
+                  <td>{m.razao_social || '-'}</td>
                 </>
               )}
               {variante === 'montagem' && <td>{m.tipo === 'saida' ? 'Saida B2' : 'Entrada B2'}</td>}
@@ -183,6 +186,7 @@ export default function FechamentoImpressao({
                 <>
                   <td>{m.numero_pedido || '-'}</td>
                   <td>{colunaColeta(m, armazens)}</td>
+                  <td>{m.razao_social || '-'}</td>
                 </>
               )}
               {variante === 'reparo_externo' && <td>{m.contraparte || '-'}</td>}

@@ -191,7 +191,7 @@ export default function Sac({
       }));
 
     if (itensValidos.length === 0) {
-      setErro('Informe ao menos uma peca com quantidade valida.');
+      setErro('Informe ao menos uma peça com quantidade valida.');
       return;
     }
 
@@ -485,13 +485,13 @@ export default function Sac({
             />
           </label>
 
-          <h3>Pecas deste atendimento</h3>
+          <h3>Peças deste atendimento</h3>
           {itens.map((item, indice) => (
             <div className="linha-item" key={indice}>
               <input
                 value={item.descricao}
                 onChange={(e) => atualizarItem(indice, { descricao: e.target.value })}
-                placeholder="Descricao da peca (ex: Retrovisor)"
+                placeholder="Descricao da peça (ex: Retrovisor)"
                 list="sugestoes-peca-sac"
               />
               <datalist id="sugestoes-peca-sac">
@@ -520,7 +520,7 @@ export default function Sac({
           ))}
 
           <button type="button" className="secundario" onClick={adicionarLinhaItem}>
-            + adicionar peca
+            + adicionar peça
           </button>
 
           {erro && <p className="erro" role="alert">{erro}</p>}
@@ -543,6 +543,7 @@ export default function Sac({
               <th>Horario</th>
               <th>Protocolo</th>
               <th>Coleta</th>
+              <th>Razao Social</th>
               <th>Itens</th>
               <th>Qtd.</th>
               <th>Motivo</th>
@@ -558,6 +559,7 @@ export default function Sac({
                 <td>{m.hora}</td>
                 <td>{m.numero_pedido || '-'}</td>
                 <td>{colunaColeta(m, armazens)}</td>
+                <td>{m.razao_social || '-'}</td>
                 <td>{itensResumoTexto(m, lancamentos)}</td>
                 <td>{m.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
                 <td>{motivoSacTexto(m)}</td>
@@ -581,7 +583,7 @@ export default function Sac({
             ))}
             {lancamentos.length === 0 && (
               <tr>
-                <td colSpan={10} className="rodape-tabela">
+                <td colSpan={11} className="rodape-tabela">
                   Nenhum lancamento registrado ainda hoje.
                 </td>
               </tr>
@@ -590,7 +592,7 @@ export default function Sac({
         </table>
         </div>
         <p className="rodape-tabela">
-          <strong>{totalGeralDoDia}</strong> pecas no total ({lancamentos.length} atendimentos)
+          <strong>{totalGeralDoDia}</strong> peças no total ({lancamentos.length} atendimentos)
         </p>
 
         <button className="aviso" onClick={handleFecharDia} disabled={fechando || lancamentos.length === 0}>

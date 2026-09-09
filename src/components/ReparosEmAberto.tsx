@@ -19,7 +19,7 @@ export default function ReparosEmAberto({ pendentes }: Props) {
     <section className="cartao somente-tela">
       <h2>Reparos em aberto</h2>
       <p className="subtitulo">
-        Pecas que ja sairam para conserto com tecnico externo e ainda nao tem retorno registrado.
+        Peças que ja sairam para conserto com tecnico externo e ainda nao tem retorno registrado.
       </p>
       <div className="tabela-scroll">
         <table>

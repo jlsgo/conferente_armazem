@@ -44,7 +44,7 @@ const CATEGORIAS: { valor: Categoria; rotulo: string }[] = [
   { valor: 'scooter', rotulo: 'Scooter' },
   { valor: 'triciclo', rotulo: 'Triciclo' },
   { valor: 'patinete', rotulo: 'Patinete' },
-  { valor: 'peca', rotulo: 'Peca' },
+  { valor: 'peca', rotulo: 'Peça' },
   { valor: 'outro', rotulo: 'Outro' },
 ];
 
@@ -575,6 +575,7 @@ export default function Lancamentos({
               <th>Horario</th>
               <th>Pedido</th>
               <th>Coleta</th>
+              <th>Razao Social</th>
               <th>Itens</th>
               <th>Qtd.</th>
               <th>Quem retirou</th>
@@ -594,6 +595,7 @@ export default function Lancamentos({
                   {!m.retirada_completa && <span className="badge badge-parcial"> parcial</span>}
                 </td>
                 <td>{colunaColeta(m, armazens)}</td>
+                <td>{m.razao_social || '-'}</td>
                 <td>{itensResumoTexto(m, lancamentos)}</td>
                 <td>{m.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
                 <td>{m.quem_retirou || '-'}</td>
@@ -618,7 +620,7 @@ export default function Lancamentos({
             ))}
             {lancamentos.length === 0 && (
               <tr>
-                <td colSpan={11} className="rodape-tabela">
+                <td colSpan={12} className="rodape-tabela">
                   Nenhum lancamento registrado ainda hoje.
                 </td>
               </tr>

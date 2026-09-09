@@ -60,7 +60,7 @@ interface ItemForm {
 }
 
 const CATEGORIAS: { valor: Categoria; rotulo: string }[] = [
-  { valor: 'peca', rotulo: 'Peca' },
+  { valor: 'peca', rotulo: 'Peça' },
   { valor: 'scooter', rotulo: 'Scooter' },
   { valor: 'triciclo', rotulo: 'Triciclo' },
   { valor: 'patinete', rotulo: 'Patinete' },
@@ -205,7 +205,7 @@ export default function ReparoExterno({ usuario, armazem, onReparoAtualizado, on
     }
     const itensComQuantidade = itens.filter((it) => it.quantidade > 0);
     if (tipo === 'entrada' && itensComQuantidade.some((it) => !it.codigoComponente.trim())) {
-      setErro('Informe o codigo da etiqueta colada na peca de cada item.');
+      setErro('Informe o codigo da etiqueta colada na peça de cada item.');
       return;
     }
     if (tipo === 'entrada' && itensComQuantidade.some((it) => !it.condicao)) {
@@ -396,8 +396,8 @@ export default function ReparoExterno({ usuario, armazem, onReparoAtualizado, on
         {codigosGerados.length > 0 && (
           <div className="aviso-fechado" style={{ marginBottom: 20 }}>
             <p>
-              <strong>Anote o codigo na etiqueta de cada peca antes de enviar ao tecnico</strong> - e o
-              que vai ser digitado na entrada pra confirmar que voltou a mesma peca:
+              <strong>Anote o codigo na etiqueta de cada peça antes de enviar ao tecnico</strong> - e o
+              que vai ser digitado na entrada pra confirmar que voltou a mesma peça:
             </p>
             <ul style={{ margin: '6px 0 0', paddingLeft: 20 }}>
               {codigosGerados.map((cg, i) => (
