@@ -309,7 +309,7 @@ export default function Dashboard({
         {aba === 'historico' && <Historico usuario={usuario} armazem={armazem} armazens={armazens} />}
         {aba === 'usuarios' && ehGestor && <Usuarios armazens={armazens} />}
       </main>
-      {cobrinha.ativo && <CobrinhaSecreta onFechar={cobrinha.fechar} />}
+      {cobrinha.ativo && <CobrinhaSecreta onFechar={cobrinha.fechar} armazemCodigo={armazem?.codigo} />}
     </div>
   );
 }

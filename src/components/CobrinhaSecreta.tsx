@@ -1,7 +1,14 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
+import { cobrinhaListarRecordes, cobrinhaRegistrarRecorde } from '../lib/api';
+import type { RecordeCobrinha } from '../types';
 
 interface Props {
   onFechar: () => void;
+  /** Codigo do armazem ('A4'/'B2') de quem esta logado - so passado pela
+   * instancia pos-login (Dashboard.tsx). Presente = liga o placar unificado
+   * (Turso, A4 x B2); ausente (instancia da tela de login, AuthCard.tsx) =
+   * placar continua 100% local, sem nenhuma chamada ao backend. */
+  armazemCodigo?: string;
 }
 
 interface Ponto {
@@ -9,7 +16,7 @@ interface Ponto {
   y: number;
 }
 
-interface Recorde {
+interface RecordeLocal {
   nome: string;
   pontos: number;
 }
@@ -34,10 +41,10 @@ const DIRECOES: Record<string, Ponto> = {
   ArrowRight: { x: 1, y: 0 },
 };
 
-// Recordes ficam so no localStorage deste PC (nao sincroniza entre A4/B2) -
-// e uma brincadeira local entre quem usa esta maquina, nao um dado real do
-// negocio.
-function carregarRecordes(): Recorde[] {
+// Fallback local (localStorage deste PC) - usado sempre na tela de login
+// (sem `armazemCodigo`) e como rede de seguranca pos-login se o placar
+// unificado nao estiver disponivel (sync nao configurado, sem internet).
+function carregarRecordesLocais(): RecordeLocal[] {
   try {
     const bruto = window.localStorage.getItem(CHAVE_RECORDES);
     const lista = bruto ? JSON.parse(bruto) : [];
@@ -47,7 +54,7 @@ function carregarRecordes(): Recorde[] {
   }
 }
 
-function salvarRecordes(recordes: Recorde[]) {
+function salvarRecordesLocais(recordes: RecordeLocal[]) {
   try {
     window.localStorage.setItem(CHAVE_RECORDES, JSON.stringify(recordes));
   } catch {
@@ -59,11 +66,14 @@ function salvarRecordes(recordes: Recorde[]) {
  * Easter egg: cobrinha simples, sem estilo elaborado - so pra ser uma
  * pausa engracada, escondida atras de 5 cliques na logo (useCliquesSecretos).
  */
-export default function CobrinhaSecreta({ onFechar }: Props) {
+export default function CobrinhaSecreta({ onFechar, armazemCodigo }: Props) {
   const [cobra, setCobra] = useState<Ponto[]>([{ x: 8, y: 8 }]);
   const [comida, setComida] = useState<Ponto>(() => posicaoAleatoria());
   const [gameOver, setGameOver] = useState(false);
-  const [recordes, setRecordes] = useState<Recorde[]>(() => carregarRecordes());
+  const [recordesLocais, setRecordesLocais] = useState<RecordeLocal[]>(() => carregarRecordesLocais());
+  // `null` = ainda nao carregou (ou falhou) - nesse caso a tela usa
+  // `recordesLocais` como se nao houvesse placar unificado nenhum.
+  const [recordesUnificados, setRecordesUnificados] = useState<RecordeCobrinha[] | null>(null);
   const [nomeInput, setNomeInput] = useState('');
   const [nomeSalvo, setNomeSalvo] = useState(false);
   const [recordeQuebradoDe, setRecordeQuebradoDe] = useState<string | null>(null);
@@ -72,6 +82,26 @@ export default function CobrinhaSecreta({ onFechar }: Props) {
 
   const pontos = cobra.length - 1;
   const elegivelParaRecorde = gameOver && !nomeSalvo && pontos > PONTUACAO_MINIMA_PARA_RECORDE;
+  const unificadoDisponivel = !!armazemCodigo && recordesUnificados !== null;
+  const recordesExibidos: { nome: string; pontos: number; armazemCodigo?: string }[] = unificadoDisponivel
+    ? recordesUnificados!.map((r) => ({ nome: r.nome, pontos: r.pontos, armazemCodigo: r.armazem_codigo }))
+    : recordesLocais;
+
+  useEffect(() => {
+    if (!armazemCodigo) return;
+    let cancelado = false;
+    cobrinhaListarRecordes()
+      .then((lista) => {
+        if (!cancelado) setRecordesUnificados(lista);
+      })
+      .catch(() => {
+        // Sem sync/sem internet - a tela ja cai sozinha pro placar local
+        // (recordesUnificados continua null).
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [armazemCodigo]);
 
   useEffect(() => {
     function aoTeclar(e: KeyboardEvent) {
@@ -122,17 +152,30 @@ export default function CobrinhaSecreta({ onFechar }: Props) {
     return () => window.clearInterval(intervalo);
   }, [comida, gameOver]);
 
-  function registrarNome(e: FormEvent) {
+  async function registrarNome(e: FormEvent) {
     e.preventDefault();
     const nome = nomeInput.trim().toUpperCase().slice(0, 4) || 'ANON';
-    const liderAnterior = recordes[0];
-    const novaLista = [...recordes, { nome, pontos }].sort((a, b) => b.pontos - a.pontos).slice(0, MAX_RECORDES);
-    setRecordes(novaLista);
-    salvarRecordes(novaLista);
+    const liderAnterior = recordesExibidos[0];
     setNomeSalvo(true);
     if (liderAnterior && pontos > liderAnterior.pontos && liderAnterior.nome !== nome) {
       setRecordeQuebradoDe(liderAnterior.nome);
     }
+
+    if (armazemCodigo) {
+      try {
+        const novaLista = await cobrinhaRegistrarRecorde(pontos, nome);
+        setRecordesUnificados(novaLista);
+        return;
+      } catch {
+        // Sync nao configurado/sem internet nesta hora - nao perde a
+        // pontuacao, so cai pro placar local desta maquina.
+      }
+    }
+    const novaListaLocal = [...recordesLocais, { nome, pontos }]
+      .sort((a, b) => b.pontos - a.pontos)
+      .slice(0, MAX_RECORDES);
+    setRecordesLocais(novaListaLocal);
+    salvarRecordesLocais(novaListaLocal);
   }
 
   function reiniciar() {
@@ -201,13 +244,14 @@ export default function CobrinhaSecreta({ onFechar }: Props) {
             )}
           </div>
         )}
-        {recordes.length > 0 && (
+        {recordesExibidos.length > 0 && (
           <div className="cobrinha-recordes">
-            <p className="subtitulo">Recordes desta maquina:</p>
+            <p className="subtitulo">{unificadoDisponivel ? 'Recordes gerais (A4 x B2):' : 'Recordes desta maquina:'}</p>
             <ol>
-              {recordes.map((r, i) => (
+              {recordesExibidos.map((r, i) => (
                 <li key={i}>
-                  {r.nome} - {r.pontos}
+                  {r.nome}
+                  {r.armazemCodigo ? ` (${r.armazemCodigo})` : ''} - {r.pontos}
                 </li>
               ))}
             </ol>

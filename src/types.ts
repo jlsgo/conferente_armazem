@@ -144,6 +144,14 @@ export interface TransferenciaRecusada {
   itens: MovimentoItem[];
 }
 
+/** Uma linha do placar unificado da cobrinha (easter egg) - ver
+ * `CobrinhaSecreta.tsx` e `db::cobrinha_sync` no backend. */
+export interface RecordeCobrinha {
+  armazem_codigo: string;
+  nome: string;
+  pontos: number;
+}
+
 /** Um item enviado pra reparo externo que ainda nao voltou (nenhuma entrada
  * registrada ainda com o mesmo `codigo_componente` nesse armazem/fluxo). */
 export interface ReparoPendente {

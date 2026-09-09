@@ -10,7 +10,11 @@ use crate::state::AppState;
 /// Codigo ('A4'/'B2') do armazem do usuario logado, direto do banco local -
 /// nunca aceito como parametro vindo do frontend. `None` se o usuario nao
 /// tiver um armazem fixo (gestor "global", caso raro).
-fn armazem_codigo_do_usuario(
+///
+/// `pub(crate)` pra ser reaproveitado por `cobrinha_commands` - mesma regra
+/// de identidade (nunca confiar no frontend pra saber de qual armazem e o
+/// usuario), sem duplicar a query.
+pub(crate) fn armazem_codigo_do_usuario(
     conn: &Connection,
     armazem_id: Option<i64>,
 ) -> AppResult<Option<String>> {

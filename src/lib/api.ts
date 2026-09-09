@@ -8,6 +8,7 @@ import type {
   NovoMovimento,
   NovoUsuarioInput,
   QuebraCadeia,
+  RecordeCobrinha,
   ReparoConcluido,
   ReparoPendente,
   ResultadoHistorico,
@@ -270,4 +271,19 @@ export function buscarTransferenciasRecusadas(): Promise<TransferenciaRecusada[]
   // volta Ok([]) do lado do Rust, so chega aqui como rejeicao uma falha de
   // verdade (rede/IPC).
   return invoke<TransferenciaRecusada[]>('buscar_transferencias_recusadas');
+}
+
+/** Placar unificado da cobrinha (easter egg) - so chamado da instancia
+ * pos-login (Dashboard.tsx), nunca da tela de login. "Sem sync configurado"
+ * ja volta Ok([]) do lado do Rust; so chega aqui como rejeicao uma falha de
+ * rede/IPC de verdade, que CobrinhaSecreta.tsx trata caindo pro placar local. */
+export function cobrinhaListarRecordes(): Promise<RecordeCobrinha[]> {
+  return invoke<RecordeCobrinha[]>('cobrinha_listar_recordes');
+}
+
+/** Salva um recorde no placar unificado e devolve o top atualizado - rejeita
+ * (sync nao configurado, rede fora) em vez de engolir o erro, pra
+ * CobrinhaSecreta.tsx saber que precisa cair pro placar local desta vez. */
+export function cobrinhaRegistrarRecorde(pontos: number, nome: string): Promise<RecordeCobrinha[]> {
+  return invoke<RecordeCobrinha[]>('cobrinha_registrar_recorde', { pontos, nome });
 }

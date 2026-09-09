@@ -156,6 +156,8 @@ pub fn run() {
             commands::sync_commands::confirmar_recebimento,
             commands::sync_commands::recusar_recebimento,
             commands::sync_commands::buscar_transferencias_recusadas,
+            commands::cobrinha_commands::cobrinha_registrar_recorde,
+            commands::cobrinha_commands::cobrinha_listar_recordes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

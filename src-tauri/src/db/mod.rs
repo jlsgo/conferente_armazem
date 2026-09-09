@@ -7,6 +7,7 @@ use crate::domain::errors::{AppError, AppResult};
 
 pub mod backup;
 pub mod backup_nuvem;
+pub mod cobrinha_sync;
 pub mod sync;
 
 fn migrations() -> Migrations<'static> {
