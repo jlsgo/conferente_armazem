@@ -27,6 +27,17 @@ const TITULOS: Record<Variante, string> = {
   reparo_externo: 'Controle de Reparo Externo',
 };
 
+// Mesmo nome das abas do menu (Dashboard.tsx) - usado so pra sugerir o nome
+// do arquivo ao "Salvar como PDF" (o navegador usa document.title como
+// sugestao), pra bater com a organizacao em pastas que o time ja faz por
+// aba+dia em vez do titulo completo do documento impresso.
+const NOMES_ABA: Record<Variante, string> = {
+  armazem: 'Saida de Armazem',
+  montagem: 'Montagem',
+  sac: 'SAC',
+  reparo_externo: 'Reparo Externo',
+};
+
 // Mesma cor usada no friso de cada aba do menu (ver global.css, "Cor por
 // aba") - repetida aqui como friso no topo da folha impressa, pra identificar
 // de relance de qual fluxo e o documento mesmo fora do sistema.
@@ -74,6 +85,22 @@ export default function FechamentoImpressao({
 
   function nomeBase(extensao: string): string {
     return `fechamento_${variante}_${armazem?.codigo ?? 'armazem'}_${formatarDataArquivo(data)}.${extensao}`;
+  }
+
+  function handleImprimir() {
+    // "Salvar como PDF" no dialogo de impressao sugere document.title como
+    // nome do arquivo - sem isso, sugeria sempre o titulo fixo da pagina
+    // (index.html), entao todo mundo digitava o nome na mao e cada um
+    // organizava diferente (motivo deste ajuste).
+    const tituloOriginal = document.title;
+    const sufixoArmazem = armazem ? ` - ${armazem.codigo}` : '';
+    document.title = `${NOMES_ABA[variante]}${sufixoArmazem} - ${formatarDataArquivo(data)}`;
+    const restaurarTitulo = () => {
+      document.title = tituloOriginal;
+      window.removeEventListener('afterprint', restaurarTitulo);
+    };
+    window.addEventListener('afterprint', restaurarTitulo);
+    window.print();
   }
 
   function handleExportarCsv() {
@@ -251,7 +278,7 @@ export default function FechamentoImpressao({
       </div>
 
       <div className="somente-tela" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <button onClick={() => window.print()}>Imprimir / Salvar como PDF</button>
+        <button onClick={handleImprimir}>Imprimir / Salvar como PDF</button>
         <button className="secundario" onClick={handleExportarCsv}>
           Exportar CSV
         </button>
