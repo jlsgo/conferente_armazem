@@ -1543,6 +1543,80 @@ continua obrigatoria como na v3.2.0 — so a descricao reverteu.
 
 Bump de `3.2.0` pra `3.3.0` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
 
+(`3.3.1` e `3.3.2` nao ganharam secao aqui — visibilidade da Razao Social no painel
+publico e o placar unificado da cobrinha, respectivamente. Ver `git log` pros
+detalhes.)
+
+## Versao 3.3.3 — autocomplete de Coleta/Razao Social, nome do PDF por aba+dia, comemoracao de recorde na cobrinha (Feito)
+
+Motivado por uma leitura de ~11 fechamentos reais impressos pelas conferentes
+(pasta `exemplos-em-prod/`, fora do controle de versao): o campo Coleta (e
+Razao Social) e texto livre sem sugestao nenhuma, e o mesmo nome real aparecia
+grafado de formas diferentes dia a dia ("ARMAZÉM"/"ARMZÉM"/"AEMAZÉM",
+"CORREIOS"/"CORRREIOS", "TRANSLOVATO"/"TRANLOVATO") — o mesmo problema que a
+sugestao de descricao do item (`sugestoes_descricao`) ja resolvia, so que sem
+cobrir esses dois campos.
+
+**Autocomplete de Coleta/Razao Social**: `domain::movimentos::sugestoes_contraparte`/
+`sugestoes_razao_social` (mesmo padrao de `sugestoes_descricao` — `SELECT DISTINCT`
+com limite de 100), comandos Tauri novos (`sugestoes_contraparte`/
+`sugestoes_razao_social`, registrados em `lib.rs`), `src/lib/api.ts` expõe as duas
+funcoes. `Lancamentos.tsx` e `Sac.tsx` buscam a lista uma vez ao montar e ligam via
+`<datalist>` nos respectivos `<input>` — mesma tecnica ja usada pra descricao do
+item, sem catalogo mantido a parte. Sugestoes vêm de todos os fluxos juntos (nao
+so do fluxo da tela atual), ja que a mesma transportadora/cliente aparece tanto em
+Saida de Armazem quanto em SAC.
+
+**Nome do arquivo ao "Salvar como PDF"**: `FechamentoImpressao.tsx` agora seta
+`document.title` (que o navegador usa como nome sugerido no dialogo de
+salvar/imprimir) pra `"<nome da aba> - <armazem> - <dia>"` antes de chamar
+`window.print()`, restaurando no evento `afterprint`. Antes o titulo era sempre o
+fixo do `index.html`, entao cada conferente digitava o nome na mao e organizava
+diferente — o mesmo problema de inconsistencia apareceu nos nomes dos PDFs da
+pasta `exemplos-em-prod/` analisada.
+
+**Comemoracao de recorde na cobrinha** (`CobrinhaSecreta.tsx`): ao virar o novo
+nº1 do placar (mesmo criterio que ja disparava o texto "Voce tirou X do topo",
+mais o caso de bater o proprio recorde sem tirar ninguem do topo), mostra
+`🎉🏆🎉` com uma animacao CSS simples (`@keyframes`, so `transform`/`opacity`,
+sem JS/canvas/biblioteca) — pedido depois que as conferentes comecaram a competir
+de verdade pelo placar unificado A4 x B2 da v3.3.2.
+
+**Correção de ambiente**: `vite.config.ts` ganhou `server.watch.ignored:
+['**/src-tauri/**']` — sem isso o watcher do Vite tentava vigiar as dezenas de
+milhares de arquivos de build do Rust em `src-tauri/target` e estourava o limite
+de inotify do Linux (`ENOSPC`), derrubando o `tauri dev` inteiro antes do cargo
+terminar de compilar.
+
+**Testes de frontend menos flaky**: `Montagem.test.tsx`/`Lancamentos.test.tsx`/
+`Sac.test.tsx`/`Usuarios.test.tsx` trocaram `waitFor(() =>
+expect(api.X).toHaveBeenCalled())` (so garante que a chamada *comecou*, nao que a
+tela terminou de carregar) por `waitFor(() =>
+expect(screen.queryByText('Carregando...')).not.toBeInTheDocument())` — a causa
+raiz de duas falhas reais de CI (`6f736fe`, `563f85a`) que nao tinham nada a ver
+com os commits que "quebraram" o pipeline.
+
+**Backlog sugerido** (nao implementado ainda, ver conversa que originou esta
+versao):
+
+- Investigar o motivo real por tras de 3 estornos com motivo "SISTEMA
+  TRAVOU"/"ERRO DE SISTEMA" no mesmo lote, num dos PDFs analisados — puxar o log
+  do `tauri_plugin_log` da B2 pra esse dia.
+- Campo dedicado pra "quem retira" numa transferencia entre armazens
+  (`saida_armazem`/`peca_montagem`/`sac` com `armazem_destino_id` setado) — hoje
+  a conferente digita o nome dentro da descricao do item ("- RUAN", "- GUSTAVO"),
+  repetido item a item, porque a tela esconde Coleta nesse caso assumindo que
+  transferencia nao tem "coleta" (na pratica, tem: e quem vai retirar no destino).
+- Cobrinha: recorde pessoal separado do top-5 geral (hoje quem nao entra no top 5
+  nao recebe nenhum feedback de progresso), e/ou um placar mensal pra manter o
+  jogo renovado em vez de um top-5 histórico que fica dificil de bater com o
+  tempo.
+
+**Verificado**: `tsc --noEmit`/`vite build`/`vitest run` (18 testes) limpos,
+`cargo fmt --check`/`clippy -D warnings`/`cargo test` (163 testes) limpos.
+
+Bump de `3.3.2` pra `3.3.3` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um
