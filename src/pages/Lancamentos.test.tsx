@@ -32,6 +32,8 @@ beforeEach(() => {
   vi.mocked(api.listarMovimentosDoDia).mockResolvedValue([]);
   vi.mocked(api.buscarFechamentoDoDia).mockResolvedValue(null);
   vi.mocked(api.sugestoesDescricao).mockResolvedValue([]);
+  vi.mocked(api.sugestoesContraparte).mockResolvedValue([]);
+  vi.mocked(api.sugestoesRazaoSocial).mockResolvedValue([]);
   vi.mocked(api.criarMovimento).mockResolvedValue({ ok: true });
   vi.mocked(api.verificarRetiradaPendente).mockResolvedValue(null);
   vi.mocked(api.buscarTransferenciasPendentes).mockResolvedValue([]);
@@ -41,7 +43,7 @@ beforeEach(() => {
 describe('Lancamentos - montagem e coleta do item', () => {
   it('nao oferece mais um placeholder em branco pra montagem, e comeca em "Em caixa"', async () => {
     renderLancamentos();
-    await waitFor(() => expect(api.listarMovimentosDoDia).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Carregando...')).not.toBeInTheDocument());
 
     // getAllByRole('combobox') tambem pega o input de descricao (tem `list=`
     // apontando pra um datalist, o que da role combobox mesmo sem ser um
@@ -65,7 +67,7 @@ describe('Lancamentos - montagem e coleta do item', () => {
   it('exige coleta pra registrar uma saida, e envia o pedido sem quem_retirou', async () => {
     const user = userEvent.setup();
     renderLancamentos();
-    await waitFor(() => expect(api.listarMovimentosDoDia).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Carregando...')).not.toBeInTheDocument());
 
     await user.type(screen.getByPlaceholderText('Ex: 3932'), '4001');
 

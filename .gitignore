@@ -6,3 +6,5 @@ dist/
 *.db-shm
 .DS_Store
 painel/local/
+# PDFs reais exportados pelas conferentes (dados de clientes/vendas) - nunca versionar.
+exemplos-em-prod/

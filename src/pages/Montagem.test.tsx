@@ -46,7 +46,7 @@ function selectDeMontagem() {
 describe('Montagem - montagem so pra veiculo inteiro', () => {
   it('peca solta (categoria padrao) nao mostra campo de montagem', async () => {
     renderMontagem();
-    await waitFor(() => expect(api.listarMovimentosDoDia).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Carregando...')).not.toBeInTheDocument());
 
     expect(selectDeMontagem()).toBeUndefined();
   });
@@ -54,7 +54,7 @@ describe('Montagem - montagem so pra veiculo inteiro', () => {
   it('categoria de veiculo mostra montagem sem placeholder, comecando em "Em caixa"', async () => {
     const user = userEvent.setup();
     renderMontagem();
-    await waitFor(() => expect(api.listarMovimentosDoDia).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Carregando...')).not.toBeInTheDocument());
 
     const selectCategoria = screen.getAllByRole('combobox')[0];
     await user.selectOptions(selectCategoria, 'scooter');
@@ -72,7 +72,7 @@ describe('Montagem - montagem so pra veiculo inteiro', () => {
   it('envia montagem null pra peca solta e um valor real pra veiculo', async () => {
     const user = userEvent.setup();
     renderMontagem();
-    await waitFor(() => expect(api.listarMovimentosDoDia).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Carregando...')).not.toBeInTheDocument());
 
     // Fluxo padrao (tipo=saida, destino=armazem) ja e uma transferencia pro
     // outro armazem - descricao e opcional, montagem continua obrigatoria do

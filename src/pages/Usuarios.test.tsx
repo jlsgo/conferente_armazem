@@ -18,7 +18,7 @@ describe('Usuarios - verificar integridade', () => {
     const user = userEvent.setup();
     vi.mocked(api.verificarIntegridade).mockResolvedValue({ ok: true, quebra: null });
     render(<Usuarios armazens={[armazemA4]} />);
-    await waitFor(() => expect(api.listarUsuarios).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Carregando...')).not.toBeInTheDocument());
 
     await user.click(screen.getByRole('button', { name: /verificar integridade/i }));
 
@@ -34,7 +34,7 @@ describe('Usuarios - verificar integridade', () => {
       quebra: { movimento_id: 42, numero_pedido: '3893' },
     });
     render(<Usuarios armazens={[armazemA4]} />);
-    await waitFor(() => expect(api.listarUsuarios).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Carregando...')).not.toBeInTheDocument());
 
     await user.click(screen.getByRole('button', { name: /verificar integridade/i }));
 
@@ -51,7 +51,7 @@ describe('Usuarios - verificar integridade', () => {
       error: 'Somente um gestor pode verificar a integridade da cadeia de auditoria.',
     });
     render(<Usuarios armazens={[armazemA4]} />);
-    await waitFor(() => expect(api.listarUsuarios).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Carregando...')).not.toBeInTheDocument());
 
     await user.click(screen.getByRole('button', { name: /verificar integridade/i }));
 

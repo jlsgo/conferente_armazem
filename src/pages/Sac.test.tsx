@@ -32,6 +32,8 @@ beforeEach(() => {
   vi.mocked(api.listarMovimentosDoDia).mockResolvedValue([]);
   vi.mocked(api.buscarFechamentoDoDia).mockResolvedValue(null);
   vi.mocked(api.sugestoesDescricao).mockResolvedValue([]);
+  vi.mocked(api.sugestoesContraparte).mockResolvedValue([]);
+  vi.mocked(api.sugestoesRazaoSocial).mockResolvedValue([]);
   vi.mocked(api.criarMovimento).mockResolvedValue({ ok: true });
   // Sub-componentes independentes do formulario (aviso de transferencia
   // chegando/recusada) - sem isso eles tentam chamar a API real e poluem a
@@ -43,7 +45,7 @@ beforeEach(() => {
 describe('Sac - motivo de saida', () => {
   it('nao oferece mais "Entregue ao cliente" como opcao de motivo', async () => {
     renderSac();
-    await waitFor(() => expect(api.listarMovimentosDoDia).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Carregando...')).not.toBeInTheDocument());
 
     const select = screen.getByRole('combobox', { name: /motivo da saida/i });
     const opcoes = within(select)
@@ -58,7 +60,7 @@ describe('Sac - motivo de saida', () => {
   it('nao exige valor quando o motivo da saida e descarte', async () => {
     const user = userEvent.setup();
     renderSac();
-    await waitFor(() => expect(api.listarMovimentosDoDia).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Carregando...')).not.toBeInTheDocument());
 
     await user.type(screen.getByPlaceholderText('Numero do protocolo'), '123');
     await user.selectOptions(
@@ -82,7 +84,7 @@ describe('Sac - motivo de saida', () => {
   it('exige valor quando o motivo da saida e garantia', async () => {
     const user = userEvent.setup();
     renderSac();
-    await waitFor(() => expect(api.listarMovimentosDoDia).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Carregando...')).not.toBeInTheDocument());
 
     await user.type(screen.getByPlaceholderText('Numero do protocolo'), '124');
     await user.selectOptions(
