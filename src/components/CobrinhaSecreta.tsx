@@ -27,6 +27,25 @@ const PONTUACAO_MINIMA_PARA_RECORDE = 13;
 const MAX_RECORDES = 5;
 const CHAVE_RECORDES = 'ecoviva-cobrinha-recordes';
 
+// "Motivacao" ironica pra quem nao bateu recorde - so pra rir, sorteada a
+// cada game over (ver `mensagemFim`). Se um dia isso incomodar alguem, e so
+// apagar este array e o texto que o usa.
+const MENSAGENS_SEM_RECORDE = [
+  'Bateu na parede. A vida e assim mesmo.',
+  'Reflita sobre suas escolhas enquanto a cobra reinicia.',
+  'Culpa do teclado, com certeza.',
+  'Grande jogada. Digna de um quadro la no fundo do galpao.',
+  'Voce e oficialmente melhor que a cobrinha de ontem. Parabens, eu acho.',
+  'Isso foi... uma pontuacao. Tecnicamente.',
+  'A parede nao teve culpa dessa vez. Ou teve?',
+  'Impressionante como sempre da pra piorar amanha.',
+  'A cobrinha confiou em voce. Ela vai superar.',
+];
+
+function mensagemSemRecorde(): string {
+  return MENSAGENS_SEM_RECORDE[Math.floor(Math.random() * MENSAGENS_SEM_RECORDE.length)];
+}
+
 function posicaoAleatoria(): Ponto {
   return {
     x: Math.floor(Math.random() * TAMANHO_GRADE),
@@ -76,6 +95,7 @@ export default function CobrinhaSecreta({ onFechar, armazemCodigo }: Props) {
   const [recordesUnificados, setRecordesUnificados] = useState<RecordeCobrinha[] | null>(null);
   const [nomeInput, setNomeInput] = useState('');
   const [nomeSalvo, setNomeSalvo] = useState(false);
+  const [mensagemFim, setMensagemFim] = useState('');
   const [recordeQuebradoDe, setRecordeQuebradoDe] = useState<string | null>(null);
   const [comemorarRecorde, setComemorarRecorde] = useState(false);
   const direcaoRef = useRef<Ponto>({ x: 1, y: 0 });
@@ -137,6 +157,7 @@ export default function CobrinhaSecreta({ onFechar, armazemCodigo }: Props) {
         const bateuNoProprioCorpo = atual.some((p) => p.x === novaCabeca.x && p.y === novaCabeca.y);
         if (bateuParede || bateuNoProprioCorpo) {
           setGameOver(true);
+          setMensagemFim(mensagemSemRecorde());
           return atual;
         }
 
@@ -191,6 +212,7 @@ export default function CobrinhaSecreta({ onFechar, armazemCodigo }: Props) {
     setGameOver(false);
     setNomeInput('');
     setNomeSalvo(false);
+    setMensagemFim('');
     setRecordeQuebradoDe(null);
     setComemorarRecorde(false);
   }
@@ -249,6 +271,7 @@ export default function CobrinhaSecreta({ onFechar, armazemCodigo }: Props) {
                 <p>Bateu! Pontos: {pontos}</p>
                 {comemorarRecorde && <p>Novo recorde geral! Parabens! 🎉</p>}
                 {recordeQuebradoDe && <p>Voce tirou {recordeQuebradoDe} do topo!</p>}
+                {!comemorarRecorde && mensagemFim && <p className="subtitulo">{mensagemFim}</p>}
                 <button type="button" onClick={reiniciar}>
                   Jogar de novo
                 </button>
