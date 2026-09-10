@@ -100,6 +100,13 @@ export default function CobrinhaSecreta({ onFechar, armazemCodigo }: Props) {
   const [comemorarRecorde, setComemorarRecorde] = useState(false);
   const direcaoRef = useRef<Ponto>({ x: 1, y: 0 });
   const proximaDirecaoRef = useRef<Ponto>({ x: 1, y: 0 });
+  // Melhor pontuacao desta sessao (aba aberta) - `null` = ainda nao jogou
+  // nenhuma vez, pra nao mostrar "seu melhor da sessao" logo na primeira
+  // partida (nao ha sessao anterior pra bater). Deliberadamente sem
+  // persistencia/identidade (as iniciais de 4 letras nao identificam a
+  // pessoa de forma confiavel entre partidas/maquinas) - só um placar
+  // informal enquanto o jogo fica aberto.
+  const melhorSessaoRef = useRef<number | null>(null);
 
   const pontos = cobra.length - 1;
   const elegivelParaRecorde = gameOver && !nomeSalvo && pontos > PONTUACAO_MINIMA_PARA_RECORDE;
@@ -156,8 +163,12 @@ export default function CobrinhaSecreta({ onFechar, armazemCodigo }: Props) {
           novaCabeca.x < 0 || novaCabeca.x >= TAMANHO_GRADE || novaCabeca.y < 0 || novaCabeca.y >= TAMANHO_GRADE;
         const bateuNoProprioCorpo = atual.some((p) => p.x === novaCabeca.x && p.y === novaCabeca.y);
         if (bateuParede || bateuNoProprioCorpo) {
+          const pontosFinal = atual.length - 1;
+          const ehRecordeDaSessao =
+            melhorSessaoRef.current !== null && pontosFinal > melhorSessaoRef.current;
+          melhorSessaoRef.current = Math.max(melhorSessaoRef.current ?? 0, pontosFinal);
           setGameOver(true);
-          setMensagemFim(mensagemSemRecorde());
+          setMensagemFim(ehRecordeDaSessao ? 'Seu melhor desta sessao! 🔥' : mensagemSemRecorde());
           return atual;
         }
 
