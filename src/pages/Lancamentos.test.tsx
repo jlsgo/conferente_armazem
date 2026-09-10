@@ -87,4 +87,23 @@ describe('Lancamentos - montagem e coleta do item', () => {
     expect(payload.quem_retirou).toBeUndefined();
     expect(payload.itens[0]).toMatchObject({ descricao: 'HE-15 CARBON', montagem: 'caixa' });
   });
+
+  it('numa transferencia pro outro armazem, o campo de coleta vira "quem retira" e continua enviando contraparte', async () => {
+    const user = userEvent.setup();
+    renderLancamentos();
+    await waitFor(() => expect(screen.queryByText('Carregando...')).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Transferir para B2' }));
+
+    const campoQuemRetira = screen.getByLabelText(/Quem retira\/entrega no destino/i);
+    expect(campoQuemRetira).not.toBeRequired();
+    await user.type(campoQuemRetira, 'RUAN');
+
+    await user.click(screen.getByRole('button', { name: /^Registrar saida$/ }));
+
+    await waitFor(() => expect(api.criarMovimento).toHaveBeenCalledTimes(1));
+    const payload = vi.mocked(api.criarMovimento).mock.calls[0][0];
+    expect(payload.armazem_destino_id).toBe(armazemB2.id);
+    expect(payload.contraparte).toBe('RUAN');
+  });
 });

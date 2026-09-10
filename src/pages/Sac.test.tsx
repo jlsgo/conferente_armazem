@@ -114,4 +114,29 @@ describe('Sac - motivo de saida', () => {
     expect(payload.motivo).toBe('garantia');
     expect(payload.valor_centavos).toBe(15000);
   });
+
+  it('numa transferencia pro outro armazem, o campo de coleta vira "quem retira" e continua enviando contraparte', async () => {
+    const user = userEvent.setup();
+    renderSac();
+    await waitFor(() => expect(screen.queryByText('Carregando...')).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Transferir para B2' }));
+
+    await user.type(screen.getByPlaceholderText('Numero do protocolo'), '125');
+
+    const campoQuemRetira = screen.getByLabelText(/Quem retira\/entrega no destino/i);
+    await user.type(campoQuemRetira, 'RUAN');
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /motivo da saida/i }), 'descarte');
+    await user.type(
+      screen.getByPlaceholderText('Descricao da peça (ex: Retrovisor)'),
+      'Capacete'
+    );
+    await user.click(screen.getByRole('button', { name: /registrar/i }));
+
+    await waitFor(() => expect(api.criarMovimento).toHaveBeenCalledTimes(1));
+    const payload = vi.mocked(api.criarMovimento).mock.calls[0][0];
+    expect(payload.armazem_destino_id).toBe(armazemB2.id);
+    expect(payload.contraparte).toBe('RUAN');
+  });
 });

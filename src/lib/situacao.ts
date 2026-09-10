@@ -56,10 +56,35 @@ export function colunaColeta(
   armazens: Pick<Armazem, 'id' | 'codigo'>[]
 ): string {
   if (m.armazem_destino_id != null) {
-    return `Enviado para ${armazens.find((a) => a.id === m.armazem_destino_id)?.codigo ?? '?'}`;
+    const destino = `Enviado para ${armazens.find((a) => a.id === m.armazem_destino_id)?.codigo ?? '?'}`;
+    return m.contraparte ? `${destino} (${m.contraparte})` : destino;
   }
   if (m.recebido_de_armazem_codigo) return `Recebido de ${m.recebido_de_armazem_codigo}`;
   return m.contraparte || '-';
+}
+
+/**
+ * Equivalente a `colunaColeta`, mas pra Montagem: a coluna "Direcao" la
+ * mostra Saida/Entrada B2 + de onde/pra onde (outro armazem, ou destino
+ * externo tipo tecnico) + quem retira/entrega, quando preenchido. Extraida
+ * pra aqui porque existia uma copia em `Montagem.tsx` (rica, com essa info) e
+ * outra em `Historico.tsx` (so "Saida B2"/"Entrada B2" fixo, sem a direcao
+ * de transferencia) - a segunda perdia a informacao de quem preencheu esse
+ * campo. Uma unica versao evita essa divergencia acontecer de novo.
+ */
+export function direcaoMontagemTexto(
+  m: Pick<Movimento, 'tipo' | 'armazem_destino_id' | 'recebido_de_armazem_codigo' | 'contraparte'>,
+  armazens: Pick<Armazem, 'id' | 'codigo'>[]
+): string {
+  if (m.tipo === 'entrada') {
+    return m.recebido_de_armazem_codigo ? `Recebido de ${m.recebido_de_armazem_codigo}` : 'Entrada';
+  }
+  if (m.armazem_destino_id != null) {
+    const destino = `Enviado para ${armazens.find((a) => a.id === m.armazem_destino_id)?.codigo ?? '?'}`;
+    return m.contraparte ? `${destino} (${m.contraparte})` : destino;
+  }
+  if (m.contraparte) return `Enviado para ${m.contraparte}`;
+  return 'Saida';
 }
 
 /**

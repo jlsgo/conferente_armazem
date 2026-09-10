@@ -1044,7 +1044,10 @@
   // pra confirmacao de transferencia, senao a contraparte (transportadora/
   // cliente/tecnico) ou "-".
   function colunaColeta(m) {
-    if (m.armazem_destino_codigo) return t("coletaEnviadoPara") + " " + m.armazem_destino_codigo;
+    if (m.armazem_destino_codigo) {
+      var destino = t("coletaEnviadoPara") + " " + m.armazem_destino_codigo;
+      return m.contraparte ? destino + " (" + escaparHtml(m.contraparte) + ")" : destino;
+    }
     if (m.recebido_de_armazem_codigo) return t("coletaRecebidoDe") + " " + m.recebido_de_armazem_codigo;
     return m.contraparte ? escaparHtml(m.contraparte) : "-";
   }

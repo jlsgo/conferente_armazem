@@ -237,7 +237,7 @@ export default function Lancamentos({
       turno: 'diurno',
       numero_pedido: numeroPedido || null,
       codigo_rastreio: null,
-      contraparte: paraOutroArmazem ? null : contraparte || null,
+      contraparte: contraparte || null,
       razao_social: paraOutroArmazem ? null : razaoSocial || null,
       observacoes: observacoes || null,
       retirada_completa: paraOutroArmazem ? true : tipo === 'saida' ? !retiradaParcial : true,
@@ -450,22 +450,24 @@ export default function Lancamentos({
               <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} required />
             </label>
 
-            {!paraOutroArmazemNoForm && (
-              <label>
-                {tipo === 'saida' ? 'Coleta (transportadora / cliente)' : 'Fornecedor / origem'}
-                <input
-                  value={contraparte}
-                  onChange={(e) => setContraparte(e.target.value)}
-                  required={tipo === 'saida'}
-                  list="sugestoes-coleta"
-                />
-                <datalist id="sugestoes-coleta">
-                  {sugestoesColeta.map((s) => (
-                    <option key={s} value={s} />
-                  ))}
-                </datalist>
-              </label>
-            )}
+            <label>
+              {paraOutroArmazemNoForm
+                ? 'Quem retira/entrega no destino (opcional)'
+                : tipo === 'saida'
+                  ? 'Coleta (transportadora / cliente)'
+                  : 'Fornecedor / origem'}
+              <input
+                value={contraparte}
+                onChange={(e) => setContraparte(e.target.value)}
+                required={tipo === 'saida' && !paraOutroArmazemNoForm}
+                list="sugestoes-coleta"
+              />
+              <datalist id="sugestoes-coleta">
+                {sugestoesColeta.map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
+            </label>
 
             {!paraOutroArmazemNoForm && (
               <label>

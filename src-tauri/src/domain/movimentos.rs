@@ -1994,6 +1994,30 @@ mod tests {
         assert!(criar_movimento(&mut conn, novo).is_ok());
     }
 
+    // Ate a v3.3.x, o frontend sempre forcava `contraparte = None` numa
+    // transferencia (premissa de que "transferencia nao tem coleta" - falsa
+    // na pratica, ver v4.0.0: conferentes digitavam "quem retira/entrega no
+    // destino" manualmente dentro da descricao do item porque o campo estava
+    // escondido). O backend sempre aceitou um valor aqui (contraparte e
+    // sempre opcional) - este teste trava que continua aceitando, e que o
+    // valor sobrevive intacto na cadeia de hash (contraparte ja fazia parte
+    // de `CamposHash` desde sempre, entao isto nao e uma mudanca de formato).
+    #[test]
+    fn aceita_transferencia_saida_armazem_com_contraparte_e_mantem_cadeia_intacta() {
+        let (mut conn, armazem_id, usuario_id) = conexao_de_teste();
+        let armazem_a4: i64 = conn
+            .query_row("SELECT id FROM armazens WHERE codigo = 'A4'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        let mut novo = movimento_base(armazem_id, usuario_id, item_simples());
+        novo.armazem_destino_id = Some(armazem_a4);
+        novo.contraparte = Some("RUAN".into());
+        let criado = criar_movimento(&mut conn, novo).unwrap();
+        assert_eq!(criado.contraparte, Some("RUAN".into()));
+        assert!(verificar_cadeia(&conn).unwrap().is_none());
+    }
+
     #[test]
     fn rejeita_categoria_outro_sem_observacao() {
         let (mut conn, armazem_id, usuario_id) = conexao_de_teste();

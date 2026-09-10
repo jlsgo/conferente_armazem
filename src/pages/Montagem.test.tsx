@@ -90,4 +90,24 @@ describe('Montagem - montagem so pra veiculo inteiro', () => {
     const payload = vi.mocked(api.criarMovimento).mock.calls[0][0];
     expect(payload.itens[0]).toMatchObject({ categoria: 'peca', montagem: null });
   });
+
+  it('no destino "outro armazem" (padrao), o campo "quem retira" e opcional e vira contraparte', async () => {
+    const user = userEvent.setup();
+    renderMontagem();
+    await waitFor(() => expect(screen.queryByText('Carregando...')).not.toBeInTheDocument());
+
+    const campoQuemRetira = screen.getByLabelText(/Quem retira\/entrega no destino/i);
+    expect(campoQuemRetira).not.toBeRequired();
+    await user.type(campoQuemRetira, 'GUSTAVO');
+
+    const selectCondicao = screen.getAllByRole('combobox')[2];
+    await user.selectOptions(selectCondicao, 'boa');
+
+    await user.click(screen.getByRole('button', { name: /^Registrar saida$/ }));
+
+    await waitFor(() => expect(api.criarMovimento).toHaveBeenCalledTimes(1));
+    const payload = vi.mocked(api.criarMovimento).mock.calls[0][0];
+    expect(payload.armazem_destino_id).toBe(armazemA4.id);
+    expect(payload.contraparte).toBe('GUSTAVO');
+  });
 });

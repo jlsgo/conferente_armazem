@@ -23,7 +23,7 @@ import Carregando from '../components/Carregando';
 import TransferenciasChegando from '../components/TransferenciasChegando';
 import TransferenciasRecusadas from '../components/TransferenciasRecusadas';
 import ResumoDoDia from '../components/ResumoDoDia';
-import { itensResumoTexto, situacaoInfo } from '../lib/situacao';
+import { direcaoMontagemTexto, itensResumoTexto, situacaoInfo } from '../lib/situacao';
 import { formatarData } from '../lib/data';
 import { algumCampoEhOutro } from '../lib/outro';
 import { itensPreenchidos } from '../lib/formularioSujo';
@@ -230,7 +230,7 @@ export default function Montagem({
       data,
       hora,
       turno: 'diurno',
-      contraparte: paraDestinoExterno ? enviadoPara.trim() : null,
+      contraparte: paraOutroArmazem || paraDestinoExterno ? enviadoPara.trim() || null : null,
       itens: itensValidos,
     });
     setEnviando(false);
@@ -281,20 +281,6 @@ export default function Montagem({
     }
 
     await carregarTudo();
-  }
-
-  function nomeArmazemPorId(id: number | null): string {
-    if (id == null) return '-';
-    return armazens.find((a) => a.id === id)?.codigo ?? '-';
-  }
-
-  function direcaoTexto(m: Movimento): string {
-    if (m.tipo === 'entrada') {
-      return m.recebido_de_armazem_codigo ? `Recebido de ${m.recebido_de_armazem_codigo}` : 'Entrada';
-    }
-    if (m.armazem_destino_id) return `Enviado para ${nomeArmazemPorId(m.armazem_destino_id)}`;
-    if (m.contraparte) return `Enviado para ${m.contraparte}`;
-    return 'Saida';
   }
 
   const idsJaEstornados = new Set(
@@ -440,6 +426,16 @@ export default function Montagem({
                 />
               </label>
             )}
+            {tipo === 'saida' && destino === 'armazem' && (
+              <label>
+                Quem retira/entrega no destino (opcional)
+                <input
+                  value={enviadoPara}
+                  onChange={(e) => setEnviadoPara(e.target.value)}
+                  placeholder="Ex: Ruan"
+                />
+              </label>
+            )}
           </div>
           {tipo === 'saida' && destino === 'externo' && (
             <p className="subtitulo">
@@ -572,7 +568,7 @@ export default function Montagem({
               <tr key={m.id}>
                 <td>{m.numero}</td>
                 <td>{m.hora}</td>
-                <td>{direcaoTexto(m)}</td>
+                <td>{direcaoMontagemTexto(m, armazens)}</td>
                 <td>{itensResumoTexto(m, lancamentos)}</td>
                 <td>{m.itens.reduce((s, it) => s + it.quantidade, 0)}</td>
                 <td>{m.itens.map((it) => it.condicao).filter(Boolean).join(', ') || '-'}</td>

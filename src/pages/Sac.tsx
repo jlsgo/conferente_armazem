@@ -215,7 +215,7 @@ export default function Sac({
       hora,
       turno: 'diurno',
       numero_pedido: protocolo || null,
-      contraparte: paraOutroArmazem ? null : coleta || null,
+      contraparte: coleta || null,
       razao_social: paraOutroArmazem ? null : razaoSocial || null,
       motivo,
       valor_centavos: valorCentavos,
@@ -429,17 +429,15 @@ export default function Sac({
               <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} required />
             </label>
 
-            {!paraOutroArmazem && (
-              <label>
-                Coleta (Correios / cliente)
-                <input value={coleta} onChange={(e) => setColeta(e.target.value)} list="sugestoes-coleta-sac" />
-                <datalist id="sugestoes-coleta-sac">
-                  {sugestoesColeta.map((s) => (
-                    <option key={s} value={s} />
-                  ))}
-                </datalist>
-              </label>
-            )}
+            <label>
+              {paraOutroArmazem ? 'Quem retira/entrega no destino (opcional)' : 'Coleta (Correios / cliente)'}
+              <input value={coleta} onChange={(e) => setColeta(e.target.value)} list="sugestoes-coleta-sac" />
+              <datalist id="sugestoes-coleta-sac">
+                {sugestoesColeta.map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
+            </label>
 
             {!paraOutroArmazem && (
               <label>

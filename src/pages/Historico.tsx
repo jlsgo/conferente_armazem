@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import type { Armazem, Fluxo, Movimento, Usuario } from '../types';
 import { buscarFechamentoDoDia, buscarHistorico, estornarMovimento } from '../lib/api';
-import { colunaColeta, itensResumoTexto, motivoSacTexto, situacaoInfo } from '../lib/situacao';
+import { colunaColeta, direcaoMontagemTexto, itensResumoTexto, motivoSacTexto, situacaoInfo } from '../lib/situacao';
 import { baixarCsv, paraCsv } from '../lib/csv';
 import { baixarXlsx } from '../lib/xlsx';
 import { agoraLocalTexto, formatarData, formatarDataArquivo, formatarDataHora } from '../lib/data';
@@ -46,10 +46,6 @@ function pedidoTexto(m: Movimento): string {
 
 function qtdTotal(m: Movimento): number {
   return m.itens.reduce((s, it) => s + it.quantidade, 0);
-}
-
-function direcaoTexto(m: Movimento): string {
-  return m.tipo === 'saida' ? 'Saida B2' : 'Entrada B2';
 }
 
 export default function Historico({ usuario, armazem, armazens }: Props) {
@@ -191,7 +187,7 @@ export default function Historico({ usuario, armazem, armazens }: Props) {
         linhas = resultados.map((m) => [
           formatarData(m.data),
           m.hora,
-          direcaoTexto(m),
+          direcaoMontagemTexto(m, armazens),
           itensResumoTexto(m, resultados),
           String(qtdTotal(m)),
           m.usuario_nome,
@@ -456,7 +452,7 @@ export default function Historico({ usuario, armazem, armazens }: Props) {
                           <td>{m.razao_social || '-'}</td>
                         </>
                       )}
-                      {fluxo === 'peca_montagem' && <td>{direcaoTexto(m)}</td>}
+                      {fluxo === 'peca_montagem' && <td>{direcaoMontagemTexto(m, armazens)}</td>}
                       {fluxo === 'sac' && (
                         <>
                           <td>{m.numero_pedido || '-'}</td>
