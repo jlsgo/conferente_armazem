@@ -1617,6 +1617,23 @@ versao):
 
 Bump de `3.3.2` pra `3.3.3` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
 
+## Versao 3.3.4 — mensagens sarcasticas na cobrinha (Feito)
+
+Pedido logo apos a v3.3.3 (que ja tinha adicionado a comemoracao de recorde):
+um pouco de humor/ironia tambem quando a pessoa NAO bate o recorde, pra
+manter o clima de brincadeira do easter egg.
+
+`MENSAGENS_SEM_RECORDE` (`CobrinhaSecreta.tsx`) — 9 frases curtas e
+sarcasticas, sorteada uma a cada game over (`mensagemSemRecorde()`, chamada
+junto com `setGameOver(true)` no loop do jogo, pra nao mudar de frase a
+cada re-render). Mostrada so quando `!comemorarRecorde` — quem bate o
+recorde ve a comemoracao de verdade (v3.3.3), nao a zoeira.
+
+**Verificado**: `tsc --noEmit`/`vite build`/`vitest run` (18 testes) limpos,
+`cargo fmt --check`/`clippy -D warnings`/`cargo test` (163 testes) limpos.
+
+Bump de `3.3.3` pra `3.3.4` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um
