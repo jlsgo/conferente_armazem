@@ -1701,6 +1701,88 @@ no painel escapada, React cobre o resto).
 
 Bump de `3.3.4` pra `4.0.0` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
 
+## Painel: abas por fluxo + Sprints A/B/C (reparos abertos, export, comparacao, drill-down)
+
+Pedido do usuario: melhorar a apresentacao do painel (abas de cada fluxo mais
+separadas, filtro "Hoje" como padrao) e depois planejar e implementar as
+proximas sprints de melhoria em cima disso. `painel/index.html`-only, nenhuma
+mudanca em backend/schema/sync.
+
+**Abas por fluxo + "Hoje" padrao** (pedido original): o `<select id="filtro-
+fluxo">` foi substituido por uma barra de abas (Todos/Saida de Armazem/
+Montagem/SAC/Reparo Externo, cor por fluxo reaproveitando `CORES_FLUXO`) -
+cada aba esconde os stat tiles e colunas que nao fazem sentido pra ela (ex.:
+"Valor total vendas SAC" fora da aba SAC, coluna Razao Social fora de Saida/
+SAC) via `#conteudo[data-aba-atual]` no CSS. O periodo De/Ate passou a
+comecar em "Hoje" (antes ficava vazio - primeira consulta carregava o
+historico inteiro sem filtro), e o atalho de periodo correspondente ao
+filtro atual fica marcado (`.atalho.ativo`). Filtros finos (pedido/
+responsavel/tipo/situacao/busca) foram pra uma segunda linha, separados do
+recorte principal (periodo/armazem).
+
+**Sprint A** (fechar divida conhecida + habito de uso):
+
+- **Reparos externos em aberto** no painel - item que tinha ficado
+  explicitamente fora de escopo numa rodada anterior (ver secao "Painel:
+  `reparo_externo` estava totalmente ausente..."). Mirror de
+  `domain::movimentos::buscar_reparos_em_aberto` (app Rust): la e um `NOT
+  EXISTS` casando por `codigo_componente` direto no SQL (tabela
+  `movimento_itens` normalizada); aqui `itens_json` e um blob por movimento,
+  entao o casamento e feito em JS depois de buscar todo `fluxo =
+  'reparo_externo'` (volume baixo, `LIMIT 1000` sobra). Card novo "Reparos
+  externos em aberto", visivel so nas abas Todos/Reparo Externo (mesma
+  tecnica de esconder por `data-aba-atual`); o card "Transferencias
+  pendentes" passou a se esconder na aba Reparo Externo (fluxo nunca tem uma).
+- **Aba lembrada por navegador** (`localStorage`, chave
+  `ecoviva-painel-aba`, mesmo padrao de tema/idioma) - quem so acompanha uma
+  aba nao precisa reclicar nela a cada visita.
+- **Card de sincronizacao destaca de verdade quando atrasa**: antes so o
+  pontinho de 10px mudava de cor (`frescor()` ja tinha o limiar de 2h pra
+  "frio") - agora o card inteiro ganha `background`/`border` de erro nesse
+  caso, nao so o detalhe pequeno.
+
+**Sprint B** (exportacao e contexto de tendencia):
+
+- **Exportar CSV** do filtro/aba/busca atual (botao ao lado do titulo
+  "Movimentos recentes") - mesma convencao de `src/lib/csv.ts` (separador
+  `;`, BOM UTF-8, `\r\n`), respeitando as mesmas colunas que a aba atual
+  mostra na tela. Deliberadamente sem XLSX/SheetJS - o painel e um arquivo
+  unico sem build step nem dependencia externa, e uma lib de planilha so
+  pra isso quebraria essa premissa; CSV o Excel abre igual.
+- **Comparacao com o periodo anterior** nos 4 stat tiles de contagem pura
+  (Movimentos/Unidades/Entrada/Saida): `periodoAnterior` calcula o intervalo
+  de mesmo tamanho imediatamente anterior ao filtro De/Ate ativo (so quando
+  os dois extremos estao preenchidos - um filtro em aberto nao tem "periodo
+  anterior" bem definido), busca esse intervalo em paralelo
+  (`Promise.all`) e mostra um delta (`▲ 12%`/`▼ 8%`) sem cor semantica de
+  proposito - mais ou menos movimento nao e bom nem mau por si so, e so
+  contexto de tendencia.
+
+**Sprint C** (drill-down):
+
+- **Clique numa linha da tabela abre um modal de detalhe** com todos os
+  campos do movimento (reusando os mesmos helpers da tabela -
+  `colunaColeta`/`resumoItens`/`situacaoBadge`, pra nunca divergir do que a
+  tabela mostra) mais qualquer relacionado encontrado na hora do clique (nao
+  pre-carregado pra tabela inteira): original de um estorno (ou o estorno
+  deste, se houver), par de envio/confirmacao de uma transferencia entre
+  A4/B2, ou par de envio/retorno de um reparo externo (casado por
+  `codigo_componente`, mesma logica do item de reparos abertos acima). A
+  maioria dos movimentos nao tem nenhum relacionado (uma venda comum e um
+  registro isolado) - o modal so mostra o que existir, sem erro nem aviso.
+- Verificacao visual formalizada: `scripts/painel-local-gerar.sh` +
+  Puppeteer (`puppeteer-core` apontando pro `google-chrome` ja instalado na
+  maquina, sem baixar Chromium) contra o Turso real de producao, autenticando
+  por `sessionStorage` sem precisar da senha - confirmou os contadores por
+  aba, a comparacao de periodo, os reparos abertos reais (4 pendentes de
+  verdade, B2/SERGIO) e o modal de detalhe, em desktop e mobile.
+
+**Verificado**: sintaxe do script extraida e checada com `node --check`,
+balanco de tags `<div>`/`<nav>` confirmado, e a verificacao visual acima
+contra dados reais (nao um mock) - primeira vez que esse metodo (documentado
+em rodadas anteriores do painel) foi de fato reusado numa sessao, em vez de
+montar dado ficticio do zero outra vez.
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um

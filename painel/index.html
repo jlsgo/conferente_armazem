@@ -172,6 +172,19 @@
     box-shadow: var(--sombra-sm);
   }
   .cartao h3 { margin: 0 0 4px; font-size: 1rem; }
+  .cartao-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .cartao-cabecalho h3 { margin: 0; }
+  button.secundario {
+    background: var(--cartao);
+    color: var(--texto-suave);
+    border: 1px solid var(--borda);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.secundario:hover { background: var(--bg); color: var(--texto); border-color: var(--texto-suave); }
   .gate {
     max-width: 380px;
     margin: 90px auto;
@@ -320,8 +333,55 @@
   #conteudo:not([data-aba-atual="todos"]) .col-fluxo { display: none; }
   #conteudo[data-aba-atual="peca_montagem"] .col-razaosocial,
   #conteudo[data-aba-atual="reparo_externo"] .col-razaosocial { display: none; }
+  /* "Transferencias pendentes" nao existe pra Reparo Externo (fluxo nao
+     suporta armazem_destino); "Reparos em aberto" so existe pra Reparo
+     Externo - cada card so aparece onde faz sentido. */
+  #conteudo[data-aba-atual="reparo_externo"] #cartao-pendentes { display: none; }
+  #conteudo:not([data-aba-atual="todos"]):not([data-aba-atual="reparo_externo"]) #cartao-reparos-abertos { display: none; }
   th { position: sticky; top: 0; background: var(--cartao); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--texto-suave); }
   tbody tr:hover { background: var(--bg); }
+  tbody tr.linha-clicavel { cursor: pointer; }
+
+  /* Modal de detalhe (clique numa linha) - mostra o movimento completo mais
+     qualquer relacionado (original de um estorno, par de uma transferencia,
+     par de envio/retorno de reparo externo). Overlay simples, sem lib. */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 100;
+  }
+  .modal-caixa {
+    background: var(--cartao);
+    border-radius: var(--raio);
+    box-shadow: var(--sombra-md);
+    max-width: 640px;
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 20px 22px;
+    position: relative;
+  }
+  .modal-fechar {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    background: none;
+    border: none;
+    color: var(--texto-suave);
+    cursor: pointer;
+    padding: 4px;
+    line-height: 0;
+  }
+  .modal-fechar:hover { color: var(--texto); }
+  .modal-registro { border: 1px solid var(--borda); border-radius: 8px; padding: 12px 14px; margin-top: 12px; }
+  .modal-registro h4 { margin: 0 0 8px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--texto-suave); }
+  .modal-campo { display: flex; gap: 8px; font-size: 0.85rem; padding: 3px 0; }
+  .modal-campo .rotulo-campo { color: var(--texto-suave); min-width: 130px; flex-shrink: 0; }
   .tabela-scroll { overflow-x: auto; max-height: 65vh; overflow-y: auto; border-radius: 8px; border: 1px solid var(--borda); }
   .tabela-scroll table { border: none; }
   .tabela-scroll tr:last-child td { border-bottom: none; }
@@ -371,6 +431,11 @@
   .status-armazem .ponto.fresco { background: var(--verde); }
   .status-armazem .ponto.morno { background: var(--aviso); }
   .status-armazem .ponto.frio { background: var(--erro); }
+  /* Antes so o pontinho de 10px mudava de cor com o atraso - facil de nao
+     notar. Acima de 2h sem sincronizar (ver `frescor`), o card inteiro
+     ganha destaque de erro, do mesmo jeito que qualquer outro alerta ja
+     usa (`--erro-claro`/`--erro` do resto da pagina). */
+  .status-armazem.frio { background: var(--erro-claro); border-color: var(--erro); }
   .status-armazem strong { margin-right: 4px; }
   .grade-stats { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
   .stat-tile { background: var(--bg); border: 1px solid var(--borda); border-radius: 8px; padding: 12px 16px; min-width: 140px; flex: 1; }
@@ -378,6 +443,11 @@
   .stat-tile .valor.aviso { color: var(--aviso); }
   .stat-tile .valor.erro { color: var(--erro); }
   .stat-tile .rotulo { font-size: 0.75rem; color: var(--texto-suave); margin-top: 2px; }
+  /* Comparacao com o periodo anterior (ver `deltaTexto`) - fonte pequena e
+     cor neutra de proposito, herdaria o 1.5rem verde/vermelho de `.valor`
+     sem essas duas regras. Nao e semaforo (mais/menos movimento nao e bom
+     nem mau por si so). */
+  .tile-delta { font-size: 0.68rem; font-weight: 700; color: var(--texto-suave); vertical-align: middle; margin-left: 4px; }
   .grafico-bloco { margin-top: 18px; }
   .grafico-bloco h4 { margin: 0 0 10px; font-size: 0.85rem; color: var(--texto-suave); text-transform: uppercase; letter-spacing: 0.03em; }
   .barra-linha { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; margin-bottom: 6px; }
@@ -614,13 +684,24 @@
       </div>
     </div>
 
-    <div class="cartao">
+    <div class="cartao" id="cartao-pendentes">
       <h3 data-i18n="cartaoPendentesTitulo">Transferencias pendentes de confirmacao</h3>
       <div id="lista-pendentes" class="lista-pendentes"><p data-i18n="nenhuma">Nenhuma.</p></div>
     </div>
 
+    <!-- So faz sentido nas abas Todos/Reparo Externo - as outras 3 nunca
+         tem reparo externo, ver #conteudo[data-aba-atual] no <style>. -->
+    <div class="cartao" id="cartao-reparos-abertos">
+      <h3 data-i18n="cartaoReparosAbertosTitulo">Reparos externos em aberto</h3>
+      <p class="subtitulo-cartao" data-i18n="cartaoReparosAbertosSubtitulo">Pecas que sairam pro tecnico externo e ainda nao voltaram.</p>
+      <div id="lista-reparos-abertos" class="lista-pendentes"><p data-i18n="nenhuma">Nenhuma.</p></div>
+    </div>
+
     <div class="cartao">
-      <h3 data-i18n="cartaoMovimentosTitulo">Movimentos recentes</h3>
+      <div class="cartao-cabecalho">
+        <h3 data-i18n="cartaoMovimentosTitulo">Movimentos recentes</h3>
+        <button type="button" id="botao-exportar-csv" class="secundario" data-i18n="botaoExportarCsv">Exportar CSV</button>
+      </div>
       <div class="tabela-scroll">
         <table>
           <thead>
@@ -649,6 +730,15 @@
       que fica no app, nao reproduzido aqui).
     </p>
   </main>
+
+  <div id="modal-detalhe" class="modal-overlay escondido">
+    <div class="modal-caixa" role="dialog" aria-modal="true">
+      <button type="button" class="modal-fechar" id="modal-fechar" aria-label="Fechar">
+        <svg class="icone-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <div id="modal-detalhe-conteudo"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -772,6 +862,7 @@
       filtroBuscaLabel: "Busca",
       filtroBuscaPlaceholder: "Nome ou item",
       botaoAtualizar: "Atualizar agora",
+      botaoExportarCsv: "Exportar CSV",
       cartaoSyncTitulo: "Sincronizacao por armazem",
       cartaoSyncSubtitulo: "Quando cada armazem mandou dado pela ultima vez - se um ficar muito tempo sem sincronizar, o que aparece dele aqui pode estar desatualizado.",
       cartaoInsightsTitulo: "Resumo do periodo filtrado",
@@ -781,6 +872,8 @@
       graficoArmazemTitulo: "Por armazem",
       graficoFluxoTitulo: "Por fluxo",
       cartaoPendentesTitulo: "Transferencias pendentes de confirmacao",
+      cartaoReparosAbertosTitulo: "Reparos externos em aberto",
+      cartaoReparosAbertosSubtitulo: "Pecas que sairam pro tecnico externo e ainda nao voltaram.",
       nenhuma: "Nenhuma.",
       cartaoMovimentosTitulo: "Movimentos recentes",
       colArmazem: "Armazem",
@@ -821,7 +914,15 @@
       situacaoBaixaBadge: "BAIXA",
       situacaoEntradaBadge: "ENTRADA",
       situacaoRecusadoBadge: "RECUSADO",
-      divergenciaBadge: "divergencia"
+      divergenciaBadge: "divergencia",
+      modalTituloDetalhe: "Detalhes do movimento",
+      modalCampoObservacoes: "Observacoes",
+      modalRelacionadoOriginal: "Lancamento original (antes do estorno)",
+      modalRelacionadoEstorno: "Estorno deste lancamento",
+      modalRelacionadoEnvioOriginal: "Envio original (armazem de origem)",
+      modalRelacionadoRecebimento: "Confirmacao de recebimento",
+      modalRelacionadoEnvio: "Envio pro reparo externo",
+      modalRelacionadoRetorno: "Retorno do reparo externo"
     },
     zh: {
       gateTitulo: "Ecoviva 面板",
@@ -857,6 +958,7 @@
       filtroBuscaLabel: "搜索",
       filtroBuscaPlaceholder: "姓名或物品",
       botaoAtualizar: "立即刷新",
+      botaoExportarCsv: "导出CSV",
       cartaoSyncTitulo: "各仓库同步状态",
       cartaoSyncSubtitulo: "每个仓库最后一次发送数据的时间 - 如果某个仓库长时间未同步，这里显示的数据可能已过时。",
       cartaoInsightsTitulo: "所选时段汇总",
@@ -866,6 +968,8 @@
       graficoArmazemTitulo: "按仓库",
       graficoFluxoTitulo: "按流程",
       cartaoPendentesTitulo: "待确认的转运",
+      cartaoReparosAbertosTitulo: "在外维修中的物品",
+      cartaoReparosAbertosSubtitulo: "已送往外部技术人员、尚未返回的物品。",
       nenhuma: "无。",
       cartaoMovimentosTitulo: "最近的记录",
       colArmazem: "仓库",
@@ -906,7 +1010,15 @@
       situacaoBaixaBadge: "出库",
       situacaoEntradaBadge: "入库",
       situacaoRecusadoBadge: "拒收",
-      divergenciaBadge: "差异"
+      divergenciaBadge: "差异",
+      modalTituloDetalhe: "记录详情",
+      modalCampoObservacoes: "备注",
+      modalRelacionadoOriginal: "原始记录（冲销前）",
+      modalRelacionadoEstorno: "本记录的冲销",
+      modalRelacionadoEnvioOriginal: "原始发送（来源仓库）",
+      modalRelacionadoRecebimento: "收货确认",
+      modalRelacionadoEnvio: "发往外部维修",
+      modalRelacionadoRetorno: "外部维修返回"
     }
   };
 
@@ -943,6 +1055,7 @@
   var ultimosNomesResponsavelCache = [];
   var ultimaSincPorArmazemCache = {};
   var ultimosPendentesCache = [];
+  var ultimosReparosAbertosCache = [];
 
   function aplicarTraducoesEstaticas() {
     document.querySelectorAll("[data-i18n]").forEach(function (el) {
@@ -973,6 +1086,7 @@
       renderizarOpcoesResponsavel(ultimosNomesResponsavelCache);
       renderizarStatusArmazens(ultimaSincPorArmazemCache);
       renderizarPendentes(ultimosPendentesCache);
+      renderizarReparosAbertos(ultimosReparosAbertosCache);
       if (ultimosFiltrados && ultimosFiltrados.movimentos) reaplicarBusca();
     }
   }
@@ -1244,6 +1358,64 @@
     return mapa;
   }
 
+  // Busca um movimento exato pela chave (armazem_codigo, id_origem) - usado
+  // pelo modal de detalhe (clique numa linha) pra buscar um relacionado que
+  // pode nao estar no filtro/periodo atualmente carregado na tela.
+  async function buscarMovimentoExato(armazemCodigo, idOrigem) {
+    if (armazemCodigo == null || idOrigem == null) return null;
+    var sql = "SELECT " + COLUNAS_MOVIMENTO + " FROM movimentos_consolidados WHERE armazem_codigo = ?1 AND id_origem = ?2 LIMIT 1";
+    var linhas = await executarSql(sql, [armazemCodigo, idOrigem]);
+    return linhas.length ? linhaParaMovimento(linhas[0]) : null;
+  }
+
+  // Acha os registros "do outro lado" de `m`, um busca por vez (cada caso e
+  // raro/opcional, entao nao compensa uma query so genericona):
+  // - estorno <-> original (mesmo par que `detalheObservacao` ja usa)
+  // - envio <-> confirmacao de recebimento entre A4/B2
+  // - envio <-> retorno de reparo externo (casado por `codigo_componente`,
+  //   mesma logica de `buscarReparosEmAberto`)
+  // So dispara a consulta pro(s) caso(s) que fazem sentido pros campos de
+  // `m` - a maioria dos movimentos vai cair em zero relacionados (uma venda
+  // comum nao tem par nenhum), e isso e esperado, nao um erro.
+  async function buscarMovimentosRelacionados(m) {
+    var relacionados = [];
+
+    if (m.estornado_de != null) {
+      var original = await buscarMovimentoExato(m.armazem_codigo, m.estornado_de);
+      if (original) relacionados.push({ papel: "modalRelacionadoOriginal", movimento: original });
+    } else {
+      var sqlEstorno = "SELECT " + COLUNAS_MOVIMENTO + " FROM movimentos_consolidados WHERE armazem_codigo = ?1 AND estornado_de = ?2 LIMIT 1";
+      var linhasEstorno = await executarSql(sqlEstorno, [m.armazem_codigo, m.id_origem]);
+      if (linhasEstorno.length) relacionados.push({ papel: "modalRelacionadoEstorno", movimento: linhaParaMovimento(linhasEstorno[0]) });
+    }
+
+    if (m.recebido_de_armazem_codigo != null && m.recebido_de_id_origem != null) {
+      var envioOriginal = await buscarMovimentoExato(m.recebido_de_armazem_codigo, m.recebido_de_id_origem);
+      if (envioOriginal) relacionados.push({ papel: "modalRelacionadoEnvioOriginal", movimento: envioOriginal });
+    }
+    if (m.armazem_destino_codigo) {
+      var sqlRecebimento = "SELECT " + COLUNAS_MOVIMENTO + " FROM movimentos_consolidados WHERE recebido_de_armazem_codigo = ?1 AND recebido_de_id_origem = ?2 LIMIT 1";
+      var linhasRecebimento = await executarSql(sqlRecebimento, [m.armazem_codigo, m.id_origem]);
+      if (linhasRecebimento.length) relacionados.push({ papel: "modalRelacionadoRecebimento", movimento: linhaParaMovimento(linhasRecebimento[0]) });
+    }
+
+    if (m.fluxo === "reparo_externo" && m.itens[0] && m.itens[0].codigo_componente) {
+      var codigo = m.itens[0].codigo_componente;
+      var tipoOposto = m.tipo === "saida" ? "entrada" : "saida";
+      var sqlReparo = "SELECT " + COLUNAS_MOVIMENTO + " FROM movimentos_consolidados " +
+        "WHERE armazem_codigo = ?1 AND fluxo = 'reparo_externo' AND tipo = ?2 AND estornado_de IS NULL LIMIT 200";
+      var linhasReparo = await executarSql(sqlReparo, [m.armazem_codigo, tipoOposto]);
+      var candidato = linhasReparo.map(linhaParaMovimento).find(function (c) {
+        return c.itens.some(function (it) { return it.codigo_componente === codigo; });
+      });
+      if (candidato) {
+        relacionados.push({ papel: tipoOposto === "entrada" ? "modalRelacionadoRetorno" : "modalRelacionadoEnvio", movimento: candidato });
+      }
+    }
+
+    return relacionados;
+  }
+
   // Movimentos pro periodo/filtro selecionado (tabela + insights). Pede uma
   // linha a mais que o limite pra saber se foi cortado, sem precisar de um
   // COUNT(*) separado - mesma ideia ja usada em `buscar_historico` no app.
@@ -1280,6 +1452,49 @@
       "ORDER BY data ASC, hora ASC LIMIT 200";
     var linhas = await executarSql(sql, []);
     return linhas.map(linhaParaMovimento);
+  }
+
+  // Mirror de `domain::movimentos::buscar_reparos_em_aberto` (app Rust) -
+  // um item de reparo_externo que saiu (saida) e ainda nao tem uma entrada
+  // correspondente (nao estornada) com o mesmo `codigo_componente` no mesmo
+  // armazem. La e um NOT EXISTS casando por `codigo_componente` direto no
+  // SQL porque o app tem uma tabela `movimento_itens` normalizada; aqui
+  // `itens_json` e um blob por movimento, entao busca-se so pelo fluxo (o
+  // reparo_externo tem volume bem menor que os outros 3 fluxos somados,
+  // LIMIT 1000 sobra) e o casamento por codigo_componente e feito em JS.
+  // Sempre global (ignora os filtros de armazem/periodo ativos), mesmo
+  // criterio de `buscarPendentesGlobal` acima - e um backlog, nao um
+  // relatorio do periodo.
+  async function buscarReparosEmAberto() {
+    var sql = "SELECT " + COLUNAS_MOVIMENTO + " FROM movimentos_consolidados " +
+      "WHERE fluxo = 'reparo_externo' AND estornado_de IS NULL LIMIT 1000";
+    var linhas = await executarSql(sql, []);
+    var movimentos = linhas.map(linhaParaMovimento);
+    var codigosRetornados = {};
+    movimentos.filter(function (m) { return m.tipo === "entrada"; }).forEach(function (m) {
+      m.itens.forEach(function (it) {
+        if (it.codigo_componente) codigosRetornados[m.armazem_codigo + ":" + it.codigo_componente] = true;
+      });
+    });
+    var abertos = [];
+    movimentos.filter(function (m) { return m.tipo === "saida"; }).forEach(function (m) {
+      m.itens.forEach(function (it) {
+        if (!it.codigo_componente) return;
+        if (codigosRetornados[m.armazem_codigo + ":" + it.codigo_componente]) return;
+        abertos.push({
+          armazem_codigo: m.armazem_codigo,
+          data: m.data,
+          hora: m.hora,
+          codigo_componente: it.codigo_componente,
+          categoria: it.categoria,
+          descricao: it.descricao,
+          quantidade: it.quantidade,
+          contraparte: m.contraparte
+        });
+      });
+    });
+    abertos.sort(function (a, b) { return (a.data + a.hora).localeCompare(b.data + b.hora); });
+    return abertos;
   }
 
   // Quantos movimentos cada fluxo tem dentro dos filtros ATIVOS, exceto o
@@ -1355,7 +1570,8 @@
       var texto = ultimo
         ? (idiomaAtual === "zh" ? "同步于 " + tempoRelativo(ultimo) : "sincronizado " + tempoRelativo(ultimo))
         : t("nuncaSincronizou");
-      return '<div class="status-armazem"><span class="ponto ' + frescor(ultimo) + '"></span>' +
+      var estado = frescor(ultimo);
+      return '<div class="status-armazem ' + estado + '"><span class="ponto ' + estado + '"></span>' +
         '<span><strong>' + codigo + '</strong>' + texto + '</span></div>';
     }).join("");
   }
@@ -1489,6 +1705,25 @@
     }).join("");
   }
 
+  function renderizarReparosAbertos(abertos) {
+    ultimosReparosAbertosCache = abertos;
+    var el = document.getElementById("lista-reparos-abertos");
+    if (abertos.length === 0) {
+      el.innerHTML = "<p>" + t("nenhuma") + "</p>";
+      return;
+    }
+    el.innerHTML = abertos.map(function (r) {
+      var haQuanto = tempoRelativo(r.data + " " + r.hora + ":00");
+      var descricaoSegura = r.descricao ? " (" + escaparHtml(r.descricao) + ")" : "";
+      return '<p><span class="badge badge-pendente">' + t("badgePendente") + '</span> ' +
+        r.armazem_codigo + " - " + escaparHtml(r.codigo_componente) + " - " +
+        r.quantidade + "x " + rotuloCategoria(r.categoria) + descricaoSegura +
+        (r.contraparte ? " - " + escaparHtml(r.contraparte) : "") + " - " +
+        formatarData(r.data) + " " + r.hora +
+        (haQuanto ? " (" + haQuanto + ")" : "") + "</p>";
+    }).join("");
+  }
+
   function renderizarContagemAbas(porFluxo) {
     var total = 0;
     Object.keys(porFluxo).forEach(function (f) { total += porFluxo[f]; });
@@ -1564,7 +1799,16 @@
     return ' <span class="obs-detalhe">- ' + referencia + (motivo ? ": " + escaparHtml(motivo) : "") + "</span>";
   }
 
+  // Guardada aqui pra o clique na linha (delegado, ver `abrirDetalheDoClique`
+  // em `iniciar`) achar o objeto `m` completo so pela chave armazem+id_origem
+  // que fica em `data-armazem`/`data-id-origem` - sem precisar de um
+  // listener por `<tr>` (o corpo da tabela e reconstruido inteiro a cada
+  // `atualizar`/busca, entao listeners individuais teriam que ser
+  // re-anexados toda vez).
+  var ultimaListaRenderizada = [];
+
   function renderizarTabela(filtrados, totalSemBusca, truncado) {
+    ultimaListaRenderizada = filtrados;
     var corpo = document.getElementById("corpo-tabela");
     corpo.innerHTML = filtrados.map(function (m) {
       var divergencia = temDivergencia(m.itens)
@@ -1579,7 +1823,7 @@
       // usado em tela estreita (ver o @media (max-width: 720px) - o
       // pseudo-elemento `td::before { content: attr(data-label) }` le
       // daqui). Sem efeito nenhum acima do breakpoint.
-      return "<tr>" +
+      return '<tr class="linha-clicavel" data-armazem="' + m.armazem_codigo + '" data-id-origem="' + m.id_origem + '">' +
         '<td class="col-armazem" data-label="' + t("colArmazem") + '">' + m.armazem_codigo + "</td>" +
         '<td class="col-fluxo" data-label="' + t("colFluxo") + '">' + rotuloFluxo(m.fluxo) + "</td>" +
         '<td class="col-datahora" data-label="' + t("colData") + '" title="' + formatarData(m.data) + " " + m.hora + '">' + formatarData(m.data) + " " + m.hora + "</td>" +
@@ -1603,6 +1847,141 @@
           " movimentos - alguns dos mais antigos nao estao sendo mostrados. Reduza o periodo pra ver tudo.";
     }
     document.getElementById("rodape-tabela").textContent = rodape;
+  }
+
+  // Uma linha "rotulo: valor" do modal de detalhe - omite o campo inteiro
+  // quando vazio (em vez de mostrar "Pedido: -" pra todo campo opcional que
+  // esse movimento nao tem).
+  function campoModal(rotulo, valor) {
+    if (valor == null || valor === "") return "";
+    return '<div class="modal-campo"><span class="rotulo-campo">' + rotulo + "</span><span>" + valor + "</span></div>";
+  }
+
+  // Um "cartao" dentro do modal com todos os campos de um movimento -
+  // reusado tanto pro movimento clicado quanto pra cada relacionado
+  // encontrado por `buscarMovimentosRelacionados`. Reaproveita os mesmos
+  // helpers ja usados na tabela principal (`colunaColeta`/`resumoItens`/
+  // `situacaoBadge`), entao o texto no modal e sempre consistente com o que
+  // a tabela mostra pro mesmo movimento.
+  function renderizarRegistroModal(m, tituloChave) {
+    var titulo = tituloChave ? "<h4>" + t(tituloChave) + "</h4>" : "";
+    var campos = [
+      campoModal(t("colArmazem"), m.armazem_codigo),
+      campoModal(t("colFluxo"), rotuloFluxo(m.fluxo)),
+      campoModal(t("colData"), formatarData(m.data) + " " + m.hora),
+      campoModal(t("colPedido"), m.numero_pedido ? escaparHtml(m.numero_pedido) : null),
+      campoModal(t("colColeta"), colunaColeta(m)),
+      campoModal(t("colRazaoSocial"), m.razao_social ? escaparHtml(m.razao_social) : null),
+      campoModal(t("colItens"), resumoItens(m.itens)),
+      campoModal(t("colRegistradoPor"), m.usuario_nome ? escaparHtml(m.usuario_nome) : null),
+      campoModal(t("colSituacao"), situacaoBadge(m)),
+      campoModal(t("modalCampoObservacoes"), m.observacoes ? escaparHtml(justificativaLimpa(m)) : null),
+      campoModal(t("colSincronizado"), m.enviado_em ? formatarDataHora(m.enviado_em) : null)
+    ].join("");
+    return '<div class="modal-registro">' + titulo + campos + "</div>";
+  }
+
+  // Clique numa linha da tabela abre este modal: o registro clicado mais
+  // qualquer relacionado encontrado (busca so ao clicar, nao pre-carregado
+  // pra toda a tabela - ver `buscarMovimentosRelacionados`). A maioria dos
+  // movimentos nao tem nenhum relacionado, e isso e o esperado (uma venda
+  // comum e um registro isolado) - o modal so mostra o que existir.
+  async function abrirDetalhe(m) {
+    var overlay = document.getElementById("modal-detalhe");
+    var conteudo = document.getElementById("modal-detalhe-conteudo");
+    conteudo.innerHTML = "<h3>" + t("modalTituloDetalhe") + "</h3>" + renderizarRegistroModal(m, null) +
+      "<p>" + t("statusCarregando") + "</p>";
+    overlay.classList.remove("escondido");
+    var relacionados = await buscarMovimentosRelacionados(m);
+    var htmlRelacionados = relacionados.map(function (r) { return renderizarRegistroModal(r.movimento, r.papel); }).join("");
+    conteudo.innerHTML = "<h3>" + t("modalTituloDetalhe") + "</h3>" + renderizarRegistroModal(m, null) + htmlRelacionados;
+  }
+
+  function fecharDetalhe() {
+    document.getElementById("modal-detalhe").classList.add("escondido");
+  }
+
+  // Mesma convencao de `src/lib/csv.ts` (app Tauri): separador `;` (nao `,`
+  // - Excel em locale PT-BR usa `,` como separador decimal), BOM UTF-8 pro
+  // Excel reconhecer acentuacao ao abrir por duplo-clique, `\r\n`. So CSV
+  // (sem XLSX/SheetJS) de proposito - o painel e um arquivo unico sem
+  // build step nem dependencia externa, e uma lib de planilha so pra isso
+  // quebraria essa premissa; CSV o Excel abre igual.
+  function escaparCsv(valor) {
+    var texto = valor == null ? "" : String(valor);
+    if (/[;"\n]/.test(texto)) return '"' + texto.replace(/"/g, '""') + '"';
+    return texto;
+  }
+
+  // Mesma logica de `colunaColeta`/`resumoItens` acima, sem HTML/escaparHtml
+  // (o CSV tem sua propria fuga via `escaparCsv`, nao precisa de entidades
+  // HTML como "&amp;").
+  function linhaCsvColeta(m) {
+    if (m.armazem_destino_codigo) {
+      var destino = t("coletaEnviadoPara") + " " + m.armazem_destino_codigo;
+      return m.contraparte ? destino + " (" + m.contraparte + ")" : destino;
+    }
+    if (m.recebido_de_armazem_codigo) return t("coletaRecebidoDe") + " " + m.recebido_de_armazem_codigo;
+    return m.contraparte || "-";
+  }
+
+  function linhaCsvItens(itens) {
+    return itens.map(function (it) {
+      var base = it.quantidade + "x " + rotuloCategoria(it.categoria) + (it.descricao ? " (" + it.descricao + ")" : "");
+      var montagem = montagemTexto(it.montagem);
+      return montagem ? base + " [" + montagem + "]" : base;
+    }).join(" + ");
+  }
+
+  var SITUACAO_CSV_CHAVE = {
+    estorno: "situacaoEstornoBadge",
+    baixa: "situacaoBaixaBadge",
+    recusado: "situacaoRecusadoBadge",
+    entrada: "situacaoEntradaBadge"
+  };
+
+  // Exporta exatamente o que esta na tela (filtro + aba + busca ativos),
+  // respeitando as mesmas colunas que a aba atual mostra (ver
+  // `#conteudo[data-aba-atual]` no <style> - Fluxo so em "Todos", Razao
+  // Social so em Saida de Armazem/SAC) - pra nao exportar uma coluna vazia
+  // que a propria tela ja escondeu por nao se aplicar aquele fluxo.
+  function exportarCsv() {
+    var movimentos = aplicarBusca((ultimosFiltrados && ultimosFiltrados.movimentos) || []);
+    var incluirFluxo = abaAtual === "";
+    var incluirRazaoSocial = abaAtual === "" || abaAtual === "saida_armazem" || abaAtual === "sac";
+
+    var cabecalhos = [t("colArmazem")];
+    if (incluirFluxo) cabecalhos.push(t("colFluxo"));
+    cabecalhos.push(t("colData"), t("colPedido"), t("colColeta"));
+    if (incluirRazaoSocial) cabecalhos.push(t("colRazaoSocial"));
+    cabecalhos.push(t("colItens"), t("colQtd"), t("colRegistradoPor"), t("colSituacao"));
+
+    var linhas = movimentos.map(function (m) {
+      var linha = [m.armazem_codigo];
+      if (incluirFluxo) linha.push(rotuloFluxo(m.fluxo));
+      linha.push(formatarData(m.data) + " " + m.hora, m.numero_pedido || "-", linhaCsvColeta(m));
+      if (incluirRazaoSocial) linha.push(m.razao_social || "-");
+      linha.push(
+        linhaCsvItens(m.itens),
+        String(totalItens(m.itens)),
+        m.usuario_nome || "-",
+        t(SITUACAO_CSV_CHAVE[situacaoValor(m)])
+      );
+      return linha;
+    });
+
+    var texto = "﻿" + [cabecalhos].concat(linhas).map(function (linha) {
+      return linha.map(escaparCsv).join(";");
+    }).join("\r\n");
+
+    var blob = new Blob([texto], { type: "text/csv;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement("a");
+    var nomeAba = abaAtual ? rotuloFluxo(abaAtual) : t("opcaoTodos");
+    link.href = url;
+    link.download = "Painel Ecoviva - " + nomeAba + " - " + dataIso(new Date()) + ".csv";
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   function calcularInsights(filtrados, pendentesCount) {
@@ -1715,12 +2094,26 @@
   // "Saiu montado"/"Saiu em caixa" zerados (montagem de item so existe em
   // saida_armazem/peca_montagem, ver CLAUDE.md) - ruido constante que a
   // separacao em abas existe justamente pra eliminar.
+  // Compara com o valor equivalente do periodo imediatamente anterior, de
+  // mesmo tamanho (ver `periodoAnterior`) - so pras 4 metricas de contagem
+  // pura (Movimentos/Unidades/Entrada/Saida), onde "valor" ja e o numero
+  // crua exibido (nao uma string formatada como Taxa de Estorno/Valor). Sem
+  // cor semantica de proposito - mais ou menos movimento nao e bom nem mau
+  // por si so, e so contexto de tendencia.
+  function deltaTexto(atual, anterior) {
+    if (anterior == null) return "";
+    if (anterior === 0) return atual > 0 ? ' <span class="tile-delta">▲</span>' : "";
+    var pct = Math.round(((atual - anterior) / anterior) * 100);
+    if (pct === 0) return "";
+    return ' <span class="tile-delta">' + (pct > 0 ? "▲" : "▼") + " " + Math.abs(pct) + "%</span>";
+  }
+
   function construirStatTiles(dados) {
     return [
-      { chave: "statTileMovimentos", valor: dados.totalMovimentos, abas: null },
-      { chave: "statTileUnidades", valor: dados.totalUnidades, abas: null },
-      { chave: "tipoEntrada", valor: dados.totalEntrada, abas: null },
-      { chave: "tipoSaida", valor: dados.totalSaida, abas: null },
+      { chave: "statTileMovimentos", valor: dados.totalMovimentos, abas: null, comparar: "totalMovimentos" },
+      { chave: "statTileUnidades", valor: dados.totalUnidades, abas: null, comparar: "totalUnidades" },
+      { chave: "tipoEntrada", valor: dados.totalEntrada, abas: null, comparar: "totalEntrada" },
+      { chave: "tipoSaida", valor: dados.totalSaida, abas: null, comparar: "totalSaida" },
       { chave: "statTilePendentes", valor: dados.pendentesCount, abas: ["", "saida_armazem", "peca_montagem", "sac"] },
       // Recusados e taxa de estorno sao metricas negativas - nao fazem
       // sentido na mesma cor verde usada pras demais (neutras/positivas),
@@ -1735,13 +2128,14 @@
     ];
   }
 
-  function renderizarInsights(filtrados, pendentesCount) {
+  function renderizarInsights(filtrados, pendentesCount, comparacaoInsights) {
     var dados = calcularInsights(filtrados, pendentesCount);
     document.getElementById("grade-stats").innerHTML = construirStatTiles(dados)
       .filter(function (item) { return !item.abas || item.abas.indexOf(abaAtual) >= 0; })
       .map(function (item) {
         var classeValor = "valor" + (item.classe ? " " + item.classe : "");
-        return '<div class="stat-tile"><div class="' + classeValor + '">' + item.valor + '</div><div class="rotulo">' + t(item.chave) + '</div></div>';
+        var delta = (item.comparar && comparacaoInsights) ? deltaTexto(item.valor, comparacaoInsights[item.comparar]) : "";
+        return '<div class="stat-tile"><div class="' + classeValor + '">' + item.valor + delta + '</div><div class="rotulo">' + t(item.chave) + '</div></div>';
       }).join("");
 
     renderizarBarras("grafico-volume", dados.porDia, Object.keys(dados.porDia).sort(), formatarData);
@@ -1796,8 +2190,23 @@
   function reaplicarBusca() {
     var comBusca = aplicarBusca(ultimosFiltrados.movimentos);
     renderizarTabela(comBusca, ultimosFiltrados.movimentos.length, ultimosFiltrados.truncado);
-    renderizarInsights(comBusca, ultimosFiltrados.pendentesCount);
+    renderizarInsights(comBusca, ultimosFiltrados.pendentesCount, ultimosFiltrados.comparacaoInsights);
     document.getElementById("aviso-truncado").classList.toggle("escondido", !ultimosFiltrados.truncado);
+  }
+
+  // Periodo imediatamente anterior, de mesmo tamanho em dias, ao [dataInicio,
+  // dataFim] informado - usado pra comparacao de tendencia nos stat tiles
+  // (ver `deltaTexto`). Ex.: filtro 01/09-10/09 (10 dias) -> anterior e
+  // 22/08-31/08 (tambem 10 dias, terminando um dia antes do inicio atual).
+  function periodoAnterior(dataInicioStr, dataFimStr) {
+    var inicio = new Date(dataInicioStr + "T00:00:00");
+    var fim = new Date(dataFimStr + "T00:00:00");
+    var dias = Math.round((fim - inicio) / 86400000) + 1;
+    var novoFim = new Date(inicio);
+    novoFim.setDate(novoFim.getDate() - 1);
+    var novoInicio = new Date(novoFim);
+    novoInicio.setDate(novoInicio.getDate() - (dias - 1));
+    return { dataInicio: dataIso(novoInicio), dataFim: dataIso(novoFim) };
   }
 
   async function atualizar() {
@@ -1805,17 +2214,30 @@
     try {
       var filtros = lerFiltrosDaTela();
       atualizarEstadoAtalhos(filtros);
+      // So compara quando o periodo e explicito nos dois extremos - um
+      // filtro em aberto (De ou Ate vazio) nao tem um "periodo anterior de
+      // mesmo tamanho" bem definido.
+      var compararPeriodo = filtros.dataInicio && filtros.dataFim;
+      var filtrosComparacao = compararPeriodo
+        ? Object.assign({}, filtros, periodoAnterior(filtros.dataInicio, filtros.dataFim))
+        : null;
       var resultados = await Promise.all([
         buscarMovimentosFiltrados(filtros),
         buscarPendentesGlobal(),
         buscarUltimaSincronizacaoPorArmazem(),
-        buscarContagemPorFluxo(filtros)
+        buscarContagemPorFluxo(filtros),
+        buscarReparosEmAberto(),
+        compararPeriodo ? buscarMovimentosFiltrados(filtrosComparacao) : Promise.resolve(null)
       ]);
       var dadosFiltrados = resultados[0];
       var pendentes = resultados[1];
       var ultimaSincPorArmazem = resultados[2];
       var contagemPorFluxo = resultados[3];
+      var reparosAbertos = resultados[4];
+      var dadosComparacao = resultados[5];
+      var comparacaoInsights = dadosComparacao ? calcularInsights(dadosComparacao.movimentos, 0) : null;
       renderizarContagemAbas(contagemPorFluxo);
+      renderizarReparosAbertos(reparosAbertos);
 
       var precisamOriginal = [];
       var jaPedidos = {};
@@ -1837,7 +2259,8 @@
         movimentos: dadosFiltrados.movimentos,
         truncado: dadosFiltrados.truncado,
         pendentesCount: pendentes.length,
-        referenciasEstorno: referenciasEstorno
+        referenciasEstorno: referenciasEstorno,
+        comparacaoInsights: comparacaoInsights
       };
       renderizarPendentes(pendentes);
       renderizarStatusArmazens(ultimaSincPorArmazem);
@@ -1878,8 +2301,13 @@
   // Aba de fluxo (Todos/Saida de Armazem/Montagem/SAC/Reparo Externo) - ver
   // `abaAtual` mais acima. So troca o estado e redispara `atualizar()`, o
   // filtro de fluxo em si ja e lido de `abaAtual` por `lerFiltrosDaTela`.
+  // Persiste a escolha (mesmo padrao de tema/idioma) - quem sempre acompanha
+  // uma aba especifica (ex.: SAC) nao precisa reclicar nela a cada visita.
+  var CHAVE_ABA = "ecoviva-painel-aba";
+
   function selecionarAba(fluxo) {
     abaAtual = fluxo;
+    try { localStorage.setItem(CHAVE_ABA, fluxo); } catch (e) {}
     document.querySelectorAll(".aba-fluxo").forEach(function (botao) {
       var ativa = botao.getAttribute("data-fluxo") === fluxo;
       botao.classList.toggle("ativa", ativa);
@@ -1892,6 +2320,28 @@
   function iniciar() {
     document.getElementById("status-topo").textContent = t("statusCarregando");
     document.getElementById("botao-atualizar").addEventListener("click", atualizar);
+    document.getElementById("botao-exportar-csv").addEventListener("click", exportarCsv);
+
+    // Delegado (um listener so, no <tbody>) porque `renderizarTabela`
+    // reconstroi o corpo inteiro a cada atualizacao/busca - listeners por
+    // `<tr>` teriam que ser re-anexados toda vez.
+    document.getElementById("corpo-tabela").addEventListener("click", function (e) {
+      var linha = e.target.closest("tr[data-armazem]");
+      if (!linha) return;
+      var armazemCodigo = linha.getAttribute("data-armazem");
+      var idOrigem = Number(linha.getAttribute("data-id-origem"));
+      var m = ultimaListaRenderizada.find(function (item) {
+        return item.armazem_codigo === armazemCodigo && item.id_origem === idOrigem;
+      });
+      if (m) abrirDetalhe(m);
+    });
+    document.getElementById("modal-fechar").addEventListener("click", fecharDetalhe);
+    document.getElementById("modal-detalhe").addEventListener("click", function (e) {
+      if (e.target.id === "modal-detalhe") fecharDetalhe();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") fecharDetalhe();
+    });
     [
       "filtro-armazem", "filtro-data-inicio", "filtro-data-fim",
       "filtro-tipo", "filtro-situacao", "filtro-responsavel"
@@ -1922,6 +2372,22 @@
     document.querySelectorAll(".aba-fluxo").forEach(function (botao) {
       botao.addEventListener("click", function () { selecionarAba(botao.getAttribute("data-fluxo")); });
     });
+
+    // Restaura a aba salva (se houver) sem disparar uma consulta extra aqui -
+    // so ajusta o estado visual/`abaAtual`, o `atualizar()` unico no fim
+    // desta funcao ja busca com o fluxo certo.
+    var VALORES_ABA_VALIDOS = ["", "saida_armazem", "peca_montagem", "sac", "reparo_externo"];
+    var abaSalva = null;
+    try { abaSalva = localStorage.getItem(CHAVE_ABA); } catch (e) {}
+    if (abaSalva != null && VALORES_ABA_VALIDOS.indexOf(abaSalva) >= 0) {
+      abaAtual = abaSalva;
+      document.querySelectorAll(".aba-fluxo").forEach(function (botao) {
+        var ativa = botao.getAttribute("data-fluxo") === abaSalva;
+        botao.classList.toggle("ativa", ativa);
+        botao.setAttribute("aria-selected", ativa ? "true" : "false");
+      });
+      elConteudo.setAttribute("data-aba-atual", abaSalva || "todos");
+    }
 
     buscarResponsaveis().then(renderizarOpcoesResponsavel).catch(function () {});
 
