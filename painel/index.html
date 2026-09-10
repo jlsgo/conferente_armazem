@@ -217,9 +217,69 @@
     font-weight: 600;
   }
   .filtros button.atalho:hover { background: var(--verde-claro); color: var(--verde-escuro); border-color: var(--verde); }
+  /* Atalho ativo (ex.: "Hoje", o padrao ao abrir o painel) - antes nenhum
+     atalho mostrava qual periodo estava de fato aplicado, so dava pra saber
+     olhando os campos De/Ate. */
+  .filtros button.atalho.ativo { background: var(--verde); color: white; border-color: var(--verde); }
   .gate .erro { color: var(--erro); font-size: 0.9rem; font-weight: 600; }
-  .filtros { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; }
-  .filtros label { display: flex; flex-direction: column; font-size: 0.78rem; font-weight: 600; color: var(--texto-suave); gap: 5px; }
+
+  /* Abas por fluxo: navegacao primaria do painel (mesmos 4 fluxos que o app
+     desktop ja separa em telas proprias - Saida de Armazem/Montagem/SAC/
+     Reparo Externo), pra parar de esconder essa divisao dentro de um
+     <select> de peso igual a filtros finos como Responsavel/Busca. "Todos"
+     (data-fluxo="") continua sendo a visao consolidada, e o padrao ao abrir. */
+  .abas-fluxo {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    background: var(--bg);
+    padding: 14px 0;
+    margin-bottom: 4px;
+  }
+  .aba-fluxo {
+    background: var(--cartao);
+    border: 1px solid var(--borda);
+    color: var(--texto-suave);
+    padding: 9px 16px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .aba-fluxo:hover { border-color: var(--verde); }
+  .aba-fluxo.ativa { background: var(--verde); color: white; border-color: var(--verde); }
+  /* Cor de cada aba ao ficar ativa reaproveita a mesma paleta ja usada no
+     grafico "Por fluxo" (CORES_FLUXO no script abaixo) - quem ja associa
+     azul=Saida/dourado=Montagem/ciano=SAC/verde-oliva=Reparo nos graficos
+     reconhece a mesma cor na aba. */
+  .aba-fluxo-saida_armazem.ativa { background: var(--grafico-1); border-color: var(--grafico-1); }
+  .aba-fluxo-peca_montagem.ativa { background: var(--grafico-4); border-color: var(--grafico-4); }
+  .aba-fluxo-sac.ativa { background: var(--grafico-6); border-color: var(--grafico-6); }
+  .aba-fluxo-reparo_externo.ativa { background: var(--grafico-8); border-color: var(--grafico-8); }
+  .aba-fluxo-contagem {
+    background: var(--bg);
+    color: var(--texto-suave);
+    border-radius: 999px;
+    padding: 1px 7px;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+  .aba-fluxo.ativa .aba-fluxo-contagem { background: rgba(255, 255, 255, 0.25); color: white; }
+
+  .filtros-linha { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; }
+  /* Segunda linha de filtros (refinamentos finos - pedido/responsavel/tipo/
+     situacao/busca) separada visualmente da primeira (periodo/armazem, o
+     recorte principal "qual dado eu quero ver") - antes eram 8 controles de
+     peso visual igual numa parede so. */
+  .filtros-linha-refinar { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--borda); }
+  .filtros-linha label { display: flex; flex-direction: column; font-size: 0.78rem; font-weight: 600; color: var(--texto-suave); gap: 5px; }
   .filtros label.campo-destaque { color: var(--verde-escuro); }
   .filtros label.campo-destaque input {
     border-color: var(--verde);
@@ -252,6 +312,14 @@
   .col-sincronizado { width: 11%; }
   .col-coleta { width: 9%; white-space: normal; }
   .col-razaosocial { width: 8%; white-space: normal; }
+  /* Colunas so fazem sentido dentro de fluxos especificos - a coluna Fluxo
+     fica redundante depois que a aba ja filtrou pra um so (so continua
+     visivel em "Todos"), e Razao Social so e coletada em saida_armazem/sac
+     (ver CLAUDE.md) - fora dessas duas fica sempre "-", entao esconde em vez
+     de poluir a tabela de Montagem/Reparo Externo com uma coluna vazia. */
+  #conteudo:not([data-aba-atual="todos"]) .col-fluxo { display: none; }
+  #conteudo[data-aba-atual="peca_montagem"] .col-razaosocial,
+  #conteudo[data-aba-atual="reparo_externo"] .col-razaosocial { display: none; }
   th { position: sticky; top: 0; background: var(--cartao); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--texto-suave); }
   tbody tr:hover { background: var(--bg); }
   .tabela-scroll { overflow-x: auto; max-height: 65vh; overflow-y: auto; border-radius: 8px; border: 1px solid var(--borda); }
@@ -336,11 +404,17 @@
     header h1 { font-size: 1.05rem; }
     header .header-controles { margin-left: 0; width: 100%; justify-content: flex-end; }
 
+    /* Abas por fluxo: 5 pílulas + contador não cabem numa tela de ~360-400px
+       sem quebrar em varias linhas feias - rolagem horizontal (como uma
+       barra de abas de app mobile) em vez de empilhar. */
+    .abas-fluxo { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 10px 0; }
+    .aba-fluxo { flex-shrink: 0; }
+
     /* Grade de filtros: o wrap automatico agrupava campos de forma
        arbitraria (ex.: atalhos de periodo dividindo linha com Responsavel
        por acaso) - empilhado em coluna unica fica previsivel. */
-    .filtros { flex-direction: column; align-items: stretch; }
-    .filtros label, .filtros label.campo-destaque input { width: 100%; min-width: 0; }
+    .filtros-linha { flex-direction: column; align-items: stretch; }
+    .filtros-linha label, .filtros-linha label.campo-destaque input { width: 100%; min-width: 0; }
     .atalhos-periodo button { flex: 1; }
 
     /* Tabela de 10 colunas era ilegivel (cabecalho truncava pra letras
@@ -403,7 +477,7 @@
   <p id="erro-senha" class="erro escondido" data-i18n="senhaIncorreta">Senha incorreta.</p>
 </div>
 
-<div id="conteudo" class="escondido">
+<div id="conteudo" class="escondido" data-aba-atual="todos">
   <header>
     <span class="icone-cabecalho" aria-hidden="true">
       <svg class="icone-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>
@@ -429,66 +503,84 @@
     </div>
   </header>
   <main>
+    <nav class="abas-fluxo" id="abas-fluxo" role="tablist" aria-label="Fluxo">
+      <button type="button" class="aba-fluxo ativa" data-fluxo="" role="tab" aria-selected="true">
+        <span data-i18n="opcaoTodos">Todos</span>
+        <span class="aba-fluxo-contagem">0</span>
+      </button>
+      <button type="button" class="aba-fluxo aba-fluxo-saida_armazem" data-fluxo="saida_armazem" role="tab" aria-selected="false">
+        <span data-i18n="fluxoSaidaArmazem">Saida de Armazem</span>
+        <span class="aba-fluxo-contagem">0</span>
+      </button>
+      <button type="button" class="aba-fluxo aba-fluxo-peca_montagem" data-fluxo="peca_montagem" role="tab" aria-selected="false">
+        <span data-i18n="fluxoMontagem">Montagem</span>
+        <span class="aba-fluxo-contagem">0</span>
+      </button>
+      <button type="button" class="aba-fluxo aba-fluxo-sac" data-fluxo="sac" role="tab" aria-selected="false">
+        <span data-i18n="fluxoSac">SAC</span>
+        <span class="aba-fluxo-contagem">0</span>
+      </button>
+      <button type="button" class="aba-fluxo aba-fluxo-reparo_externo" data-fluxo="reparo_externo" role="tab" aria-selected="false">
+        <span data-i18n="fluxoReparoExterno">Reparo Externo</span>
+        <span class="aba-fluxo-contagem">0</span>
+      </button>
+    </nav>
+
     <div class="cartao filtros">
-      <label class="campo-destaque"><span data-i18n="filtroPedidoLabel">Numero do pedido</span>
-        <input id="filtro-pedido" type="search" placeholder="Ex: 3893" data-i18n-placeholder="filtroPedidoPlaceholder" />
-      </label>
-      <label><span data-i18n="filtroArmazemLabel">Armazem</span>
-        <select id="filtro-armazem">
-          <option value="" data-i18n="opcaoTodos">Todos</option>
-          <option value="A4">A4</option>
-          <option value="B2">B2</option>
-        </select>
-      </label>
-      <label><span data-i18n="filtroFluxoLabel">Fluxo</span>
-        <select id="filtro-fluxo">
-          <option value="" data-i18n="opcaoTodos">Todos</option>
-          <option value="saida_armazem" data-i18n="fluxoSaidaArmazem">Saida de Armazem</option>
-          <option value="peca_montagem" data-i18n="fluxoMontagem">Montagem</option>
-          <option value="sac" data-i18n="fluxoSac">SAC</option>
-          <option value="reparo_externo" data-i18n="fluxoReparoExterno">Reparo Externo</option>
-        </select>
-      </label>
-      <label><span data-i18n="filtroDeLabel">De</span>
-        <input id="filtro-data-inicio" type="date" />
-      </label>
-      <label><span data-i18n="filtroAteLabel">Ate</span>
-        <input id="filtro-data-fim" type="date" />
-      </label>
-      <label>&nbsp;
-        <div class="atalhos-periodo">
-          <button type="button" class="atalho" data-dias="0" data-i18n="atalhoHoje">Hoje</button>
-          <button type="button" class="atalho" data-dias="7" data-i18n="atalho7dias">7 dias</button>
-          <button type="button" class="atalho" data-dias="30" data-i18n="atalho30dias">30 dias</button>
-        </div>
-      </label>
-      <label><span data-i18n="filtroResponsavelLabel">Responsavel</span>
-        <select id="filtro-responsavel">
-          <option value="" data-i18n="opcaoTodos">Todos</option>
-        </select>
-      </label>
-      <label><span data-i18n="filtroTipoLabel">Tipo</span>
-        <select id="filtro-tipo">
-          <option value="" data-i18n="opcaoTodos">Todos</option>
-          <option value="entrada" data-i18n="tipoEntrada">Entrada</option>
-          <option value="saida" data-i18n="tipoSaida">Saida</option>
-        </select>
-      </label>
-      <label><span data-i18n="filtroSituacaoLabel">Situacao</span>
-        <select id="filtro-situacao">
-          <option value="" data-i18n="opcaoTodas">Todas</option>
-          <option value="entrada" data-i18n="tipoEntrada">Entrada</option>
-          <option value="baixa" data-i18n="situacaoBaixa">Baixa</option>
-          <option value="estorno" data-i18n="situacaoEstorno">Estorno</option>
-          <option value="recusado" data-i18n="situacaoRecusado">Recusado</option>
-        </select>
-      </label>
-      <label><span data-i18n="filtroBuscaLabel">Busca</span>
-        <input id="filtro-busca" type="search" placeholder="Nome ou item" data-i18n-placeholder="filtroBuscaPlaceholder" />
-      </label>
-      <label>&nbsp;
-        <button id="botao-atualizar" data-i18n="botaoAtualizar">Atualizar agora</button>
-      </label>
+      <div class="filtros-linha filtros-linha-principal">
+        <label><span data-i18n="filtroArmazemLabel">Armazem</span>
+          <select id="filtro-armazem">
+            <option value="" data-i18n="opcaoTodos">Todos</option>
+            <option value="A4">A4</option>
+            <option value="B2">B2</option>
+          </select>
+        </label>
+        <label><span data-i18n="filtroDeLabel">De</span>
+          <input id="filtro-data-inicio" type="date" />
+        </label>
+        <label><span data-i18n="filtroAteLabel">Ate</span>
+          <input id="filtro-data-fim" type="date" />
+        </label>
+        <label>&nbsp;
+          <div class="atalhos-periodo">
+            <button type="button" class="atalho" data-dias="0" data-i18n="atalhoHoje">Hoje</button>
+            <button type="button" class="atalho" data-dias="7" data-i18n="atalho7dias">7 dias</button>
+            <button type="button" class="atalho" data-dias="30" data-i18n="atalho30dias">30 dias</button>
+          </div>
+        </label>
+        <label>&nbsp;
+          <button id="botao-atualizar" data-i18n="botaoAtualizar">Atualizar agora</button>
+        </label>
+      </div>
+      <div class="filtros-linha filtros-linha-refinar">
+        <label class="campo-destaque"><span data-i18n="filtroPedidoLabel">Numero do pedido</span>
+          <input id="filtro-pedido" type="search" placeholder="Ex: 3893" data-i18n-placeholder="filtroPedidoPlaceholder" />
+        </label>
+        <label><span data-i18n="filtroResponsavelLabel">Responsavel</span>
+          <select id="filtro-responsavel">
+            <option value="" data-i18n="opcaoTodos">Todos</option>
+          </select>
+        </label>
+        <label><span data-i18n="filtroTipoLabel">Tipo</span>
+          <select id="filtro-tipo">
+            <option value="" data-i18n="opcaoTodos">Todos</option>
+            <option value="entrada" data-i18n="tipoEntrada">Entrada</option>
+            <option value="saida" data-i18n="tipoSaida">Saida</option>
+          </select>
+        </label>
+        <label><span data-i18n="filtroSituacaoLabel">Situacao</span>
+          <select id="filtro-situacao">
+            <option value="" data-i18n="opcaoTodas">Todas</option>
+            <option value="entrada" data-i18n="tipoEntrada">Entrada</option>
+            <option value="baixa" data-i18n="situacaoBaixa">Baixa</option>
+            <option value="estorno" data-i18n="situacaoEstorno">Estorno</option>
+            <option value="recusado" data-i18n="situacaoRecusado">Recusado</option>
+          </select>
+        </label>
+        <label><span data-i18n="filtroBuscaLabel">Busca</span>
+          <input id="filtro-busca" type="search" placeholder="Nome ou item" data-i18n-placeholder="filtroBuscaPlaceholder" />
+        </label>
+      </div>
     </div>
 
     <div class="cartao">
@@ -660,7 +752,6 @@
       filtroArmazemLabel: "Armazem",
       opcaoTodos: "Todos",
       opcaoTodas: "Todas",
-      filtroFluxoLabel: "Fluxo",
       fluxoSaidaArmazem: "Saida de Armazem",
       fluxoMontagem: "Montagem",
       fluxoSac: "SAC",
@@ -746,7 +837,6 @@
       filtroArmazemLabel: "仓库",
       opcaoTodos: "全部",
       opcaoTodas: "全部",
-      filtroFluxoLabel: "流程",
       fluxoSaidaArmazem: "仓库出库",
       fluxoMontagem: "组装",
       fluxoSac: "客服(SAC)",
@@ -934,6 +1024,11 @@
     "valor_centavos, razao_social";
   var ultimosFiltrados = [];
   var intervaloAtualizacao = null;
+  // Aba de fluxo ativa - "" e "Todos" (visao consolidada, padrao ao abrir),
+  // senao um dos 4 valores de `fluxo` da tabela. Substitui o antigo
+  // <select id="filtro-fluxo"> (removido do HTML) como fonte da verdade
+  // pra esse filtro - ver `selecionarAba` mais abaixo.
+  var abaAtual = "";
 
   var elGate = document.getElementById("gate");
   var elConteudo = document.getElementById("conteudo");
@@ -1064,7 +1159,7 @@
     return {
       pedido: document.getElementById("filtro-pedido").value.trim(),
       armazem: document.getElementById("filtro-armazem").value,
-      fluxo: document.getElementById("filtro-fluxo").value,
+      fluxo: abaAtual,
       dataInicio: document.getElementById("filtro-data-inicio").value,
       dataFim: document.getElementById("filtro-data-fim").value,
       tipo: document.getElementById("filtro-tipo").value,
@@ -1185,6 +1280,24 @@
       "ORDER BY data ASC, hora ASC LIMIT 200";
     var linhas = await executarSql(sql, []);
     return linhas.map(linhaParaMovimento);
+  }
+
+  // Quantos movimentos cada fluxo tem dentro dos filtros ATIVOS, exceto o
+  // proprio fluxo (pra alimentar o contador de cada aba - "SAC (12)") -
+  // reaproveita `montarFiltroSql` ignorando o campo `fluxo` do filtro
+  // recebido, senao toda aba diferente da atual sempre contaria 0.
+  async function buscarContagemPorFluxo(filtros) {
+    var filtrosSemFluxo = Object.assign({}, filtros, { fluxo: "" });
+    var f = montarFiltroSql(filtrosSemFluxo);
+    var sql = "SELECT fluxo, COUNT(*) FROM movimentos_consolidados" + f.where + " GROUP BY fluxo";
+    var linhas = await executarSql(sql, f.args);
+    var porFluxo = {};
+    linhas.forEach(function (linha) {
+      var fluxo = linha[0] && linha[0].value;
+      var contagem = linha[1] && linha[1].value;
+      if (fluxo) porFluxo[fluxo] = Number(contagem);
+    });
+    return porFluxo;
   }
 
   // Armazens fixos do sistema (A4/B2, ver domain::db::mod.rs no app) - lista
@@ -1374,6 +1487,17 @@
         formatarData(m.data) + " " + m.hora +
         (haQuanto ? " (" + haQuanto + ")" : "") + " - " + resumoItens(m.itens) + "</p>";
     }).join("");
+  }
+
+  function renderizarContagemAbas(porFluxo) {
+    var total = 0;
+    Object.keys(porFluxo).forEach(function (f) { total += porFluxo[f]; });
+    document.querySelectorAll(".aba-fluxo").forEach(function (botao) {
+      var fluxo = botao.getAttribute("data-fluxo");
+      var el = botao.querySelector(".aba-fluxo-contagem");
+      if (!el) return;
+      el.textContent = fluxo ? (porFluxo[fluxo] || 0) : total;
+    });
   }
 
   // Os filtros estruturados ja foram aplicados na consulta SQL - aqui so
@@ -1584,28 +1708,41 @@
       '</svg>';
   }
 
-  function renderizarInsights(filtrados, pendentesCount) {
-    var dados = calcularInsights(filtrados, pendentesCount);
-    document.getElementById("grade-stats").innerHTML = [
-      [t("statTileMovimentos"), dados.totalMovimentos],
-      [t("statTileUnidades"), dados.totalUnidades],
-      [t("tipoEntrada"), dados.totalEntrada],
-      [t("tipoSaida"), dados.totalSaida],
-      [t("statTilePendentes"), dados.pendentesCount],
+  // Cada tile so aparece nas abas listadas em `abas` ("" = Todos) - `null`
+  // significa "em qualquer aba" (metrica universal). Sem isso, filtrar pra
+  // Montagem sempre mostrava "Valor total (vendas SAC): R$ 0,00" (motivo/
+  // valor_centavos so existem em SAC) e filtrar pra SAC sempre mostrava
+  // "Saiu montado"/"Saiu em caixa" zerados (montagem de item so existe em
+  // saida_armazem/peca_montagem, ver CLAUDE.md) - ruido constante que a
+  // separacao em abas existe justamente pra eliminar.
+  function construirStatTiles(dados) {
+    return [
+      { chave: "statTileMovimentos", valor: dados.totalMovimentos, abas: null },
+      { chave: "statTileUnidades", valor: dados.totalUnidades, abas: null },
+      { chave: "tipoEntrada", valor: dados.totalEntrada, abas: null },
+      { chave: "tipoSaida", valor: dados.totalSaida, abas: null },
+      { chave: "statTilePendentes", valor: dados.pendentesCount, abas: ["", "saida_armazem", "peca_montagem", "sac"] },
       // Recusados e taxa de estorno sao metricas negativas - nao fazem
       // sentido na mesma cor verde usada pras demais (neutras/positivas),
       // reaproveita as mesmas cores que badge-recusado/badge-estorno ja
       // usam na tabela pra essa mesma situacao.
-      [t("statTileRecusados"), dados.totalRecusado, "aviso"],
-      [t("statTileTaxaEstorno"), (dados.taxaEstorno * 100).toFixed(1) + "%", "erro"],
-      [t("statTileValorVendas"), formatarMoeda(dados.totalVendasCentavos)],
-      [t("statTileValorGarantia"), formatarMoeda(dados.totalGarantiaCentavos)],
-      [t("statTileMontado"), dados.totalMontado],
-      [t("statTileCaixa"), dados.totalCaixa]
-    ].map(function (item) {
-      var classeValor = "valor" + (item[2] ? " " + item[2] : "");
-      return '<div class="stat-tile"><div class="' + classeValor + '">' + item[1] + '</div><div class="rotulo">' + item[0] + '</div></div>';
-    }).join("");
+      { chave: "statTileRecusados", valor: dados.totalRecusado, classe: "aviso", abas: ["", "saida_armazem", "peca_montagem", "sac"] },
+      { chave: "statTileTaxaEstorno", valor: (dados.taxaEstorno * 100).toFixed(1) + "%", classe: "erro", abas: null },
+      { chave: "statTileValorVendas", valor: formatarMoeda(dados.totalVendasCentavos), abas: ["", "sac"] },
+      { chave: "statTileValorGarantia", valor: formatarMoeda(dados.totalGarantiaCentavos), abas: ["", "sac"] },
+      { chave: "statTileMontado", valor: dados.totalMontado, abas: ["", "saida_armazem", "peca_montagem"] },
+      { chave: "statTileCaixa", valor: dados.totalCaixa, abas: ["", "saida_armazem", "peca_montagem"] }
+    ];
+  }
+
+  function renderizarInsights(filtrados, pendentesCount) {
+    var dados = calcularInsights(filtrados, pendentesCount);
+    document.getElementById("grade-stats").innerHTML = construirStatTiles(dados)
+      .filter(function (item) { return !item.abas || item.abas.indexOf(abaAtual) >= 0; })
+      .map(function (item) {
+        var classeValor = "valor" + (item.classe ? " " + item.classe : "");
+        return '<div class="stat-tile"><div class="' + classeValor + '">' + item.valor + '</div><div class="rotulo">' + t(item.chave) + '</div></div>';
+      }).join("");
 
     renderizarBarras("grafico-volume", dados.porDia, Object.keys(dados.porDia).sort(), formatarData);
     var categorias = Object.keys(dados.porCategoria).sort(function (a, b) {
@@ -1667,14 +1804,18 @@
     var elStatus = document.getElementById("status-topo");
     try {
       var filtros = lerFiltrosDaTela();
+      atualizarEstadoAtalhos(filtros);
       var resultados = await Promise.all([
         buscarMovimentosFiltrados(filtros),
         buscarPendentesGlobal(),
-        buscarUltimaSincronizacaoPorArmazem()
+        buscarUltimaSincronizacaoPorArmazem(),
+        buscarContagemPorFluxo(filtros)
       ]);
       var dadosFiltrados = resultados[0];
       var pendentes = resultados[1];
       var ultimaSincPorArmazem = resultados[2];
+      var contagemPorFluxo = resultados[3];
+      renderizarContagemAbas(contagemPorFluxo);
 
       var precisamOriginal = [];
       var jaPedidos = {};
@@ -1715,11 +1856,44 @@
     return data.getFullYear() + "-" + pad(data.getMonth() + 1) + "-" + pad(data.getDate());
   }
 
+  function subtrairDias(dias) {
+    var data = new Date();
+    data.setDate(data.getDate() - dias);
+    return dataIso(data);
+  }
+
+  // Marca visualmente qual atalho (Hoje/7 dias/30 dias) corresponde ao
+  // periodo atualmente nos campos De/Ate - antes nenhum atalho mostrava
+  // estado "selecionado", entao nao dava pra saber o que estava aplicado
+  // sem olhar os dois campos de data.
+  function atualizarEstadoAtalhos(filtros) {
+    var hoje = dataIso(new Date());
+    document.querySelectorAll(".atalho").forEach(function (botao) {
+      var dias = Number(botao.getAttribute("data-dias"));
+      var ativo = filtros.dataFim === hoje && filtros.dataInicio === subtrairDias(dias);
+      botao.classList.toggle("ativo", ativo);
+    });
+  }
+
+  // Aba de fluxo (Todos/Saida de Armazem/Montagem/SAC/Reparo Externo) - ver
+  // `abaAtual` mais acima. So troca o estado e redispara `atualizar()`, o
+  // filtro de fluxo em si ja e lido de `abaAtual` por `lerFiltrosDaTela`.
+  function selecionarAba(fluxo) {
+    abaAtual = fluxo;
+    document.querySelectorAll(".aba-fluxo").forEach(function (botao) {
+      var ativa = botao.getAttribute("data-fluxo") === fluxo;
+      botao.classList.toggle("ativa", ativa);
+      botao.setAttribute("aria-selected", ativa ? "true" : "false");
+    });
+    elConteudo.setAttribute("data-aba-atual", fluxo || "todos");
+    atualizar();
+  }
+
   function iniciar() {
     document.getElementById("status-topo").textContent = t("statusCarregando");
     document.getElementById("botao-atualizar").addEventListener("click", atualizar);
     [
-      "filtro-armazem", "filtro-fluxo", "filtro-data-inicio", "filtro-data-fim",
+      "filtro-armazem", "filtro-data-inicio", "filtro-data-fim",
       "filtro-tipo", "filtro-situacao", "filtro-responsavel"
     ].forEach(function (id) {
       document.getElementById(id).addEventListener("change", atualizar);
@@ -1745,7 +1919,18 @@
       });
     });
 
+    document.querySelectorAll(".aba-fluxo").forEach(function (botao) {
+      botao.addEventListener("click", function () { selecionarAba(botao.getAttribute("data-fluxo")); });
+    });
+
     buscarResponsaveis().then(renderizarOpcoesResponsavel).catch(function () {});
+
+    // "Hoje" como padrao real ao abrir o painel, nao so um atalho pra
+    // clicar - antes os campos De/Ate comecavam vazios e a primeira consulta
+    // carregava o historico inteiro (ate o limite de 2000 linhas) sem
+    // nenhum filtro de periodo.
+    document.getElementById("filtro-data-inicio").value = dataIso(new Date());
+    document.getElementById("filtro-data-fim").value = dataIso(new Date());
 
     atualizar();
     if (intervaloAtualizacao) clearInterval(intervaloAtualizacao);
