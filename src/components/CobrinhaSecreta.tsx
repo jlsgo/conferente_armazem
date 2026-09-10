@@ -77,6 +77,7 @@ export default function CobrinhaSecreta({ onFechar, armazemCodigo }: Props) {
   const [nomeInput, setNomeInput] = useState('');
   const [nomeSalvo, setNomeSalvo] = useState(false);
   const [recordeQuebradoDe, setRecordeQuebradoDe] = useState<string | null>(null);
+  const [comemorarRecorde, setComemorarRecorde] = useState(false);
   const direcaoRef = useRef<Ponto>({ x: 1, y: 0 });
   const proximaDirecaoRef = useRef<Ponto>({ x: 1, y: 0 });
 
@@ -157,6 +158,10 @@ export default function CobrinhaSecreta({ onFechar, armazemCodigo }: Props) {
     const nome = nomeInput.trim().toUpperCase().slice(0, 4) || 'ANON';
     const liderAnterior = recordesExibidos[0];
     setNomeSalvo(true);
+    // "Bater o recorde" = virar o novo nº1, mesmo que seja a propria pessoa
+    // superando a marca anterior dela - diferente de `recordeQuebradoDe`
+    // (so faz sentido o texto "voce tirou X do topo" quando X e outra pessoa).
+    setComemorarRecorde(!liderAnterior || pontos > liderAnterior.pontos);
     if (liderAnterior && pontos > liderAnterior.pontos && liderAnterior.nome !== nome) {
       setRecordeQuebradoDe(liderAnterior.nome);
     }
@@ -187,6 +192,7 @@ export default function CobrinhaSecreta({ onFechar, armazemCodigo }: Props) {
     setNomeInput('');
     setNomeSalvo(false);
     setRecordeQuebradoDe(null);
+    setComemorarRecorde(false);
   }
 
   const celulas: JSX.Element[] = [];
@@ -235,7 +241,13 @@ export default function CobrinhaSecreta({ onFechar, armazemCodigo }: Props) {
               </form>
             ) : (
               <>
+                {comemorarRecorde && (
+                  <p className="cobrinha-parabens" aria-hidden="true">
+                    🎉🏆🎉
+                  </p>
+                )}
                 <p>Bateu! Pontos: {pontos}</p>
+                {comemorarRecorde && <p>Novo recorde geral! Parabens! 🎉</p>}
                 {recordeQuebradoDe && <p>Voce tirou {recordeQuebradoDe} do topo!</p>}
                 <button type="button" onClick={reiniciar}>
                   Jogar de novo

@@ -298,6 +298,28 @@ h3 {
   margin: 6px auto;
 }
 
+.cobrinha-parabens {
+  font-size: 32px;
+  line-height: 1;
+  margin: 4px 0;
+  animation: cobrinha-comemorar 0.6s ease-out 2;
+}
+
+@keyframes cobrinha-comemorar {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 .cobrinha-recordes {
   margin-top: 10px;
   border-top: 1px solid var(--borda);
