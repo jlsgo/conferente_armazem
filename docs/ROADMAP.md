@@ -1634,6 +1634,73 @@ recorde ve a comemoracao de verdade (v3.3.3), nao a zoeira.
 
 Bump de `3.3.3` pra `3.3.4` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
 
+## Versao 4.0.0 — instalador confiavel (workflow real) + "quem retira" nas transferencias + cobrinha mensal (Feito)
+
+Motivada por um bug real: o `.msi` da v3.3.4 nao abriu no Windows (nem a tela
+de instalar/desinstalar apareceu). Causa raiz: desde a v3.3.1, os
+instaladores paravam de ser gerados pelo workflow real do GitHub Actions
+(`.github/workflows/build-installer.yml`, `windows-latest` + WiX via `tauri
+build`) e passaram a ser clonados/remendados localmente no Linux via
+`msitools` — tecnica nunca testada num Windows real, que finalmente quebrou.
+`git tag -l` confirmou: nenhuma tag `v3.3.1`-`v3.3.4` existia, so ate `v3.3.0`.
+O dado do usuario nunca foi tocado (pacote invalido rejeitado pelo Windows
+Installer antes de qualquer acao rodar), mas o processo precisava voltar ao
+caminho real - ver `project_msi_build_on_linux` (memoria) e a secao "Como
+gerar o instalador" logo apos este paragrafo.
+
+**Como gerar o `.msi`/`.exe` de verdade a partir de agora**: taguear a
+versao (`git tag vX.Y.Z && git push origin vX.Y.Z`, ou `gh workflow run
+build-installer.yml`), esperar o run (`gh run list
+--workflow=build-installer.yml --limit 1`, ~3-13min), baixar o artefato
+(`gh run download <run-id> -n ecoviva-controle-armazem-windows`). Nunca mais
+clonar/remendar um `.msi` a mao.
+
+**Campo "quem retira/entrega no destino"** (`Lancamentos.tsx`/`Sac.tsx`/
+`Montagem.tsx`): analise de ~11 fechamentos reais impressos pelas
+conferentes (pasta `exemplos-em-prod/`, fora do controle de versao) mostrou
+que, em toda transferencia entre A4 e B2, a conferente digitava um nome
+("- RUAN", "- GUSTAVO") dentro da descricao livre do item, porque o campo
+Coleta era escondido nesse caso (premissa de que "transferencia nao tem
+coleta" - falsa na pratica). Em vez de coluna nova, reaproveitado o campo
+`contraparte` que ja existia (ja fazia parte de `CamposHash`, ja sincroniza
+pro Turso, ja tinha "casa" em toda tela via `colunaColeta` em
+`situacao.ts`) - so parou de ser forcado a `null` numa transferencia, com
+rotulo diferente ("Quem retira/entrega no destino (opcional)"). `colunaColeta`
+(`situacao.ts` e a copia hand-written em `painel/index.html`, escapada com
+`escaparHtml`) passou a anexar o contraparte entre parenteses junto de
+"Enviado para X". Descoberta lateral: `Historico.tsx` tinha uma terceira
+copia (mais pobre) da logica de "Direcao" da Montagem, que nunca mostrava a
+transferencia - unificada com `Montagem.tsx` num helper novo,
+`direcaoMontagemTexto` (`situacao.ts`), eliminando a duplicacao.
+Opcionalmente, propagado tambem pro lado de quem RECEBE (`TransferenciaPendente`/
+`SQL_PENDENTES_RECEBIMENTO`/`SQL_BUSCAR_TRANSFERENCIA_POR_CHAVE` em
+`db/sync.rs`, mesmo padrao que `observacoes` ja usava) - `confirmar_recebimento`
+(`sync_commands.rs`) anexa "Quem retira/entrega (informado por quem enviou):
+X" na observacao do lancamento confirmado, e `TransferenciasChegando.tsx`
+mostra isso antes de confirmar. Nenhuma migration nova, nenhuma mudanca em
+`CamposHash`/`calcular_hash` (contraparte ja estava la, mesma posicao - dados
+historicos intactos, testado em `movimentos.rs`).
+
+**Cobrinha**: recorde da sessao (sem persistencia/identidade nova - iniciais
+de 4 letras nao identificam a pessoa de forma confiavel) - `CobrinhaSecreta.tsx`
+guarda o melhor score desta aba aberta num `useRef`, e mostra "Seu melhor
+desta sessao! 🔥" no lugar da mensagem sarcastica quando aplicavel. Placar
+unificado (Turso) passou a ser mensal (`cobrinha_sync.rs`, filtro
+`strftime('%Y-%m', criado_em) = strftime('%Y-%m', 'now')`) em vez de
+all-time, pra manter a competicao renovada - nenhum recorde antigo e
+deletado, so a listagem exibida mudou. Testado localmente contra
+`rusqlite::Connection` em memoria (mesmo motivo/padrao de `db::sync` pra
+evitar o panic conhecido de `libsql::Builder::new_local` nesta suite).
+
+**Revisao de seguranca** (`/security-review`) rodada sobre o diff completo
+antes do bump - sem achados (todo SQL parametrizado, nova interpolacao HTML
+no painel escapada, React cobre o resto).
+
+**Verificado**: `tsc --noEmit`/`vite build`/`vitest run` (21 testes) limpos,
+`cargo fmt --check`/`clippy -D warnings`/`cargo test` (167 testes) limpos.
+
+Bump de `3.3.4` pra `4.0.0` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
+
 ## Decisoes que ja foram tomadas (nao reabrir sem motivo novo)
 
 - Sem controle de saldo de estoque — e um livro de movimentacao/auditoria, nao um

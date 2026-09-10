@@ -1341,7 +1341,7 @@ dependencies = [
 
 [[package]]
 name = "ecoviva-controle-armazem"
-version = "3.3.4"
+version = "4.0.0"
 dependencies = [
  "argon2",
  "aws-sdk-s3",
