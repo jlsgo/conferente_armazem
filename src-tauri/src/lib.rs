@@ -143,6 +143,8 @@ pub fn run() {
             commands::movimento_commands::estornar_movimento,
             commands::movimento_commands::listar_movimentos_do_dia,
             commands::movimento_commands::sugestoes_descricao,
+            commands::movimento_commands::sugestoes_contraparte,
+            commands::movimento_commands::sugestoes_razao_social,
             commands::movimento_commands::buscar_historico,
             commands::movimento_commands::verificar_retirada_pendente,
             commands::movimento_commands::buscar_reparos_em_aberto,

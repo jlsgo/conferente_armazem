@@ -6,7 +6,9 @@ import {
   estornarMovimento,
   fecharDia,
   listarMovimentosDoDia,
+  sugestoesContraparte as buscarSugestoesContraparte,
   sugestoesDescricao,
+  sugestoesRazaoSocial as buscarSugestoesRazaoSocial,
   verificarRetiradaPendente,
 } from '../lib/api';
 import FechamentoImpressao from '../components/FechamentoImpressao';
@@ -85,6 +87,8 @@ export default function Lancamentos({
   const [carregandoLista, setCarregandoLista] = useState(true);
   const [erroCarregamento, setErroCarregamento] = useState('');
   const [sugestoesPorCategoria, setSugestoesPorCategoria] = useState<Partial<Record<Categoria, string[]>>>({});
+  const [sugestoesColeta, setSugestoesColeta] = useState<string[]>([]);
+  const [sugestoesRazaoSocial, setSugestoesRazaoSocial] = useState<string[]>([]);
   const { notificar } = useToast();
 
   const [tipo, setTipo] = useState<TipoMovimento>('saida');
@@ -144,6 +148,12 @@ export default function Lancamentos({
   useEffect(() => {
     carregarTudo();
     garantirSugestoes('scooter');
+    buscarSugestoesContraparte()
+      .then(setSugestoesColeta)
+      .catch(() => notificar('Nao foi possivel carregar as sugestoes de coleta. Pode digitar normalmente.', 'erro'));
+    buscarSugestoesRazaoSocial()
+      .then(setSugestoesRazaoSocial)
+      .catch(() => notificar('Nao foi possivel carregar as sugestoes de razao social. Pode digitar normalmente.', 'erro'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -447,14 +457,29 @@ export default function Lancamentos({
                   value={contraparte}
                   onChange={(e) => setContraparte(e.target.value)}
                   required={tipo === 'saida'}
+                  list="sugestoes-coleta"
                 />
+                <datalist id="sugestoes-coleta">
+                  {sugestoesColeta.map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
               </label>
             )}
 
             {!paraOutroArmazemNoForm && (
               <label>
                 Razao social / nome fantasia (opcional)
-                <input value={razaoSocial} onChange={(e) => setRazaoSocial(e.target.value)} />
+                <input
+                  value={razaoSocial}
+                  onChange={(e) => setRazaoSocial(e.target.value)}
+                  list="sugestoes-razao-social"
+                />
+                <datalist id="sugestoes-razao-social">
+                  {sugestoesRazaoSocial.map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
               </label>
             )}
           </div>

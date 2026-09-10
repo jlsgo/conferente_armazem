@@ -1496,6 +1496,36 @@ pub fn sugestoes_descricao(conn: &Connection, categoria: &str) -> AppResult<Vec<
     Ok(sugestoes)
 }
 
+/// Sugestoes de coleta (contraparte) ja usadas em qualquer fluxo, para
+/// autocompletar o campo - mesmo padrao de `sugestoes_descricao`, mas sem
+/// filtrar por categoria/fluxo: a mesma transportadora/cliente aparece tanto
+/// em `saida_armazem` quanto em `sac`, e sugerir de ambos evita que o
+/// conferente digite "TRANSLOVATO"/"ARMAZEM" de um jeito diferente a cada dia.
+pub fn sugestoes_contraparte(conn: &Connection) -> AppResult<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT contraparte FROM movimentos
+         WHERE contraparte IS NOT NULL AND contraparte != ''
+         ORDER BY contraparte ASC LIMIT 100",
+    )?;
+    let sugestoes = stmt
+        .query_map([], |r| r.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(sugestoes)
+}
+
+/// Mesma ideia de `sugestoes_contraparte`, para o campo razao_social.
+pub fn sugestoes_razao_social(conn: &Connection) -> AppResult<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT razao_social FROM movimentos
+         WHERE razao_social IS NOT NULL AND razao_social != ''
+         ORDER BY razao_social ASC LIMIT 100",
+    )?;
+    let sugestoes = stmt
+        .query_map([], |r| r.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(sugestoes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

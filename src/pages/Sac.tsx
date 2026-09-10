@@ -6,7 +6,9 @@ import {
   estornarMovimento,
   fecharDia,
   listarMovimentosDoDia,
+  sugestoesContraparte,
   sugestoesDescricao,
+  sugestoesRazaoSocial,
 } from '../lib/api';
 import FechamentoImpressao from '../components/FechamentoImpressao';
 import Carregando from '../components/Carregando';
@@ -71,6 +73,8 @@ export default function Sac({
   const [carregandoLista, setCarregandoLista] = useState(true);
   const [erroCarregamento, setErroCarregamento] = useState('');
   const [sugestoes, setSugestoes] = useState<string[]>([]);
+  const [sugestoesColeta, setSugestoesColeta] = useState<string[]>([]);
+  const [sugestoesRazaoSocialLista, setSugestoesRazaoSocialLista] = useState<string[]>([]);
   const { notificar } = useToast();
 
   const [hora, setHora] = useState(horaAtual());
@@ -129,6 +133,12 @@ export default function Sac({
       .catch(() =>
         notificar('Nao foi possivel carregar as sugestoes de descricao. Pode digitar normalmente.', 'erro')
       );
+    sugestoesContraparte()
+      .then(setSugestoesColeta)
+      .catch(() => notificar('Nao foi possivel carregar as sugestoes de coleta. Pode digitar normalmente.', 'erro'));
+    sugestoesRazaoSocial()
+      .then(setSugestoesRazaoSocialLista)
+      .catch(() => notificar('Nao foi possivel carregar as sugestoes de razao social. Pode digitar normalmente.', 'erro'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -422,14 +432,28 @@ export default function Sac({
             {!paraOutroArmazem && (
               <label>
                 Coleta (Correios / cliente)
-                <input value={coleta} onChange={(e) => setColeta(e.target.value)} />
+                <input value={coleta} onChange={(e) => setColeta(e.target.value)} list="sugestoes-coleta-sac" />
+                <datalist id="sugestoes-coleta-sac">
+                  {sugestoesColeta.map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
               </label>
             )}
 
             {!paraOutroArmazem && (
               <label>
                 Razao social / nome fantasia (opcional)
-                <input value={razaoSocial} onChange={(e) => setRazaoSocial(e.target.value)} />
+                <input
+                  value={razaoSocial}
+                  onChange={(e) => setRazaoSocial(e.target.value)}
+                  list="sugestoes-razao-social-sac"
+                />
+                <datalist id="sugestoes-razao-social-sac">
+                  {sugestoesRazaoSocialLista.map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
               </label>
             )}
 

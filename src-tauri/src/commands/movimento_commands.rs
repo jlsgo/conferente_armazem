@@ -115,6 +115,20 @@ pub fn sugestoes_descricao(state: State<AppState>, categoria: String) -> AppResu
     movimentos::sugestoes_descricao(&conn, &categoria)
 }
 
+#[tauri::command]
+pub fn sugestoes_contraparte(state: State<AppState>) -> AppResult<Vec<String>> {
+    state.usuario_logado()?;
+    let conn = state.conn()?;
+    movimentos::sugestoes_contraparte(&conn)
+}
+
+#[tauri::command]
+pub fn sugestoes_razao_social(state: State<AppState>) -> AppResult<Vec<String>> {
+    state.usuario_logado()?;
+    let conn = state.conn()?;
+    movimentos::sugestoes_razao_social(&conn)
+}
+
 /// Usado pela tela de Saida de Armazem ao digitar o numero do pedido: avisa
 /// se a retirada mais recente desse pedido ficou marcada como parcial, pra
 /// alertar que pode ser a retirada complementar. `None` (sem alerta) tanto

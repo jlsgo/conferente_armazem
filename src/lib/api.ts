@@ -108,6 +108,14 @@ export function sugestoesDescricao(categoria: Categoria): Promise<string[]> {
   return invoke<string[]>('sugestoes_descricao', { categoria });
 }
 
+export function sugestoesContraparte(): Promise<string[]> {
+  return invoke<string[]>('sugestoes_contraparte');
+}
+
+export function sugestoesRazaoSocial(): Promise<string[]> {
+  return invoke<string[]>('sugestoes_razao_social');
+}
+
 export async function verificarRetiradaPendente(params: {
   armazem_id: number;
   fluxo: Fluxo;
