@@ -176,10 +176,26 @@ export default function TransferenciasChegando({ fluxo, outroArmazem, onConfirma
                   </td>
                   <td>{t.numero_pedido ?? '-'}</td>
                   <td>
-                    {t.observacoes ? (
+                    {!t.observacoes && !t.contraparte && '-'}
+                    {t.contraparte && (
                       <span
                         style={{
                           display: 'inline-block',
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          background: 'var(--aviso-claro)',
+                          color: 'var(--aviso-escuro)',
+                          fontWeight: 600,
+                          marginBottom: t.observacoes ? 4 : 0,
+                        }}
+                      >
+                        Quem retira/entrega: {t.contraparte}
+                      </span>
+                    )}
+                    {t.observacoes && (
+                      <span
+                        style={{
+                          display: 'block',
                           padding: '2px 8px',
                           borderRadius: 6,
                           background: 'var(--aviso-claro)',
@@ -189,8 +205,6 @@ export default function TransferenciasChegando({ fluxo, outroArmazem, onConfirma
                       >
                         {t.observacoes}
                       </span>
-                    ) : (
-                      '-'
                     )}
                   </td>
                   <td>

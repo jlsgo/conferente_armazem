@@ -565,6 +565,13 @@ pub struct TransferenciaPendente {
     /// selecionar - o conferente que confirma nunca via instrucoes/detalhes
     /// importantes que o remetente escreveu ali.
     pub observacoes: Option<String>,
+    /// "Quem retira/entrega no destino" (v4.0.0) - reaproveita a coluna
+    /// `contraparte` que ja existe em `movimentos`, so que agora tambem
+    /// preenchida do lado de quem ENVIA uma transferencia (antes sempre
+    /// `None` nesse caso). Adicionada aqui pelo mesmo motivo que
+    /// `observacoes` foi: sem isso, quem confirma o recebimento nao teria
+    /// como ver essa informacao antes de confirmar.
+    pub contraparte: Option<String>,
     pub itens: Vec<MovimentoItem>,
 }
 
@@ -579,6 +586,7 @@ fn linha_para_transferencia(
     numero_pedido: Option<String>,
     observacoes: Option<String>,
     itens_json: String,
+    contraparte: Option<String>,
 ) -> AppResult<TransferenciaPendente> {
     let itens: Vec<MovimentoItem> = serde_json::from_str(&itens_json).map_err(|e| {
         AppError::Interno(format!(
@@ -594,13 +602,14 @@ fn linha_para_transferencia(
         armazem_destino_codigo,
         numero_pedido,
         observacoes,
+        contraparte,
         itens,
     })
 }
 
 const SQL_PENDENTES_RECEBIMENTO: &str = "
     SELECT armazem_codigo, id_origem, fluxo, data, hora, armazem_destino_codigo, numero_pedido,
-           observacoes, itens_json
+           observacoes, itens_json, contraparte
     FROM movimentos_consolidados m
     WHERE armazem_destino_codigo = ?1
       -- Fluxos que suportam transferencia fisica entre A4 e B2: veiculos
@@ -632,7 +641,7 @@ const SQL_PENDENTES_RECEBIMENTO: &str = "
 /// confiar no que o frontend mandar de volta).
 const SQL_BUSCAR_TRANSFERENCIA_POR_CHAVE: &str = "
     SELECT armazem_codigo, id_origem, fluxo, data, hora, armazem_destino_codigo, numero_pedido,
-           observacoes, itens_json
+           observacoes, itens_json, contraparte
     FROM movimentos_consolidados WHERE armazem_codigo = ?1 AND id_origem = ?2
 ";
 
@@ -700,6 +709,9 @@ pub async fn buscar_pendentes_recebimento(
         let itens_json: String = row
             .get(8)
             .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
+        let contraparte: Option<String> = row
+            .get(9)
+            .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
         resultado.push(linha_para_transferencia(
             armazem_origem_codigo,
             id_origem,
@@ -710,6 +722,7 @@ pub async fn buscar_pendentes_recebimento(
             numero_pedido,
             observacoes,
             itens_json,
+            contraparte,
         )?);
     }
 
@@ -777,6 +790,9 @@ pub async fn buscar_transferencia(
     let itens_json: String = row
         .get(8)
         .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
+    let contraparte: Option<String> = row
+        .get(9)
+        .map_err(|e| AppError::Interno(format!("Coluna invalida: {e}")))?;
 
     Ok(Some(linha_para_transferencia(
         armazem_origem_codigo,
@@ -788,6 +804,7 @@ pub async fn buscar_transferencia(
         numero_pedido,
         observacoes,
         itens_json,
+        contraparte,
     )?))
 }
 
@@ -1196,6 +1213,7 @@ mod tests {
             Some("1603".into()),
             Some("Frete ja pago, so descarregar".into()),
             itens_json,
+            None,
         )
         .unwrap();
 
@@ -1225,6 +1243,7 @@ mod tests {
             None,
             None,
             "[]".into(),
+            None,
         )
         .unwrap();
 
@@ -1243,6 +1262,7 @@ mod tests {
             None,
             None,
             "nao e json".into(),
+            None,
         );
         assert!(resultado.is_err());
     }
@@ -1387,12 +1407,13 @@ mod tests {
                 row.get::<_, Option<String>>(6)?,
                 row.get::<_, Option<String>>(7)?,
                 row.get::<_, String>(8)?,
+                row.get::<_, Option<String>>(9)?,
             ))
         })
         .unwrap()
         .map(|linha| linha.unwrap())
-        .map(|(a, b, c, d, e, f, g, h, i)| {
-            linha_para_transferencia(a, b, c, d, e, f, g, h, i).unwrap()
+        .map(|(a, b, c, d, e, f, g, h, i, j)| {
+            linha_para_transferencia(a, b, c, d, e, f, g, h, i, j).unwrap()
         })
         .collect()
     }
@@ -1416,13 +1437,14 @@ mod tests {
                     row.get::<_, Option<String>>(6)?,
                     row.get::<_, Option<String>>(7)?,
                     row.get::<_, String>(8)?,
+                    row.get::<_, Option<String>>(9)?,
                 ))
             },
         )
         .optional()
         .unwrap()
-        .map(|(a, b, c, d, e, f, g, h, i)| {
-            linha_para_transferencia(a, b, c, d, e, f, g, h, i).unwrap()
+        .map(|(a, b, c, d, e, f, g, h, i, j)| {
+            linha_para_transferencia(a, b, c, d, e, f, g, h, i, j).unwrap()
         })
     }
 
@@ -1475,6 +1497,7 @@ mod tests {
             .collect();
         assert_eq!(colunas_lista, colunas_chave);
         assert!(colunas_lista.contains(&"numero_pedido".to_string()));
+        assert!(colunas_lista.contains(&"contraparte".to_string()));
     }
 
     /// Reproduz o bug corrigido nesta versao: `numero_pedido` era gravado no
@@ -1550,6 +1573,27 @@ mod tests {
             transferencia.observacoes.as_deref(),
             Some("Caixa fragil, nao empilhar")
         );
+    }
+
+    /// v4.0.0: `contraparte` ("quem retira/entrega no destino") passou a ser
+    /// preenchida tambem do lado de quem ENVIA uma transferencia (antes
+    /// sempre `None` nesse caso) - mesma classe de bug que o teste acima
+    /// cobre pra `observacoes`: sem selecionar essa coluna aqui, quem
+    /// confirma nunca veria essa informacao antes de decidir.
+    #[test]
+    fn sql_pendentes_recebimento_traz_contraparte_do_envio() {
+        let conn = conexao_remota_de_teste();
+        let mut linha = linha_pendente_de_transferencia(1600, "B2", "A4", Some("1600"));
+        linha.movimento.contraparte = Some("RUAN".into());
+        inserir_na_tabela_remota(&conn, &linha, "2026-09-10 10:00:00");
+
+        let pendentes = buscar_pendentes_via_sql(&conn, "A4");
+        assert_eq!(pendentes.len(), 1);
+        assert_eq!(pendentes[0].contraparte.as_deref(), Some("RUAN"));
+
+        let transferencia = buscar_transferencia_via_sql(&conn, "B2", 1600)
+            .expect("a transferencia deveria ser encontrada");
+        assert_eq!(transferencia.contraparte.as_deref(), Some("RUAN"));
     }
 
     /// Cobertura do filtro `NOT EXISTS` de `SQL_PENDENTES_RECEBIMENTO`: uma

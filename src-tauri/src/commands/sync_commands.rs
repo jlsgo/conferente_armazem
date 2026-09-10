@@ -197,17 +197,29 @@ pub async fn confirmar_recebimento(
     let itens = validar_quantidades_recebidas(&transferencia.itens, &quantidades_recebidas)?;
     let fluxo = transferencia.fluxo.clone();
     let numero_pedido = transferencia.numero_pedido.clone();
-    // A observacao que quem enviou escreveu no movimento original nao pode
-    // se perder na confirmacao - ficava so visivel enquanto a transferencia
-    // estava pendente (`TransferenciasChegando`), sumindo do registro depois
-    // de confirmado. Anexada aqui, ela sobrevive no historico/fechamento de
-    // quem recebeu tambem.
-    let observacoes = match transferencia.observacoes.as_deref() {
-        Some(nota) if !nota.trim().is_empty() => format!(
-            "Recebido de {origem_armazem_codigo} (envio #{origem_id}). Observacao de quem enviou: {nota}"
-        ),
-        _ => format!("Recebido de {origem_armazem_codigo} (envio #{origem_id})"),
-    };
+    // A observacao (e, desde a v4.0.0, quem retira/entrega) que quem enviou
+    // escreveu no movimento original nao pode se perder na confirmacao -
+    // ficava so visivel enquanto a transferencia estava pendente
+    // (`TransferenciasChegando`), sumindo do registro depois de confirmado.
+    // Anexada aqui, ela sobrevive no historico/fechamento de quem recebeu
+    // tambem.
+    let mut observacoes = format!("Recebido de {origem_armazem_codigo} (envio #{origem_id})");
+    if let Some(nota) = transferencia
+        .observacoes
+        .as_deref()
+        .filter(|n| !n.trim().is_empty())
+    {
+        observacoes.push_str(&format!(". Observacao de quem enviou: {nota}"));
+    }
+    if let Some(quem) = transferencia
+        .contraparte
+        .as_deref()
+        .filter(|n| !n.trim().is_empty())
+    {
+        observacoes.push_str(&format!(
+            ". Quem retira/entrega (informado por quem enviou): {quem}"
+        ));
+    }
 
     let movimento_confirmado = {
         let mut conn = state.conn()?;

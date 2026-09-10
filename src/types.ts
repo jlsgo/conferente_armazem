@@ -126,6 +126,9 @@ export interface TransferenciaPendente {
   armazem_destino_codigo: string | null;
   numero_pedido: string | null;
   observacoes: string | null;
+  /** "Quem retira/entrega no destino" (v4.0.0) - ver comentario do mesmo
+   * campo em `TransferenciaPendente` no backend (`src-tauri/src/db/sync.rs`). */
+  contraparte: string | null;
   itens: MovimentoItem[];
 }
 
