@@ -250,6 +250,33 @@ const SQL_ALTER_TABELA_REMOTA: [&str; 4] = [
     "ALTER TABLE movimentos_consolidados ADD COLUMN razao_social TEXT",
 ];
 
+/// `movimentos_consolidados` so tinha a PRIMARY KEY (armazem_codigo, id_origem)
+/// desde sempre - toda outra consulta (`SQL_PENDENTES_RECEBIMENTO` aqui, e as
+/// equivalentes em `painel/index.html`) filtra por `fluxo`/`data`/
+/// `estornado_de`/`recebido_de_*`, nenhuma coberta por indice, o que forcava
+/// um table scan completo a cada chamada - e, pior, os dois `NOT EXISTS`
+/// correlacionados de `SQL_PENDENTES_RECEBIMENTO` (pollado a cada 60s por
+/// cada tela A4/B2 com transferencia pendente) faziam um scan completo *por
+/// linha candidata*, efetivamente O(n^2). Some isso ao painel publico
+/// (auto-atualizacao a cada 30s, historico do commit) e um punhado de
+/// milhares de linhas na tabela vira centenas de milhoes de "rows read" por
+/// semana - foi o que estourou a cota gratuita do Turso em 2026-09.
+/// `CREATE INDEX IF NOT EXISTS` (ao contrario do ALTER acima) e idempotente
+/// de verdade, sem precisar do padrao "ignora erro". As duas compostas
+/// (armazem_codigo+estornado_de e recebido_de_armazem_codigo+
+/// recebido_de_id_origem) casam exatamente as duas subconsultas NOT EXISTS,
+/// transformando o scan completo por linha num seek de indice.
+const SQL_CRIAR_INDICES_REMOTOS: [&str; 4] = [
+    "CREATE INDEX IF NOT EXISTS idx_movimentos_consolidados_data \
+        ON movimentos_consolidados (data)",
+    "CREATE INDEX IF NOT EXISTS idx_movimentos_consolidados_fluxo \
+        ON movimentos_consolidados (fluxo)",
+    "CREATE INDEX IF NOT EXISTS idx_movimentos_consolidados_estorno \
+        ON movimentos_consolidados (armazem_codigo, estornado_de)",
+    "CREATE INDEX IF NOT EXISTS idx_movimentos_consolidados_recebido \
+        ON movimentos_consolidados (recebido_de_armazem_codigo, recebido_de_id_origem)",
+];
+
 const SQL_UPSERT: &str = "
     INSERT OR REPLACE INTO movimentos_consolidados
         (armazem_codigo, id_origem, fluxo, tipo, data, hora, turno, usuario_nome,
@@ -310,6 +337,10 @@ async fn conectar_turso(url: &str, token: &str) -> AppResult<libsql::Connection>
         .map_err(|e| {
             AppError::Interno(format!("Nao foi possivel preparar a tabela remota: {e}"))
         })?;
+
+    for indice in SQL_CRIAR_INDICES_REMOTOS {
+        let _ = remoto.execute(indice, ()).await;
+    }
 
     Ok(remoto)
 }

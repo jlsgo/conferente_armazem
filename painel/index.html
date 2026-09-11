@@ -1138,6 +1138,15 @@
     "valor_centavos, razao_social";
   var ultimosFiltrados = [];
   var intervaloAtualizacao = null;
+  // Cache da comparacao de periodo (`compararPeriodo` em `atualizar`) - antes
+  // rodava a mesma busca de novo a cada ciclo de 30s (a maioria das aberturas
+  // usa "Hoje" como padrao, que ja tem os dois extremos preenchidos, entao
+  // isso disparava sempre). O periodo *anterior* muda muito pouco minuto a
+  // minuto, entao so refaz a busca quando o periodo pedido mudou ou o cache
+  // ja passou de `INTERVALO_MIN_COMPARACAO_MS`, cortando pela metade o
+  // numero de table scans no Turso a cada atualizacao automatica.
+  var comparacaoCache = { chave: null, insights: null, timestampMs: 0 };
+  var INTERVALO_MIN_COMPARACAO_MS = 5 * 60 * 1000;
   // Aba de fluxo ativa - "" e "Todos" (visao consolidada, padrao ao abrir),
   // senao um dos 4 valores de `fluxo` da tabela. Substitui o antigo
   // <select id="filtro-fluxo"> (removido do HTML) como fonte da verdade
@@ -2221,13 +2230,17 @@
       var filtrosComparacao = compararPeriodo
         ? Object.assign({}, filtros, periodoAnterior(filtros.dataInicio, filtros.dataFim))
         : null;
+      var chaveComparacao = compararPeriodo ? filtros.dataInicio + ":" + filtros.dataFim : null;
+      var cacheValido = compararPeriodo &&
+        chaveComparacao === comparacaoCache.chave &&
+        (Date.now() - comparacaoCache.timestampMs) < INTERVALO_MIN_COMPARACAO_MS;
       var resultados = await Promise.all([
         buscarMovimentosFiltrados(filtros),
         buscarPendentesGlobal(),
         buscarUltimaSincronizacaoPorArmazem(),
         buscarContagemPorFluxo(filtros),
         buscarReparosEmAberto(),
-        compararPeriodo ? buscarMovimentosFiltrados(filtrosComparacao) : Promise.resolve(null)
+        compararPeriodo && !cacheValido ? buscarMovimentosFiltrados(filtrosComparacao) : Promise.resolve(null)
       ]);
       var dadosFiltrados = resultados[0];
       var pendentes = resultados[1];
@@ -2235,7 +2248,15 @@
       var contagemPorFluxo = resultados[3];
       var reparosAbertos = resultados[4];
       var dadosComparacao = resultados[5];
-      var comparacaoInsights = dadosComparacao ? calcularInsights(dadosComparacao.movimentos, 0) : null;
+      var comparacaoInsights;
+      if (!compararPeriodo) {
+        comparacaoInsights = null;
+      } else if (cacheValido) {
+        comparacaoInsights = comparacaoCache.insights;
+      } else {
+        comparacaoInsights = dadosComparacao ? calcularInsights(dadosComparacao.movimentos, 0) : null;
+        comparacaoCache = { chave: chaveComparacao, insights: comparacaoInsights, timestampMs: Date.now() };
+      }
       renderizarContagemAbas(contagemPorFluxo);
       renderizarReparosAbertos(reparosAbertos);
 
@@ -2402,12 +2423,18 @@
     if (intervaloAtualizacao) clearInterval(intervaloAtualizacao);
     // Pula a atualizacao automatica com a aba em segundo plano (deixada
     // aberta numa tela de escritorio, por exemplo) - sem isso o painel
-    // continuava consultando o Turso a cada 30s pra nada, ja que ninguem
+    // continuava consultando o Turso a cada ciclo pra nada, ja que ninguem
     // estava vendo o resultado. Ao voltar pra aba, atualiza na hora em vez
     // de esperar o proximo ciclo, pra nao mostrar dado velho.
+    // 60s (era 30s) - junto com os indices adicionados em
+    // `db::sync::SQL_CRIAR_INDICES_REMOTOS`, e o cache de `comparacaoCache`
+    // acima, foi o que estourou a cota gratuita de "rows read" do Turso em
+    // 2026-09 com uma tabela de umas poucas centenas de linhas: um painel
+    // deixado aberto fazia table scans completos (alguns O(n^2), ver o
+    // comentario dos indices) a cada 30s, o dia inteiro.
     intervaloAtualizacao = setInterval(function () {
       if (!document.hidden) atualizar();
-    }, 30000);
+    }, 60000);
     document.addEventListener("visibilitychange", function () {
       if (!document.hidden) atualizar();
     });
