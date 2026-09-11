@@ -2288,8 +2288,8 @@
       reaplicarBusca();
       var hora = new Date().toLocaleTimeString(idiomaAtual === "zh" ? "zh-CN" : "pt-BR");
       elStatus.textContent = idiomaAtual === "zh"
-        ? "更新于 " + hora + " - 每30秒自动刷新。"
-        : "Atualizado as " + hora + " - atualiza sozinho a cada 30s.";
+        ? "更新于 " + hora + " - 每60秒自动刷新。"
+        : "Atualizado as " + hora + " - atualiza sozinho a cada 60s.";
     } catch (e) {
       elStatus.textContent = (idiomaAtual === "zh" ? "获取数据失败：" : "Falha ao buscar dados: ") + e.message;
     }
