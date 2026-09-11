@@ -2288,8 +2288,8 @@
       reaplicarBusca();
       var hora = new Date().toLocaleTimeString(idiomaAtual === "zh" ? "zh-CN" : "pt-BR");
       elStatus.textContent = idiomaAtual === "zh"
-        ? "更新于 " + hora + " - 每60秒自动刷新。"
-        : "Atualizado as " + hora + " - atualiza sozinho a cada 60s.";
+        ? "更新于 " + hora + " - 每5分钟自动刷新。"
+        : "Atualizado as " + hora + " - atualiza sozinho a cada 5 minutos.";
     } catch (e) {
       elStatus.textContent = (idiomaAtual === "zh" ? "获取数据失败：" : "Falha ao buscar dados: ") + e.message;
     }
@@ -2426,15 +2426,17 @@
     // continuava consultando o Turso a cada ciclo pra nada, ja que ninguem
     // estava vendo o resultado. Ao voltar pra aba, atualiza na hora em vez
     // de esperar o proximo ciclo, pra nao mostrar dado velho.
-    // 60s (era 30s) - junto com os indices adicionados em
-    // `db::sync::SQL_CRIAR_INDICES_REMOTOS`, e o cache de `comparacaoCache`
-    // acima, foi o que estourou a cota gratuita de "rows read" do Turso em
-    // 2026-09 com uma tabela de umas poucas centenas de linhas: um painel
-    // deixado aberto fazia table scans completos (alguns O(n^2), ver o
-    // comentario dos indices) a cada 30s, o dia inteiro.
+    // 5 minutos (era 30s, depois 60s) - os indices adicionados em
+    // `db::sync::SQL_CRIAR_INDICES_REMOTOS` ja tiraram o grosso do custo por
+    // consulta (alguns dos NOT EXISTS eram O(n^2) sem indice - foi o que
+    // estourou a cota gratuita de "rows read" do Turso em 2026-09 com uma
+    // tabela de umas poucas centenas de linhas), mas o "sem custo" deste
+    // sistema e regra permanente, entao o intervalo fica bem folgado por
+    // margem de seguranca, nao por necessidade tecnica - o botao "Atualizar
+    // agora" continua disponivel pra quem precisar de dado na hora.
     intervaloAtualizacao = setInterval(function () {
       if (!document.hidden) atualizar();
-    }, 60000);
+    }, 5 * 60 * 1000);
     document.addEventListener("visibilitychange", function () {
       if (!document.hidden) atualizar();
     });
