@@ -290,6 +290,37 @@ motivo de existir desse painel e ser ao vivo. `.github/workflows/deploy-painel.y
 copia `manifest.json`/`sw.js`/`icons/` pro `_site/` sem passar pelo `sed` (nao tem
 segredo neles, so o `index.html` precisa da substituicao de credenciais).
 
+### Estouro da cota gratuita do Turso por falta de indices (2026-09)
+
+`movimentos_consolidados` so tinha a `PRIMARY KEY (armazem_codigo, id_origem)` desde a
+v1 — nenhum indice em `data`/`fluxo`/`estornado_de`/`recebido_de_*`, colunas usadas em
+praticamente toda consulta real (`SQL_PENDENTES_RECEBIMENTO` aqui, e as equivalentes em
+`painel/index.html`). Isso forcava table scan completo a cada chamada, e pior: os dois
+`NOT EXISTS` correlacionados de `SQL_PENDENTES_RECEBIMENTO` (pollado a cada 60s por
+cada tela A4/B2 com transferencia pendente aberta) faziam um scan completo *por linha
+candidata* — efetivamente O(n²). Some a isso o painel publico se auto-atualizando a
+cada 30s (varias consultas em paralelo, algumas dobradas pela comparacao de periodo do
+filtro "Hoje"), e uma tabela de umas poucas centenas de linhas gerou 565 milhoes de
+"rows read" e estourou 100% da cota gratuita do Turso numa semana.
+
+Corrigido criando 4 indices — `data`, `fluxo`, `(armazem_codigo, estornado_de)`,
+`(recebido_de_armazem_codigo, recebido_de_id_origem)` — via `CREATE INDEX IF NOT
+EXISTS` (`db::sync::SQL_CRIAR_INDICES_REMOTOS`, executado a cada `conectar_turso`, ou
+seja a cada sincronizacao com algo pendente). Como indice e estado do banco (nao do
+cliente), os mesmos 4 indices tambem foram aplicados manualmente uma vez direto na base
+de producao via `turso db shell`, pra nao esperar uma nova versao do app chegar nas
+maquinas A4/B2 — todo cliente ja instalado (novo ou velho) passou a se beneficiar deles
+imediatamente, sem precisar de rebuild/reinstalacao. `painel/index.html` tambem teve o
+intervalo de auto-atualizacao aumentado de 30s para 5 minutos (os indices ja resolveram
+o custo por consulta; isso e margem de seguranca extra, nao necessidade tecnica) e
+ganhou um cache de 5 minutos pra comparacao de periodo, que antes refazia a mesma busca
+a cada ciclo.
+
+**Regra permanente decidida a partir disso**: este sistema (app + toda a infra que ele
+usa — Turso, GitHub Pages, GitHub Actions) nao pode ter custo. Se algum estouro de cota
+acontecer de novo, a resposta certa e investigar uma consulta sem indice/polling mal
+comportado antes de cogitar upgrade de plano ou "overages".
+
 ## Log de erros (`tauri_plugin_log`)
 
 `lib.rs` (`.setup()`) registra o plugin de log em toda build, gravando avisos/erros
@@ -430,6 +461,28 @@ AWS_TESTE_BUCKET=... AWS_TESTE_REGIAO=... \
 ```
 
 **Nunca aponte isso pro bucket de producao** — use sempre um bucket de teste descartavel.
+
+### Backup pessoal do Turso via cron (fora do app, so no laptop do jlsgo)
+
+Alem dos backups acima (que rodam **dentro do app**, em A4/B2), existe uma camada extra
+independente: `scripts/backup-turso-diario.sh`, agendado via `crontab` no laptop Ubuntu
+pessoal do jlsgo (fora deste repo — nao roda em nenhuma outra maquina, nao faz parte do
+app). Todo dia as 17:50, baixa um snapshot do banco Turso de producao inteiro
+(`turso db export ecoviva-armazem`, um snapshot binario — nao roda `SELECT` nenhum,
+entao nao conta na cota de "rows read") pra `~/backups-turso-ecoviva/`, com retencao de
+14 dias (mesma politica de `db::backup::limpar_backups_antigos`). Cinco minutos depois,
+uma segunda linha de cron sobe essa pasta pro Google Drive via `rclone`
+(`gdrive:BACKUP/TURSO`), no mesmo padrao ja usado pelos backups de
+ESCRITORIO/TXT/vault daquela maquina.
+
+Depende de `turso auth login` (sessao pessoal do jlsgo, nao um token de app) e do
+`cron`/`rclone` ja configurados naquele laptop especificamente — se a maquina for
+trocada, precisa ser refeito (o script em si esta versionado aqui, so o crontab e a
+autenticacao do `turso` que sao locais aquela maquina). Escolhido 1x/dia porque o Turso
+aqui **nao e a fonte de verdade** (essa continua sendo o banco local de cada armazem,
+com seu proprio backup+retencao acima) — isso e conveniencia extra pra restaurar o
+consolidado rapido sem precisar reconstruir a partir dos dois bancos locais, nao a
+ultima linha de defesa contra perda de dado.
 
 ## Rodando localmente
 
