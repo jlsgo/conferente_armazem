@@ -1701,6 +1701,43 @@ no painel escapada, React cobre o resto).
 
 Bump de `3.3.4` pra `4.0.0` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
 
+## Versao 4.0.1 — dialogo tematico substitui window.confirm/prompt, grid de itens responsivo (Feito)
+
+Motivada por uma auditoria de UI pedida pelo usuario (conectou o MCP publico
+`ui-skills` e pediu pra aprender com as telas em uso e propor melhorias).
+Sem achado de bug funcional - so debito de apresentacao acumulado.
+
+**`window.confirm`/`window.prompt`** (estornar lancamento, fechar o dia,
+trocar de aba com formulario sujo - 9 pontos em 6 telas: `Lancamentos.tsx`,
+`Montagem.tsx`, `Sac.tsx`, `ReparoExterno.tsx`, `Historico.tsx`,
+`Dashboard.tsx`) ignoravam completamente os tokens de tema - a caixa nativa
+do SO aparecia branca mesmo com o tema escuro ativo, unico ponto da UI que
+quebrava essa imersao. Substituido por `DialogoProvider`/`useDialogo`
+(`src/lib/dialogo.tsx`, novo, mesmo padrao de `ToastProvider`/`useToast` ja
+existente) - resolve por Promise (`confirmar(): Promise<boolean>`,
+`perguntar(): Promise<string | null>`), mesma semantica de retorno dos
+originais (false/null em cancelamento, inclusive Esc), so muda a
+apresentacao. Nao mexeu em nenhuma regra de autorizacao/validacao por tras
+dessas acoes - so a caixa que pergunta.
+
+**Grid de itens** (`.linha-item-veiculo`/`-peca`/`-reparo`, `global.css`):
+colunas em `px` fixo trocadas por `minmax()`, e a linha ganhou
+`overflow-x: auto` propria (mesmo padrao da tabela do dia,
+`.tabela-scroll`) - antes, numa janela estreita (notebook em tela dividida),
+a linha inteira estourava a largura da pagina; testado em headless Chrome
+a 820px (estoura sem o fix, rola só a linha com o fix) e a 1366px (sem
+diferenca visual). Tambem: cabecalho da tabela do dia com
+`position: sticky` (nao perde a referencia da coluna rolando ~40
+lancamentos); `.aviso-inline` substitui um estilo inline que duplicava as
+variaveis de aviso campo a campo; `h2`/`h3` um pouco maiores (17→19px,
+15→16px) pra escanear mais rapido.
+
+**Verificado**: `tsc --noEmit`/`vite build`/`vitest run` (21 testes, 3
+arquivos de teste ganharam o wrapper `DialogoProvider` que faltava) limpos,
+`cargo fmt --check`/`clippy -D warnings`/`cargo test` (168 testes) limpos.
+
+Bump de `4.0.0` pra `4.0.1` (`package.json`, `Cargo.toml`, `tauri.conf.json`).
+
 ## Painel: abas por fluxo + Sprints A/B/C (reparos abertos, export, comparacao, drill-down)
 
 Pedido do usuario: melhorar a apresentacao do painel (abas de cada fluxo mais
