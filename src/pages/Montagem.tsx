@@ -28,6 +28,7 @@ import { formatarData } from '../lib/data';
 import { algumCampoEhOutro } from '../lib/outro';
 import { itensPreenchidos } from '../lib/formularioSujo';
 import { useToast } from '../lib/toast';
+import { useDialogo } from '../lib/dialogo';
 
 interface Props {
   usuario: Usuario;
@@ -105,6 +106,7 @@ export default function Montagem({
   const [erroCarregamento, setErroCarregamento] = useState('');
   const [sugestoesPorCategoria, setSugestoesPorCategoria] = useState<Partial<Record<Categoria, string[]>>>({});
   const { notificar } = useToast();
+  const { confirmar, perguntar } = useDialogo();
 
   const [hora, setHora] = useState(horaAtual());
   const [tipo, setTipo] = useState<TipoMovimento>('saida');
@@ -246,8 +248,9 @@ export default function Montagem({
 
   async function handleFecharDia() {
     if (lancamentos.length === 0) return;
-    const confirmado = window.confirm(
-      `Fechar o dia ${formatarData(data)}? Depois disso nao sera mais possivel adicionar ou corrigir lancamentos deste dia neste armazem.`
+    const confirmado = await confirmar(
+      `Fechar o dia ${formatarData(data)}? Depois disso nao sera mais possivel adicionar ou corrigir lancamentos deste dia neste armazem.`,
+      { titulo: 'Fechar o dia', textoConfirmar: 'Fechar o dia', perigo: true }
     );
     if (!confirmado) return;
 
@@ -265,8 +268,9 @@ export default function Montagem({
   }
 
   async function handleEstornar(movimento: Movimento) {
-    const justificativa = window.prompt(
-      `Justificativa para estornar o lancamento nº ${movimento.numero}:`
+    const justificativa = await perguntar(
+      `Justificativa para estornar o lancamento nº ${movimento.numero}:`,
+      { titulo: 'Estornar lancamento', textoConfirmar: 'Estornar', perigo: true, placeholder: 'Descreva o motivo do estorno' }
     );
     if (!justificativa || !justificativa.trim()) return;
 

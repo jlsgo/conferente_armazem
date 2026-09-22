@@ -21,6 +21,7 @@ import { formatarData } from '../lib/data';
 import { algumCampoEhOutro } from '../lib/outro';
 import { itensPreenchidos } from '../lib/formularioSujo';
 import { useToast } from '../lib/toast';
+import { useDialogo } from '../lib/dialogo';
 
 interface Props {
   usuario: Usuario;
@@ -90,6 +91,7 @@ export default function Lancamentos({
   const [sugestoesColeta, setSugestoesColeta] = useState<string[]>([]);
   const [sugestoesRazaoSocial, setSugestoesRazaoSocial] = useState<string[]>([]);
   const { notificar } = useToast();
+  const { confirmar, perguntar } = useDialogo();
 
   const [tipo, setTipo] = useState<TipoMovimento>('saida');
   const [destino, setDestino] = useState<Destino>('cliente');
@@ -256,8 +258,9 @@ export default function Lancamentos({
 
   async function handleFecharDia() {
     if (lancamentos.length === 0) return;
-    const confirmado = window.confirm(
-      `Fechar o dia ${formatarData(data)}? Depois disso nao sera mais possivel adicionar ou corrigir lancamentos deste dia neste armazem.`
+    const confirmado = await confirmar(
+      `Fechar o dia ${formatarData(data)}? Depois disso nao sera mais possivel adicionar ou corrigir lancamentos deste dia neste armazem.`,
+      { titulo: 'Fechar o dia', textoConfirmar: 'Fechar o dia', perigo: true }
     );
     if (!confirmado) return;
 
@@ -275,8 +278,9 @@ export default function Lancamentos({
   }
 
   async function handleEstornar(movimento: Movimento) {
-    const justificativa = window.prompt(
-      `Justificativa para estornar o lancamento nº ${movimento.numero} (pedido ${movimento.numero_pedido ?? '-'}):`
+    const justificativa = await perguntar(
+      `Justificativa para estornar o lancamento nº ${movimento.numero} (pedido ${movimento.numero_pedido ?? '-'}):`,
+      { titulo: 'Estornar lancamento', textoConfirmar: 'Estornar', perigo: true, placeholder: 'Descreva o motivo do estorno' }
     );
     if (!justificativa || !justificativa.trim()) return;
 
@@ -487,7 +491,7 @@ export default function Lancamentos({
           </div>
 
           {alertaRetiradaPendente && (
-            <p className="erro" role="alert" style={{ background: 'var(--aviso-claro)', color: 'var(--aviso-escuro)', borderColor: '#f0c36d' }}>
+            <p className="aviso-inline" role="alert">
               Atencao: o pedido {numeroPedido} teve uma retirada parcial em{' '}
               {formatarData(alertaRetiradaPendente.data)} ({alertaRetiradaPendente.itens.reduce((s, it) => s + it.quantidade, 0)} un.).
               Confirme se esta e a retirada complementar.

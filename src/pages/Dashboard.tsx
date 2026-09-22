@@ -24,6 +24,7 @@ import {
   IconUsuarios,
 } from '../components/Icon';
 import { useToast } from '../lib/toast';
+import { useDialogo } from '../lib/dialogo';
 
 const INTERVALO_STATUS_SYNC_MS = 5 * 60 * 1000;
 const INTERVALO_PENDENTES_MS = 60 * 1000;
@@ -57,6 +58,7 @@ export default function Dashboard({
   const [pendentesPorFluxo, setPendentesPorFluxo] = useState<Partial<Record<Fluxo, number>>>({});
   const [reparosEmAberto, setReparosEmAberto] = useState(0);
   const { notificar } = useToast();
+  const { confirmar } = useDialogo();
   const cobrinha = useCliquesSecretos();
 
   // Trocar de aba desmonta a tela atual (cada aba e montada condicionalmente
@@ -69,13 +71,13 @@ export default function Dashboard({
   useEffect(() => {
     setFormularioSujo(false);
   }, [aba]);
-  function irPara(destino: Aba) {
-    if (
-      destino !== aba &&
-      formularioSujo &&
-      !window.confirm('Voce tem um lancamento em andamento nesta aba. Trocar de aba vai descartar esses dados. Continuar?')
-    ) {
-      return;
+  async function irPara(destino: Aba) {
+    if (destino !== aba && formularioSujo) {
+      const confirmado = await confirmar(
+        'Voce tem um lancamento em andamento nesta aba. Trocar de aba vai descartar esses dados. Continuar?',
+        { titulo: 'Descartar lancamento em andamento?', textoConfirmar: 'Trocar de aba', perigo: true }
+      );
+      if (!confirmado) return;
     }
     setAba(destino);
   }

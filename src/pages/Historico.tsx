@@ -8,6 +8,7 @@ import { agoraLocalTexto, formatarData, formatarDataArquivo, formatarDataHora } 
 import { resultadoReparoTexto } from '../lib/exportFechamento';
 import Carregando from '../components/Carregando';
 import RelatorioPagamentoReparo from '../components/RelatorioPagamentoReparo';
+import { useDialogo } from '../lib/dialogo';
 
 interface Props {
   usuario: Usuario;
@@ -50,6 +51,7 @@ function qtdTotal(m: Movimento): number {
 
 export default function Historico({ usuario, armazem, armazens }: Props) {
   const armazemId = usuario.armazem_id as number;
+  const { perguntar } = useDialogo();
 
   const [fluxo, setFluxo] = useState<Fluxo>('saida_armazem');
   const [dataInicio, setDataInicio] = useState(dataHaDias(30));
@@ -295,8 +297,9 @@ export default function Historico({ usuario, armazem, armazens }: Props) {
   }
 
   async function handleEstornar(movimento: Movimento) {
-    const justificativa = window.prompt(
-      `Justificativa para estornar o lancamento de ${formatarData(movimento.data)} (pedido ${movimento.numero_pedido ?? '-'}):`
+    const justificativa = await perguntar(
+      `Justificativa para estornar o lancamento de ${formatarData(movimento.data)} (pedido ${movimento.numero_pedido ?? '-'}):`,
+      { titulo: 'Estornar lancamento', textoConfirmar: 'Estornar', perigo: true, placeholder: 'Descreva o motivo do estorno' }
     );
     if (!justificativa || !justificativa.trim()) return;
 

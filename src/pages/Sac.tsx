@@ -19,6 +19,7 @@ import { colunaColeta, itensResumoTexto, motivoSacTexto, situacaoInfo } from '..
 import { formatarData } from '../lib/data';
 import { itensPreenchidos } from '../lib/formularioSujo';
 import { useToast } from '../lib/toast';
+import { useDialogo } from '../lib/dialogo';
 
 interface Props {
   usuario: Usuario;
@@ -76,6 +77,7 @@ export default function Sac({
   const [sugestoesColeta, setSugestoesColeta] = useState<string[]>([]);
   const [sugestoesRazaoSocialLista, setSugestoesRazaoSocialLista] = useState<string[]>([]);
   const { notificar } = useToast();
+  const { confirmar, perguntar } = useDialogo();
 
   const [hora, setHora] = useState(horaAtual());
   // Saida (fim do atendimento) e o fluxo bem mais frequente no dia a dia do
@@ -242,8 +244,9 @@ export default function Sac({
 
   async function handleFecharDia() {
     if (lancamentos.length === 0) return;
-    const confirmado = window.confirm(
-      `Fechar o dia ${formatarData(data)}? Depois disso nao sera mais possivel adicionar ou corrigir lancamentos deste dia neste armazem.`
+    const confirmado = await confirmar(
+      `Fechar o dia ${formatarData(data)}? Depois disso nao sera mais possivel adicionar ou corrigir lancamentos deste dia neste armazem.`,
+      { titulo: 'Fechar o dia', textoConfirmar: 'Fechar o dia', perigo: true }
     );
     if (!confirmado) return;
 
@@ -261,8 +264,9 @@ export default function Sac({
   }
 
   async function handleEstornar(movimento: Movimento) {
-    const justificativa = window.prompt(
-      `Justificativa para estornar o lancamento nº ${movimento.numero} (protocolo ${movimento.numero_pedido ?? '-'}):`
+    const justificativa = await perguntar(
+      `Justificativa para estornar o lancamento nº ${movimento.numero} (protocolo ${movimento.numero_pedido ?? '-'}):`,
+      { titulo: 'Estornar lancamento', textoConfirmar: 'Estornar', perigo: true, placeholder: 'Descreva o motivo do estorno' }
     );
     if (!justificativa || !justificativa.trim()) return;
 

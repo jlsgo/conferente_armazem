@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Montagem from './Montagem';
 import * as api from '../lib/api';
 import { ToastProvider } from '../lib/toast';
+import { DialogoProvider } from '../lib/dialogo';
 import type { Armazem, Usuario } from '../types';
 
 vi.mock('../lib/api');
@@ -23,7 +24,9 @@ const armazemB2: Armazem = { id: 2, codigo: 'B2', nome: 'Armazem B2' };
 function renderMontagem() {
   return render(
     <ToastProvider>
-      <Montagem usuario={usuario} armazem={armazemB2} armazens={[armazemA4, armazemB2]} />
+      <DialogoProvider>
+        <Montagem usuario={usuario} armazem={armazemB2} armazens={[armazemA4, armazemB2]} />
+      </DialogoProvider>
     </ToastProvider>
   );
 }

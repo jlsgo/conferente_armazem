@@ -210,13 +210,13 @@ h3 {
 .cartao h2 {
   margin-top: 0;
   color: var(--texto);
-  font-size: 17px;
+  font-size: 19px;
 }
 
 .cartao h3 {
   color: var(--texto);
   margin-bottom: 12px;
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .subtitulo {
@@ -480,6 +480,20 @@ button.info:hover:not(:disabled) {
   margin: 0 0 16px;
 }
 
+/* Mesmo formato de .erro, na paleta de aviso (amarelo) - pra alertas que nao
+   sao erro de validacao, so um "confira antes de continuar" (ex.: retirada
+   pendente do mesmo pedido). Existia como estilo inline repetindo campo a
+   campo as variaveis de aviso; virou classe pra nao repetir a cada novo caso. */
+.aviso-inline {
+  color: var(--aviso-escuro);
+  background: var(--aviso-claro);
+  border: 1px solid #f3d29a;
+  border-radius: var(--raio-sm);
+  padding: 10px 14px;
+  font-size: 13px;
+  margin: 0 0 16px;
+}
+
 .pagina {
   padding: 24px 40px 48px;
   max-width: 1320px;
@@ -723,6 +737,13 @@ thead th {
   text-transform: uppercase;
   letter-spacing: 0.03em;
   border-bottom: 2px solid var(--borda);
+  /* Num dia cheio (~40 lancamentos, ver comentario de impressao mais abaixo)
+     o cabecalho some ao rolar - sticky mantem os nomes das colunas visiveis
+     pra conferente nao perder a referencia de qual coluna e qual no meio da
+     lista. Precisa do background solido acima pra cobrir as linhas por baixo. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 tbody tr:nth-child(even) {
@@ -835,6 +856,12 @@ tbody tr:last-child td {
   gap: 14px;
   align-items: center;
   margin-bottom: 14px;
+  /* 6-7 colunas (ver variantes abaixo) ainda podem nao caber numa janela
+     bem estreita mesmo com minmax() - rola só a linha em vez de estourar a
+     largura da pagina inteira (mesma solucao ja usada na tabela do dia, ver
+     .tabela-scroll). */
+  overflow-x: auto;
+  padding-bottom: 2px;
 }
 
 .linha-item select,
@@ -842,23 +869,29 @@ tbody tr:last-child td {
   margin-top: 0;
 }
 
+/* Colunas em minmax() (nao px fixo) em toda linha de item abaixo: numa
+   janela mais estreita (notebook do conferente, tela dividida) as caixas de
+   categoria/montagem/quantidade tambem encolhem um pouco em vez de so
+   sobrarem os 100/160px fixos empurrando a linha pra fora do cartao (o
+   formulario, ao contrario da tabela do dia, nao tem `.tabela-scroll`). */
+
 /* categoria | descricao | montagem | observacao | quantidade | remover */
 .linha-item-veiculo {
-  grid-template-columns: 140px minmax(170px, 1fr) 140px minmax(160px, 1fr) 100px auto;
+  grid-template-columns: minmax(110px, 140px) minmax(140px, 1.4fr) minmax(110px, 140px) minmax(130px, 1fr) minmax(70px, 90px) auto;
 }
 
 /* categoria | descricao | montagem (ou placeholder vazio) | condicao |
    observacao | quantidade | remover - sempre 7 colunas, mesmo quando a
    categoria e "peca" e o campo de montagem não aparece (ver Montagem.tsx). */
 .linha-item-peca {
-  grid-template-columns: 140px minmax(170px, 1fr) 140px 130px minmax(160px, 1fr) 100px auto;
+  grid-template-columns: minmax(110px, 140px) minmax(140px, 1.2fr) minmax(110px, 140px) minmax(100px, 130px) minmax(130px, 1fr) minmax(70px, 90px) auto;
 }
 
 /* categoria | descricao | codigo/serie (bem mais largo que o normal - numero
    de serie costuma ter ate ~20 digitos) | resultado (ou placeholder vazio) |
    observacao | quantidade | remover (ver ReparoExterno.tsx). */
 .linha-item-reparo {
-  grid-template-columns: 140px minmax(170px, 1fr) 220px 130px minmax(160px, 1fr) 100px auto;
+  grid-template-columns: minmax(110px, 140px) minmax(140px, 1fr) minmax(160px, 220px) minmax(100px, 130px) minmax(130px, 1fr) minmax(70px, 90px) auto;
 }
 
 .sucesso {
@@ -977,6 +1010,55 @@ tbody tr:last-child td {
   background: var(--fundo);
   color: var(--texto);
   box-shadow: none;
+}
+
+/* Dialogo de confirmacao/pergunta (ver src/lib/dialogo.tsx) - substitui
+   window.confirm/window.prompt, que ignoram completamente os tokens de cor
+   (ficava uma caixa branca do SO solta mesmo no tema escuro). z-index acima
+   do toast/cobrinha, ja que bloqueia a interacao com o resto da tela. */
+.dialogo-fundo {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: 24px;
+}
+
+.dialogo-cartao {
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-lg);
+  box-shadow: var(--sombra-lg);
+  padding: 24px;
+  width: 100%;
+  max-width: 420px;
+  animation: entrar-toast 0.15s ease-out;
+}
+
+.dialogo-cartao h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.dialogo-cartao p {
+  color: var(--texto);
+  font-size: 14px;
+  font-weight: 400;
+  margin: 0 0 16px;
+}
+
+.dialogo-cartao textarea {
+  margin-bottom: 4px;
+}
+
+.dialogo-acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .cabecalho-impressao {
